@@ -2,10 +2,15 @@
 
 import random
 import string
+import uuid
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db import transaction
+from django.middleware.csrf import get_token
+from django.shortcuts import redirect
+from django.urls import path, reverse
+from django.utils.html import format_html
 
 from users import choices
 from users.models import CustomUser, DoctorProfile, SalesProfile, DoctorStudio
@@ -114,6 +119,7 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         "hospital",
         "department",
         "sales_display",
+        "studio_actions",
         "user_phone",
         "user_is_active",
         "user_joined",
@@ -131,6 +137,10 @@ class DoctorProfileAdmin(admin.ModelAdmin):
     def get_form(self, request, obj=None, **kwargs):
         kwargs["form"] = DoctorChangeForm if obj else DoctorCreationForm
         return super().get_form(request, obj, **kwargs)
+
+    def changelist_view(self, request, extra_context=None):
+        self._csrf_token = get_token(request)
+        return super().changelist_view(request, extra_context=extra_context)
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
@@ -173,6 +183,29 @@ class DoctorProfileAdmin(admin.ModelAdmin):
 
     sales_display.short_description = "归属销售"
 
+    def studio_actions(self, obj):
+        token = getattr(self, "_csrf_token", "")
+        if not obj.studio:
+            url = reverse("admin:users_doctor_quick_create_studio", args=[obj.pk])
+            return format_html(
+                '<form action="{}" method="post" style="display:inline;">'
+                '<input type="hidden" name="csrfmiddlewaretoken" value="{}" />'
+                '<button class="btn btn-success btn-sm" style="padding:2px 8px;">⚡️ 一键开通</button>'
+                "</form>",
+                url,
+                token,
+            )
+        qrcode_url = reverse("users:studio_qrcode", args=[obj.studio_id])
+        studio_change = reverse("admin:users_doctorstudio_change", args=[obj.studio_id])
+        return format_html(
+            '<a class="btn btn-info btn-sm" target="_blank" href="{}">👀 二维码</a> '
+            '<a class="btn btn-outline-secondary btn-sm" href="{}">✏️ 编辑</a>',
+            qrcode_url,
+            studio_change,
+        )
+
+    studio_actions.short_description = "工作室管理"
+
     def has_delete_permission(self, request, obj=None):
         return False
 
@@ -182,3 +215,42 @@ class DoctorProfileAdmin(admin.ModelAdmin):
             profile.user.is_active = False
             profile.user.save(update_fields=["is_active"])
         self.message_user(request, "已禁用所选医生账号。")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "quick-create-studio/<int:doctor_id>/",
+                self.admin_site.admin_view(self.quick_create_studio),
+                name="users_doctor_quick_create_studio",
+            )
+        ]
+        return custom + urls
+
+    def quick_create_studio(self, request, doctor_id):
+        doctor = DoctorProfile.objects.filter(pk=doctor_id).select_related("studio").first()
+        if not doctor:
+            self.message_user(request, "医生不存在", level=messages.ERROR)
+            return redirect("admin:users_doctorprofile_changelist")
+        if doctor.studio:
+            self.message_user(request, "该医生已绑定工作室。", level=messages.WARNING)
+            return redirect("admin:users_doctorprofile_changelist")
+        if request.method == "POST":
+            with transaction.atomic():
+                studio = DoctorStudio.objects.create(
+                    name=f"{doctor.name}的工作室",
+                    code=uuid.uuid4().hex[:12],
+                    owner_doctor=doctor,
+                )
+                doctor.studio = studio
+                doctor.save(update_fields=["studio"])
+            self.message_user(request, f"已创建工作室：{studio.name}")
+            return redirect("admin:users_doctorprofile_changelist")
+        self.message_user(request, "非法请求", level=messages.ERROR)
+        return redirect("admin:users_doctorprofile_changelist")
+
+
+@admin.register(DoctorStudio)
+class DoctorStudioAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "owner_doctor", "created_at")
+    search_fields = ("name", "code", "owner_doctor__name")
