@@ -52,8 +52,8 @@ class SalesProfile(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "Sales Profile"
-        verbose_name_plural = "Sales Profiles"
+        verbose_name = "销售档案"
+        verbose_name_plural = "销售档案"
 
     def clean(self):
         """
@@ -65,6 +65,8 @@ class SalesProfile(TimeStampedModel):
         """
 
         super().clean()
+        if not self.user_id:
+            return
         if self.user.user_type != choices.UserType.SALES:
             raise ValidationError("关联账号必须是销售类型。")
 

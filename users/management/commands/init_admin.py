@@ -17,7 +17,7 @@ class Command(BaseCommand):
         username = os.getenv("SUPER_USER_NAME")
         password = os.getenv("SUPER_USER_PASSWORD")
         phone = os.getenv("SUPER_USER_PHONE")
-        email = os.getenv("SUPER_USER_EMAIL", "admin@example.com")
+        
 
         missing = [
             key
