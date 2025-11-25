@@ -46,6 +46,9 @@ class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
         help_text="【业务说明】非患者账号的主要登录凭据；【用法】医生/销售/助理需填写；【示例】13800138000;【参数】字符串;【返回值】str",
     )
 
+    # 告诉 Django：命令行创建用户时，除了用户名和密码，还要必填 phone
+    REQUIRED_FIELDS = ['phone']
+
     wx_openid = models.CharField(
         "微信 OpenID",
         max_length=64,
