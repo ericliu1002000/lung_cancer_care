@@ -5,7 +5,7 @@ import types
 from django.contrib import admin
 
 from .sales import SalesProfileAdmin
-from .doctors import DoctorProfileAdmin
+from .doctors import DoctorProfileAdmin, DoctorStudioAdmin
 from .assistants import AssistantProfileAdmin
 from .patients import PatientProfileAdmin
 from .platform import PlatformAdminUserAdmin
@@ -14,6 +14,7 @@ MODEL_ORDER = [
     "平台管理员",
     "医生档案",
     "医生助理",
+    "医生工作室",
     "患者列表",
     "销售档案",
 ]
@@ -43,6 +44,7 @@ admin.site.get_app_list = types.MethodType(_sorted_app_list, admin.site)
 __all__ = [
     "SalesProfileAdmin",
     "DoctorProfileAdmin",
+    "DoctorStudioAdmin",
     "AssistantProfileAdmin",
     "PatientProfileAdmin",
     "PlatformAdminUserAdmin",

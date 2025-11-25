@@ -1,22 +1,18 @@
 """
-【业务说明】users 应用 Service 层，封装登录等跨视图复用逻辑。
-【用法】视图调用 AuthService 的方法以获得登录结果，避免重复代码。
+Auth-related service utilities.
 """
 
 from typing import Optional, Tuple
 
 from django.conf import settings
-from django.contrib.auth import authenticate, get_backends, login
+from django.contrib.auth import authenticate, login
 
-from users.models import CustomUser
 from users import choices
+from users.models import CustomUser
 
 
 class AuthService:
-    """
-    【业务说明】统一处理多端登录（微信、PC），保证 Session 统一维护。
-    【返回值约定】所有登录方法返回 (success: bool, payload: CustomUser|str)。
-    """
+    """统一处理多端登录（微信/PC），保证 Session 状态一致。"""
 
     def __init__(self) -> None:
         backends = getattr(settings, "AUTHENTICATION_BACKENDS", None) or [
@@ -25,10 +21,7 @@ class AuthService:
         self.default_backend = backends[0]
 
     def _fetch_wechat_openid(self, code: str) -> str:
-        """
-        【业务说明】模拟用微信 code 换取 openid，生产环境需调用官方 API。
-        【TODO】待对接公众号接口后替换真实实现。
-        """
+        """TODO: 调用真实的公众号接口换取 openid。"""
 
         return f"mock_{code}"
 

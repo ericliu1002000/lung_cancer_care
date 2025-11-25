@@ -3,3 +3,4 @@ pymysql==1.1.2
 django-extensions
 ipython
 python-dotenv==1.1.1
+segno

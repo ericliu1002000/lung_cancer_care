@@ -23,12 +23,7 @@ class DoctorStudio(TimeStampedModel):
         unique=True,
         help_text="【业务说明】内部唯一编码，用于生成二维码；【用法】不可重复；【示例】STU001；【参数】str；【返回值】str",
     )
-    qr_code_url = models.URLField(
-        "二维码地址",
-        max_length=255,
-        blank=True,
-        help_text="【业务说明】二维码图片地址；【用法】前端展示下载；【示例】https://cdn/qrcode.png；【参数】URL；【返回值】str",
-    )
+    
     intro = models.TextField(
         "工作室介绍",
         blank=True,
@@ -43,8 +38,8 @@ class DoctorStudio(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "Doctor Studio"
-        verbose_name_plural = "Doctor Studios"
+        verbose_name = "医生工作室"
+        verbose_name_plural = "医生工作室"
 
     def __str__(self) -> str:
         """

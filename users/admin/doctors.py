@@ -7,8 +7,7 @@ import uuid
 from django import forms
 from django.contrib import admin, messages
 from django.db import transaction
-from django.middleware.csrf import get_token
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from django.urls import path, reverse
 from django.utils.html import format_html
 
@@ -138,10 +137,6 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         kwargs["form"] = DoctorChangeForm if obj else DoctorCreationForm
         return super().get_form(request, obj, **kwargs)
 
-    def changelist_view(self, request, extra_context=None):
-        self._csrf_token = get_token(request)
-        return super().changelist_view(request, extra_context=extra_context)
-
     def get_readonly_fields(self, request, obj=None):
         if obj:
             return self.readonly_fields
@@ -184,22 +179,21 @@ class DoctorProfileAdmin(admin.ModelAdmin):
     sales_display.short_description = "归属销售"
 
     def studio_actions(self, obj):
-        token = getattr(self, "_csrf_token", "")
         if not obj.studio:
             url = reverse("admin:users_doctor_quick_create_studio", args=[obj.pk])
+            # 【修改】改为普通的 GET 链接，避免 CSRF 问题
             return format_html(
-                '<form action="{}" method="post" style="display:inline;">'
-                '<input type="hidden" name="csrfmiddlewaretoken" value="{}" />'
-                '<button class="btn btn-success btn-sm" style="padding:2px 8px;">⚡️ 一键开通</button>'
-                "</form>",
+                '<a class="button" href="{}" style="background-color:#52B45A; color:white; padding:3px 8px; border-radius:4px; font-size:12px;">'
+                '⚡️ 一键开通</a>',
                 url,
-                token,
             )
         qrcode_url = reverse("users:studio_qrcode", args=[obj.studio_id])
         studio_change = reverse("admin:users_doctorstudio_change", args=[obj.studio_id])
         return format_html(
-            '<a class="btn btn-info btn-sm" target="_blank" href="{}">👀 二维码</a> '
-            '<a class="btn btn-outline-secondary btn-sm" href="{}">✏️ 编辑</a>',
+            '<a class="button" target="_blank" href="{}" style="background-color:#3B7FDD; color:white; padding:3px 8px; border-radius:4px; font-size:12px; margin-right:5px;">'
+            '👀 二维码</a>'
+            '<a class="button" href="{}" style="padding:3px 8px; border-radius:4px; font-size:12px;">'
+            '✏️ 编辑</a>',
             qrcode_url,
             studio_change,
         )
@@ -228,25 +222,38 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         return custom + urls
 
     def quick_create_studio(self, request, doctor_id):
+        # 【业务逻辑】通过 GET 请求快速创建工作室
         doctor = DoctorProfile.objects.filter(pk=doctor_id).select_related("studio").first()
         if not doctor:
             self.message_user(request, "医生不存在", level=messages.ERROR)
             return redirect("admin:users_doctorprofile_changelist")
+        
         if doctor.studio:
             self.message_user(request, "该医生已绑定工作室。", level=messages.WARNING)
             return redirect("admin:users_doctorprofile_changelist")
-        if request.method == "POST":
+
+        try:
             with transaction.atomic():
+                # 生成随机编码
+                for _ in range(5):
+                    code = "".join(random.choices(string.digits, k=4))
+                    if not DoctorStudio.objects.filter(code=code).exists():
+                        break
+                else:
+                    code = uuid.uuid4().hex[:6] # 兜底
+
                 studio = DoctorStudio.objects.create(
                     name=f"{doctor.name}的工作室",
-                    code=uuid.uuid4().hex[:12],
+                    code=code,
                     owner_doctor=doctor,
                 )
                 doctor.studio = studio
                 doctor.save(update_fields=["studio"])
-            self.message_user(request, f"已创建工作室：{studio.name}")
-            return redirect("admin:users_doctorprofile_changelist")
-        self.message_user(request, "非法请求", level=messages.ERROR)
+                
+            self.message_user(request, f"成功！已创建工作室：{studio.name} (编码 {code})", level=messages.SUCCESS)
+        except Exception as e:
+            self.message_user(request, f"创建失败：{str(e)}", level=messages.ERROR)
+
         return redirect("admin:users_doctorprofile_changelist")
 
 
@@ -254,3 +261,4 @@ class DoctorProfileAdmin(admin.ModelAdmin):
 class DoctorStudioAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "owner_doctor", "created_at")
     search_fields = ("name", "code", "owner_doctor__name")
+    readonly_fields = ("code",)
