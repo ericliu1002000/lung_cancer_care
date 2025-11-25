@@ -43,6 +43,8 @@ class PlatformAdminCreationForm(forms.ModelForm):
                 username=username,
                 phone=phone,
                 wx_nickname=name,
+                wx_openid=None,
+                wx_unionid=None,
                 user_type=choices.UserType.ADMIN,
                 is_active=True,
                 is_staff=True,
@@ -88,6 +90,8 @@ class PlatformAdminChangeForm(forms.ModelForm):
         user = super().save(commit=False)
         user.phone = self.cleaned_data["phone"]
         user.wx_nickname = self.cleaned_data["name"]
+        user.wx_openid = None
+        user.wx_unionid = None
         user.is_active = self.cleaned_data.get("is_active", True)
         new_password = self.cleaned_data.get("reset_password")
         with transaction.atomic():
