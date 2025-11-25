@@ -28,6 +28,9 @@ class PlatformAdminCreationForm(forms.ModelForm):
         self.instance.wx_openid = None
         self.instance.wx_unionid = None
 
+    def save_m2m(self):  # pragma: no cover - no m2m fields
+        pass
+
     def clean_phone(self):
         phone = self.cleaned_data["phone"].strip()
         if CustomUser.objects.filter(phone=phone).exists():
@@ -109,6 +112,9 @@ class PlatformAdminChangeForm(forms.ModelForm):
                 update_fields.append("password")
             user.save(update_fields=update_fields)
         return user
+
+    def save_m2m(self):  # pragma: no cover - no m2m fields
+        pass
 
 
 @admin.register(PlatformAdminUser)
