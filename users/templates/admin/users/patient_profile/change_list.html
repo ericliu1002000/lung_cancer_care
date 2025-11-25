@@ -1,82 +1,166 @@
 {% extends "admin/change_list.html" %}
 {% load admin_list i18n static %}
+
 {% block extrastyle %}
 {{ block.super }}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<style>
+  /* --- 1. 布局容器 (替代 Bootstrap Grid) --- */
+  .layout-container {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start; /* 顶部对齐 */
+  }
+  
+  .layout-main {
+    flex: 3; /* 左侧占 3 份 (约 75%) */
+    min-width: 0; /* 防止表格撑爆容器 */
+  }
+  
+  .layout-sidebar {
+    flex: 1; /* 右侧占 1 份 (约 25%) */
+    position: sticky;
+    top: 20px; /* 简单的吸顶效果 */
+  }
+
+  /* --- 2. 卡片样式 (替代 Bootstrap Card) --- */
+  .custom-card {
+    background: var(--body-bg, #fff); /* 适配 Django 深色模式变量 */
+    border: 1px solid var(--hairline-color, #ccc);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+    padding: 15px;
+  }
+  
+  .card-body {
+    width: 100%;
+  }
+
+  /* --- 3. 筛选表单样式 (替代 Bootstrap Form) --- */
+  .filter-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); /* 自动响应式列 */
+    gap: 15px;
+    align-items: end; /* 底部对齐，为了按钮 */
+  }
+  
+  .form-group {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .form-group label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: var(--body-fg, #333);
+  }
+  
+  .form-group input, 
+  .form-group select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* --- 4. 按钮样式 (复用 Django Admin 原生样式) --- */
+  .btn-actions {
+    grid-column: 1 / -1; /* 按钮占满一行 */
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  
+  /* 强制修正 Django Admin 表格在 flex 容器中的宽度 */
+  .results table {
+    width: 100%;
+  }
+</style>
 {% endblock %}
+
 {% block extrahead %}
 {{ block.super }}
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 {% endblock %}
 
 {% block change_list %}
-<div class="container-fluid">
-  <div class="row">
-    <div class="col-md-8">
-      <div class="card mb-3">
-        <div class="card-body">
-          <form method="get" class="row g-3">
-            <div class="col-md-4">
-              {{ filter_form.q.label_tag }}
-              {{ filter_form.q }}
-            </div>
-            <div class="col-md-4">
-              {{ filter_form.gender.label_tag }}
-              {{ filter_form.gender }}
-            </div>
-            <div class="col-md-4">
-              {{ filter_form.doctor_name.label_tag }}
-              {{ filter_form.doctor_name }}
-            </div>
-            <div class="col-md-4">
-              {{ filter_form.sales_name.label_tag }}
-              {{ filter_form.sales_name }}
-            </div>
-            <div class="col-md-4">
-              {{ filter_form.birth_start.label_tag }}
-              {{ filter_form.birth_start }}
-            </div>
-            <div class="col-md-4">
-              {{ filter_form.birth_end.label_tag }}
-              {{ filter_form.birth_end }}
-            </div>
-            <div class="col-md-3">
-              {{ filter_form.date_range_start.label_tag }}
-              {{ filter_form.date_range_start }}
-            </div>
-            <div class="col-md-3">
-              {{ filter_form.date_range_end.label_tag }}
-              {{ filter_form.date_range_end }}
-            </div>
-            <div class="col-md-3">
-              {{ filter_form.purchase_start.label_tag }}
-              {{ filter_form.purchase_start }}
-            </div>
-            <div class="col-md-3">
-              {{ filter_form.purchase_end.label_tag }}
-              {{ filter_form.purchase_end }}
-            </div>
-            <div class="col-12 text-end">
-              <button type="submit" class="btn btn-primary">筛选</button>
-              <a href="{{ request.path }}" class="btn btn-secondary">重置</a>
-            </div>
-          </form>
+<div class="layout-container">
+  
+  <div class="layout-main">
+    
+    <div class="custom-card">
+      <form method="get" class="filter-form-grid">
+        
+        <div class="form-group">
+          {{ filter_form.q.label_tag }}
+          {{ filter_form.q }}
         </div>
-      </div>
-      <div class="card">
-        <div class="card-body table-responsive" id="patient-table-wrapper">
-          {% result_list cl %}
+        <div class="form-group">
+          {{ filter_form.gender.label_tag }}
+          {{ filter_form.gender }}
         </div>
-      </div>
+        
+        <div class="form-group">
+          {{ filter_form.doctor_name.label_tag }}
+          {{ filter_form.doctor_name }}
+        </div>
+        <div class="form-group">
+          {{ filter_form.sales_name.label_tag }}
+          {{ filter_form.sales_name }}
+        </div>
+
+        <div class="form-group">
+          {{ filter_form.birth_start.label_tag }}
+          {{ filter_form.birth_start }}
+        </div>
+        <div class="form-group">
+          {{ filter_form.birth_end.label_tag }}
+          {{ filter_form.birth_end }}
+        </div>
+
+        <div class="form-group">
+          {{ filter_form.date_range_start.label_tag }}
+          {{ filter_form.date_range_start }}
+        </div>
+        <div class="form-group">
+          {{ filter_form.date_range_end.label_tag }}
+          {{ filter_form.date_range_end }}
+        </div>
+
+        <div class="form-group">
+          {{ filter_form.purchase_start.label_tag }}
+          {{ filter_form.purchase_start }}
+        </div>
+        <div class="form-group">
+          {{ filter_form.purchase_end.label_tag }}
+          {{ filter_form.purchase_end }}
+        </div>
+
+        <div class="btn-actions">
+          <input type="submit" value="筛选" class="button button-primary" style="padding: 8px 20px;">
+          <a href="{{ request.path }}" class="button" style="padding: 8px 20px; line-height: 15px;">重置</a>
+        </div>
+      </form>
     </div>
-    <div class="col-md-4">
-      <div id="patient-detail-panel" class="card">
-        <div class="card-body">
-          <p>请点击左侧患者查看详情</p>
-        </div>
+
+    <div class="custom-card" id="patient-table-wrapper">
+      {% result_list cl %}
+      
+      {# 分页器 #}
+      {% pagination cl %}
+    </div>
+  </div>
+
+  <div class="layout-sidebar">
+    <div id="patient-detail-panel" class="custom-card" style="min-height: 300px;">
+      <div style="color: #666; text-align: center; margin-top: 50px;">
+        <p>👉 请点击左侧列表查看详情</p>
       </div>
     </div>
   </div>
+
 </div>
 {% endblock %}
 
@@ -86,21 +170,50 @@
 (function() {
   const previewBase = "{{ preview_url_base|default:''|escapejs }}";
   function initPatientRows() {
+    // 注意：Django Admin 表格行通常是 .row1, .row2，这里选择器需通用
     const rows = document.querySelectorAll('#result_list tbody tr');
     rows.forEach(function(row) {
-      const pk = row.getAttribute('data-object-id');
-      if (!pk || !previewBase) {
-        return;
+      // 查找 checkbox 或 link 获取 ID，Django admin 通常在 tr 上没有直接的 data-id
+      // 我们需要依赖之前提示词里让 AI 生成的 data-object-id，或者从第一列的 checkbox value 获取
+      
+      // 尝试从 checkbox 获取 ID (这是 Django admin 的标准结构)
+      let pk = null;
+      const checkbox = row.querySelector('.action-select');
+      if (checkbox) {
+          pk = checkbox.value;
+      } else {
+          // 如果没有 checkbox，尝试从第一列链接获取 ID
+          const firstLink = row.querySelector('th.field-name a, td.field-name a, th a');
+          if (firstLink) {
+              const match = firstLink.getAttribute('href').match(/(\d+)\/change/);
+              if (match) pk = match[1];
+          }
       }
-      row.setAttribute('hx-get', `${previewBase}${pk}/`);
+
+      if (!pk || !previewBase) return;
+
+      row.setAttribute('hx-get', `${previewBase}/${pk}/`); // 确保 URL 格式正确
       row.setAttribute('hx-target', '#patient-detail-panel');
       row.setAttribute('hx-swap', 'innerHTML');
       row.style.cursor = 'pointer';
+      
+      // 避免点击 checkbox 时触发 HTMX
+      row.querySelectorAll('input, a').forEach(el => {
+          el.addEventListener('click', e => e.stopPropagation());
+      });
     });
+    
+    // 如果 htmx 没加载，处理一下
+    if (window.htmx) {
+        htmx.process(document.querySelector('#result_list'));
+    }
   }
+
   document.addEventListener('DOMContentLoaded', initPatientRows);
+  // 监听 HTMX 交换后的事件（如果是 Ajax 翻页）- Django Admin 默认不是 Ajax 翻页，
+  // 但如果你将来做了 Ajax 翻页，这个监听很有用
   document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.target && evt.target.closest && evt.target.closest('#patient-table-wrapper')) {
+    if (evt.target && evt.target.id === 'patient-table-wrapper') {
       initPatientRows();
     }
   });

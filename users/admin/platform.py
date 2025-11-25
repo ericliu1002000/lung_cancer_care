@@ -58,7 +58,7 @@ class PlatformAdminCreationForm(forms.ModelForm):
                 user_type=choices.UserType.ADMIN,
                 is_active=True,
                 is_staff=True,
-                is_superuser=True,
+                is_superuser=False,
             )
             user.set_password(password)
             user.save()
@@ -119,9 +119,10 @@ class PlatformAdminChangeForm(forms.ModelForm):
 
 @admin.register(PlatformAdminUser)
 class PlatformAdminUserAdmin(admin.ModelAdmin):
-    list_display = ("username", "wx_nickname", "phone", "is_active", "date_joined", "is_superuser")
+    list_display = ("username", "wx_nickname", "phone", "is_active", "date_joined", "is_superuser", "get_groups")
     search_fields = ("username", "wx_nickname", "phone")
-    readonly_fields = ("username", "date_joined", "user_type", "is_staff", "is_superuser")
+    readonly_fields = ("username", "date_joined", "user_type")
+    filter_horizontal = ("groups", "user_permissions")
     actions = ["disable_admins"]
 
     def get_form(self, request, obj=None, **kwargs):
@@ -134,12 +135,34 @@ class PlatformAdminUserAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-    def get_readonly_fields(self, request, obj=None):
+    def get_fieldsets(self, request, obj=None):
         if obj:
-            return self.readonly_fields
-        return ()
+            return (
+                ("基础信息", {"fields": ("username", "name", "phone")}),
+                (
+                    "权限与分组",
+                    {
+                        "fields": ("is_active", "is_superuser", "groups", "user_permissions"),
+                    },
+                ),
+                ("其他信息", {"fields": ("date_joined", "user_type")}),
+            )
+        return (
+            ("基础信息", {"fields": ("username", "name", "phone", "password")}),
+            (
+                "权限与分组",
+                {
+                    "fields": ("is_superuser", "groups", "user_permissions"),
+                },
+            ),
+        )
 
     @admin.action(description="禁用所选管理员")
     def disable_admins(self, request, queryset):
         count = queryset.update(is_active=False)
         self.message_user(request, f"已禁用 {count} 个管理员。")
+
+    def get_groups(self, obj):
+        return ", ".join(obj.groups.values_list("name", flat=True)) or "-"
+
+    get_groups.short_description = "所属用户组"
