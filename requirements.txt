@@ -4,3 +4,5 @@ django-extensions
 ipython
 python-dotenv==1.1.1
 segno
+wechatpy
+cryptography
