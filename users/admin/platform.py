@@ -12,6 +12,7 @@ from users.models import CustomUser, PlatformAdminUser
 
 
 class PlatformAdminCreationForm(forms.ModelForm):
+    username = forms.CharField(label="用户名")
     phone = forms.CharField(label="登录手机号")
     password = forms.CharField(label="初始密码", widget=forms.PasswordInput)
     name = forms.CharField(label="管理员姓名")
@@ -26,19 +27,18 @@ class PlatformAdminCreationForm(forms.ModelForm):
             raise forms.ValidationError("该手机号已被其他账号使用")
         return phone
 
-    def _generate_username(self, phone: str) -> str:
-        base = f"admin_{phone}"
-        if not CustomUser.objects.filter(username=base).exists():
-            return base
-        suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
-        return f"{base}_{suffix}"
+    def clean_username(self):
+        username = self.cleaned_data["username"].strip()
+        if CustomUser.objects.filter(username=username).exists():
+            raise forms.ValidationError("该用户名已存在")
+        return username
 
     def save(self, commit=True):
+        username = self.cleaned_data["username"]
         phone = self.cleaned_data["phone"]
         password = self.cleaned_data["password"]
         name = self.cleaned_data["name"]
         with transaction.atomic():
-            username = self._generate_username(phone)
             user = PlatformAdminUser(
                 username=username,
                 phone=phone,
@@ -102,8 +102,8 @@ class PlatformAdminChangeForm(forms.ModelForm):
 
 @admin.register(PlatformAdminUser)
 class PlatformAdminUserAdmin(admin.ModelAdmin):
-    list_display = ("wx_nickname", "phone", "is_active", "date_joined", "is_superuser")
-    search_fields = ("wx_nickname", "phone")
+    list_display = ("username", "wx_nickname", "phone", "is_active", "date_joined", "is_superuser")
+    search_fields = ("username", "wx_nickname", "phone")
     readonly_fields = ("username", "date_joined", "user_type", "is_staff", "is_superuser")
     actions = ["disable_admins"]
 
