@@ -24,7 +24,7 @@
         <span>➕</span>
         <span>录入患者</span>
       </a>
-      <a href="#" class="text-slate-500 hover:text-slate-700">修改密码</a>
+      <a href="{% url 'web_sales:sales_change_password' %}" class="text-slate-500 hover:text-slate-700">修改密码</a>
       <span class="hidden sm:block text-slate-600">你好，{{ sales.name }}</span>
       <a href="{% url 'web_doctor:logout' %}" class="text-rose-500 hover:text-rose-400 font-medium">退出</a>
     </div>
