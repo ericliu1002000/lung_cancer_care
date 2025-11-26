@@ -54,7 +54,7 @@ def _build_role_decorator(*roles: int) -> Callable[[ViewFunc], ViewFunc]:
         return user_passes_test(
             lambda user: _user_role_guard(user, roles),
             login_url=LOGIN_URL,
-            raise_exception=True,
+            
         )(view_func)
 
     return decorator
