@@ -2,37 +2,17 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.conf import settings
+from django.utils import timezone
 from users.models import PatientProfile, SalesProfile, CustomUser
 from users import choices
+from health_data.models import MedicalHistory
+from regions.models import Province, City
 # 引用 wx 的 client 来获取二维码，注意避免循环引用，可以在方法内引用或使用 lazy import
 from wechatpy import WeChatClient 
 
 class PatientService:
     
-    def create_profile_by_sales(self, sales_user: CustomUser, data: dict) -> PatientProfile:
-        """
-        销售直接创建患者档案（无 customer_id）。
-        """
-        # 1. 校验销售身份
-        if not hasattr(sales_user, 'sales_profile'):
-            raise ValidationError("当前账号无销售档案")
-            
-        sales_profile = sales_user.sales_profile
-
-        # 2. 创建档案 (user=None)
-        profile = PatientProfile.objects.create(
-            name=data['name'],
-            phone=data['phone'],
-            gender=data.get('gender', choices.Gender.UNKNOWN),
-            birth_date=data.get('birth_date'),
-            address=data.get('address', ""),
-            disease_detail=data.get('disease_detail', ''), # 假设有这个字段
-            ec_relation=data.get('ec_relation', ""),
-            sales=sales_profile,
-            source=choices.PatientSource.SALES,
-            claim_status=choices.ClaimStatus.PENDING # 待认领
-        )
-        return profile
+    
 
     def create_profile_by_self(self, user: CustomUser, data: dict) -> PatientProfile:
         """
@@ -102,3 +82,85 @@ class PatientService:
             return True
             
         return True # 已经是本人绑定，算成功
+
+    def create_full_patient_record(self, sales_user: CustomUser, data: dict) -> PatientProfile:
+        """
+        销售端完整录入患者档案（含病史）。
+        """
+
+        if not hasattr(sales_user, "sales_profile"):
+            raise ValidationError("当前账号无销售档案")
+
+        name = (data.get("name") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        if not name or not phone:
+            raise ValidationError("姓名与联系电话为必填项")
+
+        risk_factors = data.get("risk_factors") or []
+        if isinstance(risk_factors, str):
+            risk_list = [risk_factors]
+        else:
+            risk_list = list(risk_factors)
+        risk_value = ",".join([item.strip() for item in risk_list if item])
+
+        record_date = data.get("record_date") or timezone.now().date()
+        address_detail = (data.get("address_detail") or "").strip()
+
+        province_name = ""
+        city_name = ""
+        province_id = data.get("province_id")
+        city_id = data.get("city_id")
+        try:
+            province_obj = (
+                Province.objects.filter(id=int(province_id)).first()
+                if province_id
+                else None
+            )
+        except (TypeError, ValueError):
+            province_obj = None
+        if province_obj:
+            province_name = province_obj.name
+
+        try:
+            city_obj = (
+                City.objects.filter(id=int(city_id)).first()
+                if city_id
+                else None
+            )
+        except (TypeError, ValueError):
+            city_obj = None
+        if city_obj:
+            city_name = city_obj.name
+
+        address = " ".join(
+            part for part in [province_name, city_name, address_detail] if part
+        )
+
+        with transaction.atomic():
+            profile = PatientProfile.objects.create(
+                name=name,
+                phone=phone,
+                gender=data.get("gender", choices.Gender.UNKNOWN),
+                birth_date=data.get("birth_date"),
+                address=address,
+                sales=sales_user.sales_profile,
+                source=choices.PatientSource.SALES,
+                claim_status=choices.ClaimStatus.PENDING,
+                ec_name=data.get("ec_name", ""),
+                ec_phone=data.get("ec_phone", ""),
+                ec_relation=data.get("ec_relation", ""),
+            )
+
+            MedicalHistory.objects.create(
+                patient=profile,
+                record_date=record_date,
+                diagnosis=data.get("diagnosis", ""),
+                pathology=data.get("pathology", ""),
+                tnm_stage=data.get("tnm_stage", ""),
+                gene_mutation=data.get("gene_mutation", ""),
+                surgery_info=data.get("surgery_info", ""),
+                doctor_note=data.get("doctor_note", ""),
+                risk_factors=risk_value,
+            )
+
+        return profile

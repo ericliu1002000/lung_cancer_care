@@ -15,7 +15,8 @@ class MedicalHistory(models.Model):
     pathology = models.CharField("病理类型", max_length=50, blank=True)
     tnm_stage = models.CharField("TNM 分期", max_length=20, blank=True)
     gene_mutation = models.CharField("基因检测结果", max_length=100, blank=True)
-    risk_factors = models.TextField("危险因素(JSON)", blank=True)
+    risk_factors = models.TextField("危险因素标签", blank=True)
+    surgery_info = models.TextField("手术信息", blank=True)
     doctor_note = models.TextField("阶段小结", blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
