@@ -50,7 +50,9 @@ INSTALLED_APPS = [
     'users',
     'web_doctor',
     'web_sales',
-    'wx'
+    'wx',
+    'health_data',
+    'regions'
 ]
 
 MIDDLEWARE = [
