@@ -1,0 +1,177 @@
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+{% block body %}
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+<div x-data="{ sidebarOpen: false }" class="min-h-screen flex flex-col bg-gray-50 text-slate-900">
+  <header class="h-16 bg-white border-b border-slate-200 shadow-sm px-4 md:px-8 flex items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <button class="md:hidden text-slate-600 focus:outline-none" @click="sidebarOpen = true" aria-label="打开导航">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center text-sky-700 font-semibold">
+          LC
+        </div>
+        <div class="text-lg font-semibold tracking-wide text-slate-800">肺癌管理-销售端</div>
+      </div>
+    </div>
+    <div class="flex items-center space-x-4 text-sm">
+      <a href="#" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg shadow flex items-center space-x-2 transition">
+        <span>➕</span>
+        <span>录入患者</span>
+      </a>
+      <a href="#" class="text-slate-500 hover:text-slate-700">修改密码</a>
+      <span class="hidden sm:block text-slate-600">你好，{{ sales.name }}</span>
+      <a href="{% url 'web_doctor:logout' %}" class="text-rose-500 hover:text-rose-400 font-medium">退出</a>
+    </div>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden relative">
+    <!-- Mobile sidebar overlay -->
+    <div
+      class="fixed inset-0 bg-black/40 z-30 md:hidden"
+      x-show="sidebarOpen"
+      x-transition.opacity
+      @click="sidebarOpen = false"
+      x-cloak
+    ></div>
+
+    <aside
+      class="fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 text-white flex flex-col transform transition-transform duration-200 md:relative md:translate-x-0 md:z-0"
+      :class="{'-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen}"
+    >
+      <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between md:hidden">
+        <span class="font-semibold">导航</span>
+        <button class="text-white" @click="sidebarOpen = false" aria-label="关闭导航">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        <div
+          class="bg-white/5 rounded-2xl border border-white/5"
+          x-data="{ open: true }"
+        >
+          <button
+            type="button"
+            class="w-full flex items-center justify-between px-4 py-3 text-left font-medium tracking-wide"
+            @click="open = !open"
+          >
+            <span>我的医生</span>
+            <svg class="w-4 h-4 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <div x-show="open" x-transition>
+            <div class="px-4 pb-4 space-y-3">
+              <div class="relative">
+                <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z" />
+                  </svg>
+                </span>
+                <input type="search" placeholder="搜索医生..." class="w-full bg-white/10 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-sm placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-300/40">
+              </div>
+              <div class="max-h-72 overflow-y-auto divide-y divide-white/5">
+                {% if doctors %}
+                  {% for doctor in doctors %}
+                  <div
+                    class="py-3 px-2 hover:bg-white/10 rounded-xl transition cursor-pointer"
+                    hx-get="#"
+                    hx-target="#sales-dashboard-panel"
+                    hx-swap="innerHTML"
+                  >
+                    <div class="text-sm font-semibold">{{ doctor.name }}</div>
+                    <div class="text-xs text-white/70 mt-1">{{ doctor.hospital }}</div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="text-center text-white/50 text-sm py-6">暂无医生</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="bg-white/5 rounded-2xl border border-white/5"
+          x-data="{ open: true }"
+        >
+          <button
+            type="button"
+            class="w-full flex items-center justify-between px-4 py-3 text-left font-medium tracking-wide"
+            @click="open = !open"
+          >
+            <span>我的患者</span>
+            <svg class="w-4 h-4 transition-transform duration-200" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          <div x-show="open" x-transition>
+            <div class="px-4 pb-4 space-y-3">
+              <div class="relative">
+                <span class="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 110-15 7.5 7.5 0 010 15z" />
+                  </svg>
+                </span>
+                <input type="search" placeholder="搜索患者..." class="w-full bg-white/10 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-sm placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-300/40">
+              </div>
+              <div class="max-h-72 overflow-y-auto divide-y divide-white/5">
+                {% if patients %}
+                  {% for patient in patients %}
+                  <div
+                    class="py-3 px-2 hover:bg-white/10 rounded-xl transition cursor-pointer space-y-1"
+                    hx-get="#"
+                    hx-target="#sales-dashboard-panel"
+                    hx-swap="innerHTML"
+                  >
+                    <div class="text-sm font-semibold">{{ patient.name }}</div>
+                    <div class="flex items-center justify-between text-xs text-white/70">
+                      <span>{{ patient.get_claim_status_display }}</span>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200">
+                        {{ patient.get_service_status_display }}
+                      </span>
+                    </div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="text-center text-white/50 text-sm py-6">暂无患者</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main id="sales-dashboard-panel" class="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 space-y-8">
+        <div>
+          <p class="text-sm uppercase tracking-widest text-slate-400">Dashboard</p>
+          <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 mt-2">你好，{{ sales.name }} 经理</h1>
+          <p class="text-slate-500 mt-2">点击左侧列表查看详情，或点击顶部按钮录入新患者。</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-gradient-to-br from-blue-500 to-sky-400 text-white rounded-2xl p-6 shadow-lg flex flex-col">
+            <div class="text-sm uppercase tracking-wide text-white/70">管理医生总数</div>
+            <div class="text-4xl font-bold mt-4">{{ stats.doctor_total }}</div>
+            <p class="text-sm text-white/80 mt-2">持续维护优质渠道，助力医生工作室增长。</p>
+          </div>
+          <div class="bg-gradient-to-br from-emerald-500 to-teal-400 text-white rounded-2xl p-6 shadow-lg flex flex-col">
+            <div class="text-sm uppercase tracking-wide text-white/70">管理患者总数</div>
+            <div class="text-4xl font-bold mt-4">{{ stats.patient_total }}</div>
+            <p class="text-sm text-white/80 mt-2">关注患者依从性，及时提醒续费与关怀。</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+{% endblock %}

@@ -47,6 +47,12 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】评估依从性风险；【用法】可空；【示例】55；【参数】int；【返回值】int",
     )
+    # birthday_date = models.DateField(
+    #     "出生日期",
+    #     null=True,
+    #     blank=True,
+    #     help_text="出生日期"
+    # )
     id_card = models.CharField(
         "身份证号",
         max_length=18,

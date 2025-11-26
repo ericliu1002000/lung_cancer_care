@@ -13,5 +13,4 @@ urlpatterns = [
         views.doctor_change_password,
         name="doctor_change_password",
     ),
-    path("sales/dashboard/", views.sales_dashboard, name="sales_dashboard"),
 ]

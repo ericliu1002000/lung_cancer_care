@@ -30,4 +30,5 @@ urlpatterns = [
     path('users/', include('users.urls')),
     path('wx/', include('wx.urls', namespace='wx')),
     path('', include('web_doctor.urls')),
+    path('', include('web_sales.urls')),
 ]
