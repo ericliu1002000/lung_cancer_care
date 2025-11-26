@@ -42,12 +42,17 @@ class AuthService:
         login(request, user, backend=self.default_backend)
         return True, user
 
-    def pc_login(self, request, username: str, password: str) -> Tuple[bool, Optional[CustomUser]]:
-        if not username or not password:
-            return False, "请输入用户名和密码"
-        user = authenticate(request, username=username, password=password)
+    def pc_login(self, request, phone: str, password: str) -> Tuple[bool, Optional[CustomUser]]:
+        """手机号 + 密码登录，内部通过用户名走 Django 认证体系。"""
+
+        if not phone or not password:
+            return False, "请输入手机号和密码"
+        account = CustomUser.objects.filter(phone=phone).first()
+        if not account:
+            return False, "手机号或密码错误"
+        user = authenticate(request, username=account.username, password=password)
         if not user:
-            return False, "用户名或密码错误"
+            return False, "手机号或密码错误"
         login(request, user)
         return True, user
     

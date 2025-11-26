@@ -19,7 +19,7 @@ class PlatformAdminCreationForm(forms.ModelForm):
 
     class Meta:
         model = PlatformAdminUser
-        fields = []
+        fields = ["username", "phone"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -78,7 +78,7 @@ class PlatformAdminChangeForm(forms.ModelForm):
 
     class Meta:
         model = PlatformAdminUser
-        fields = []
+        fields = ["username", "phone"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -14,9 +14,9 @@ def login_view(request: HttpRequest) -> HttpResponse:
     """登录入口，依据 user_type 跳转不同 Dashboard。"""
 
     if request.method == "POST":
-        username = request.POST.get("username", "").strip()
+        phone = request.POST.get("phone", "").strip()
         password = request.POST.get("password", "")
-        success, payload = AuthService().pc_login(request, username, password)
+        success, payload = AuthService().pc_login(request, phone, password)
         if success:
             user = payload
             if user.user_type in {choices.UserType.DOCTOR, choices.UserType.ASSISTANT}:
