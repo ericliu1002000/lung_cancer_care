@@ -230,6 +230,12 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # 【新增】专门打印 SQL 语句的配置
+        "django.db.backends": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
     },
 }
 

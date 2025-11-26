@@ -16,9 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from django.contrib.auth.views import LogoutView
+
+# 2. 修改 Admin 站点的文案配置
+admin.site.site_header = '肺部康复管理系统后台'  # 登录页的大标题 / 每一页顶部的标题
+admin.site.site_title = '肺部康复管理系统'     # 浏览器标签页的 Title
+admin.site.index_title = '后台管理首页'         # 登录进去后，面包屑导航后面的文字
+admin.site.logout = LogoutView.as_view(next_page='/admin/')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
     path('users/', include('users.urls')),
     path('wx/', include('wx.urls', namespace='wx')),
     path('', include('web_doctor.urls')),
