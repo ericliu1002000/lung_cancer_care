@@ -24,8 +24,10 @@ class PatientService:
             name=data['name'],
             phone=data['phone'],
             gender=data.get('gender', choices.Gender.UNKNOWN),
-            age=data.get('age'),
+            birth_date=data.get('birth_date'),
+            address=data.get('address', ""),
             disease_detail=data.get('disease_detail', ''), # 假设有这个字段
+            ec_relation=data.get('ec_relation', ""),
             sales=sales_profile,
             source=choices.PatientSource.SALES,
             claim_status=choices.ClaimStatus.PENDING # 待认领

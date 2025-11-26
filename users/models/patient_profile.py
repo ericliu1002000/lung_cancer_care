@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -41,18 +43,12 @@ class PatientProfile(TimeStampedModel):
         default=choices.Gender.UNKNOWN,
         help_text="【业务说明】基础画像；【用法】表单选择；【示例】1=男；【参数】枚举；【返回值】int",
     )
-    age = models.PositiveIntegerField(
-        "年龄",
+    birth_date = models.DateField(
+        "出生日期",
         null=True,
         blank=True,
-        help_text="【业务说明】评估依从性风险；【用法】可空；【示例】55；【参数】int；【返回值】int",
+        help_text="【业务说明】用于推算年龄、评估依从风险；【用法】可空；【示例】1969-05-10；【参数】date；【返回值】date",
     )
-    # birthday_date = models.DateField(
-    #     "出生日期",
-    #     null=True,
-    #     blank=True,
-    #     help_text="出生日期"
-    # )
     id_card = models.CharField(
         "身份证号",
         max_length=18,
@@ -125,6 +121,18 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】紧急联系人电话；【用法】一键呼叫；【示例】13900000000；【参数】str；【返回值】str",
     )
+    address = models.CharField(
+        "联系地址",
+        max_length=100,
+        blank=True,
+        help_text="【业务说明】患者联系地址；【用法】邮寄资料或上门；【示例】上海市浦东新区XX路；【参数】str；【返回值】str",
+    )
+    ec_relation = models.CharField(
+        "紧急联系人关系",
+        max_length=20,
+        blank=True,
+        help_text="【业务说明】如父子/配偶；【用法】便于识别联系人；【示例】父子；【参数】str；【返回值】str",
+    )
     is_active = models.BooleanField(
         "是否有效",
         default=True,
@@ -162,3 +170,16 @@ class PatientProfile(TimeStampedModel):
         """
 
         return f"{self.name}-{self.phone}"
+
+    @property
+    def age(self):
+        """
+        【业务说明】按出生日期计算年龄，便于兼容旧逻辑。
+        """
+
+        if not self.birth_date:
+            return None
+        today = date.today()
+        return today.year - self.birth_date.year - (
+            (today.month, today.day) < (self.birth_date.month, self.birth_date.day)
+        )

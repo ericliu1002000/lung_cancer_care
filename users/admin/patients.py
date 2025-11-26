@@ -1,7 +1,5 @@
 """Patient admin configuration with HTMX preview."""
 
-from datetime import date
-
 from django import forms
 from django.contrib import admin
 from django.db.models import Q
@@ -39,7 +37,8 @@ class PatientProfileAdmin(admin.ModelAdmin):
     list_display = (
         "name",
         "gender",
-        "age",
+        "birth_date",
+        "age_display",
         "created_at",
         "service_status",
         "doctor",
@@ -102,11 +101,9 @@ class PatientProfileAdmin(admin.ModelAdmin):
             if data.get("gender") != "":
                 qs = qs.filter(gender=data["gender"])
             if data.get("birth_start"):
-                max_age = self._age_from_birth(data["birth_start"])
-                qs = qs.filter(age__isnull=False, age__lte=max_age)
+                qs = qs.filter(birth_date__gte=data["birth_start"])
             if data.get("birth_end"):
-                min_age = self._age_from_birth(data["birth_end"])
-                qs = qs.filter(age__isnull=False, age__gte=min_age)
+                qs = qs.filter(birth_date__lte=data["birth_end"])
             if data.get("doctor_name"):
                 qs = qs.filter(doctor__name__icontains=data["doctor_name"])
             if data.get("sales_name"):
@@ -139,12 +136,10 @@ class PatientProfileAdmin(admin.ModelAdmin):
             response.context_data["preview_url_base"] = preview_base
         return response
 
-    @staticmethod
-    def _age_from_birth(birth_date):
-        today = date.today()
-        return today.year - birth_date.year - (
-            (today.month, today.day) < (birth_date.month, birth_date.day)
-        )
+    def age_display(self, obj):
+        return obj.age or "-"
+
+    age_display.short_description = "年龄"
 
 
 admin.site.register(PatientProfile, PatientProfileAdmin)
