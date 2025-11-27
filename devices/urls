@@ -1,0 +1,6 @@
+from django.urls import path
+from devices.views.callback import smartwatch_data_callback
+
+urlpatterns = [
+    path('api/callback/smartwatch/', smartwatch_data_callback, name='smartwatch_callback'),
+]

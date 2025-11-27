@@ -53,7 +53,8 @@ INSTALLED_APPS = [
     'wx',
     'health_data',
     'regions',
-    'core'
+    'core',
+    'devices'
 ]
 
 MIDDLEWARE = [
@@ -236,12 +237,20 @@ LOGGING = {
 }
 
 
+#短信配置
 SMS_CONFIG = {
     'API_URL': os.environ.get('SMS_API_URL', 'http://124.172.234.157:8180/service.asmx/SendMessageStr'),
     'ORG_ID': os.environ.get('SMS_ORG_ID'),
     'USERNAME': os.environ.get('SMS_USERNAME'),
     'PASSWORD': os.environ.get('SMS_PASSWORD'), 
     'SIGNATURE': '【岱劲健康】', # 建议配置签名，避免被拦截
+}
+
+#智能手表配置
+SMARTWATCH_CONFIG = {
+    'APP_KEY': os.environ.get('SMARTWATCH_APP_KEY'),
+    'APP_SECRET': os.environ.get('SMARTWATCH_APP_SECRET'),
+    'API_BASE_URL': 'https://apibff.scheartmed.com',  # [cite: 412]
 }
 
 """
