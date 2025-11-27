@@ -40,13 +40,9 @@ class PatientRelation(TimeStampedModel):
         blank=True,
         help_text="【业务说明】自定义关系说明；【用法】前端展示例如“女儿”；【示例】女儿；【参数】str；【返回值】str",
     )
-    is_primary = models.BooleanField(
-        "是否第一监护人",
-        default=False,
-        help_text="【业务说明】是否第一监护人；【用法】决定高危通知优先级；【示例】True；【参数】bool；【返回值】bool",
-    )
+    
     receive_alert_msg = models.BooleanField(
-        "是否接收报警",
+        "是否接收通知",
         default=False,
         help_text="【业务说明】是否接收模板消息；【用法】用户自行勾选；【示例】False；【参数】bool；【返回值】bool",
     )

@@ -1,0 +1,82 @@
+{% extends "layouts/base_portal.html" %}
+{% block body %}
+<div class="min-h-screen bg-gradient-to-b from-sky-50 to-white py-10 px-4">
+  <div class="max-w-3xl mx-auto space-y-6" x-data="{ showFamily: false }">
+    <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 text-center">
+      <p class="text-xs uppercase tracking-[0.3em] text-slate-400">患者档案绑定</p>
+      <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 mt-3">
+        欢迎加入 {{ patient.masked_name|default:"患者" }} 的康复守护团队
+      </h1>
+      <p class="text-sm text-slate-500 mt-3">
+        完成身份确认后，即可与家人共享康复进度、提醒和祝福。
+      </p>
+    </div>
+    {% if messages %}
+    <div class="bg-rose-50 border border-rose-200 text-rose-600 text-sm rounded-2xl px-4 py-3">
+      {% for message in messages %}
+      <p>{{ message }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form method="post" action="{% url 'web_patient:bind_submit' patient.id %}" class="bg-white rounded-3xl border border-slate-100 shadow-lg hover:shadow-xl transition p-6 flex flex-col justify-between">
+        {% csrf_token %}
+        <input type="hidden" name="relation_type" value="{{ relation_self }}">
+        <input type="hidden" name="relation_name" value="">
+        <input type="hidden" name="receive_notification" value="on">
+        <div>
+          <p class="text-sm uppercase tracking-widest text-slate-400">适用于手机持有人</p>
+          <h2 class="text-xl font-semibold text-slate-900 mt-2">我是患者本人</h2>
+          <p class="text-sm text-slate-500 mt-2">确认后即可同步康复计划，并接收提醒。</p>
+        </div>
+        <button type="submit" class="mt-6 w-full bg-slate-900 text-white py-3 rounded-2xl text-sm font-semibold hover:bg-slate-800 transition">立即绑定</button>
+      </form>
+      <button type="button" class="bg-white rounded-3xl border border-slate-100 shadow-lg hover:shadow-xl transition p-6 text-left" @click="showFamily = !showFamily">
+        <p class="text-sm uppercase tracking-widest text-slate-400">亲友守护</p>
+        <h2 class="text-xl font-semibold text-slate-900 mt-2">我是家属</h2>
+        <p class="text-sm text-slate-500 mt-2">
+          轻松获取最新病情与提醒，还可自定义关系和通知方式。
+        </p>
+        <span class="inline-flex items-center mt-4 text-sky-600 font-medium">
+          填写信息
+          <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </button>
+    </div>
+
+    <div x-show="showFamily" x-transition class="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-5">
+      <h3 class="text-lg font-semibold text-slate-900">填写家属信息</h3>
+      <form method="post" action="{% url 'web_patient:bind_submit' patient.id %}" class="space-y-5">
+        {% csrf_token %}
+        <div>
+          <p class="text-sm text-slate-500 mb-2">选择与患者的关系</p>
+          <div class="flex flex-wrap gap-3">
+            {% for value, label in family_relation_choices %}
+            <label class="px-4 py-2 rounded-2xl border border-slate-200 text-sm font-medium cursor-pointer hover:border-sky-400 transition">
+              <input type="radio" name="relation_type" value="{{ value }}" class="hidden" {% if forloop.first %}checked{% endif %}>
+              <span>{{ label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-600">关系备注</label>
+          <input type="text" name="relation_name" placeholder="如：王先生的父亲" class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-100">
+        </div>
+        <label class="flex items-center space-x-3 text-sm text-slate-600">
+          <input type="checkbox" name="receive_notification" class="rounded border-slate-300 text-sky-500 focus:ring-sky-200" checked>
+          <span>接收康复提醒与关怀消息</span>
+        </label>
+        <div class="text-right">
+          <button type="submit" class="inline-flex items-center px-6 py-2.5 bg-sky-600 text-white rounded-2xl text-sm font-semibold hover:bg-sky-500">
+            提交申请
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+{% endblock %}

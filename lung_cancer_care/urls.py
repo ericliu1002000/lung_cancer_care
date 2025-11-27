@@ -18,6 +18,22 @@ from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth.views import LogoutView
 from devices.views.callback import smartwatch_data_callback
+from django.http import HttpResponse
+from django.conf import settings
+import os
+
+def wechat_verify_view(request):
+    # 文件名必须与微信后台提供的一致
+    filename = "MP_verify_CHZvy99Xmr1t237O.txt"
+    # 拼接文件的完整路径 (假设文件在项目根目录，即 BASE_DIR)
+    file_path = os.path.join(settings.BASE_DIR, filename)
+    
+    
+    with open(file_path, 'r') as f:
+        content = f.read()
+    # 微信要求返回纯文本内容
+    return HttpResponse(content, content_type="text/plain")
+    
 
 # 2. 修改 Admin 站点的文案配置
 admin.site.site_header = '肺部康复管理系统后台'  # 登录页的大标题 / 每一页顶部的标题
@@ -26,7 +42,11 @@ admin.site.index_title = '后台管理首页'         # 登录进去后，面包
 admin.site.logout = LogoutView.as_view(next_page='/admin/')
 
 
+
 urlpatterns = [
+
+    path('MP_verify_CHZvy99Xmr1t237O.txt', wechat_verify_view),
+
     path('admin/', admin.site.urls),
     
     path('users/', include('users.urls')),
@@ -34,5 +54,6 @@ urlpatterns = [
     path('regions/', include('regions.urls', namespace='regions')),
     path('', include('web_doctor.urls')),
     path('', include('web_sales.urls')),
+    path('p/', include('web_patient.urls', namespace='web_patient')),
     path('deviceupload/', smartwatch_data_callback, name='device_upload_root'),
 ]

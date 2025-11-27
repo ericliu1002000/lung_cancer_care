@@ -5,7 +5,7 @@ from typing import Optional
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from users.models import PatientProfile, CustomUser
+from users.models import PatientProfile, CustomUser, PatientRelation
 from users import choices
 from health_data.models import MedicalHistory
 from regions.models import Province, City
@@ -15,23 +15,6 @@ from wechatpy import WeChatClient
 class PatientService:
     
     
-
-    def create_profile_by_self(self, user: CustomUser, data: dict) -> PatientProfile:
-        """
-        【功能3】患者自创患者档案（有 customer_id）。
-        """
-        if hasattr(user, 'patient_profile'):
-            raise ValidationError("您已拥有患者档案")
-
-        profile = PatientProfile.objects.create(
-            user=user, # 绑定当前用户
-            name=data['name'],
-            phone=data['phone'],
-            source=choices.PatientSource.SELF,
-            claim_status=choices.ClaimStatus.CLAIMED
-        )
-        return profile
-
     def generate_bind_qrcode(self, profile_id: int) -> str:
         """
         【功能4】生成或复用带参二维码（临时二维码）。
@@ -126,6 +109,50 @@ class PatientService:
             return True
             
         return True # 已经是本人绑定，算成功
+
+    def get_profile_for_bind(self, profile_id: int) -> PatientProfile:
+        """根据 ID 获取档案，找不到抛错。"""
+
+        profile = PatientProfile.objects.filter(pk=profile_id).first()
+        if profile is None:
+            raise ValidationError("患者档案不存在")
+        return profile
+
+    def process_binding(
+        self,
+        user: CustomUser,
+        patient_id: int,
+        relation_type: int,
+        **kwargs,
+    ) -> PatientProfile:
+        """处理患者本人或家属绑定逻辑。"""
+
+        profile = self.get_profile_for_bind(patient_id)
+
+        if relation_type == choices.RelationType.SELF:
+            if profile.user and profile.user != user:
+                raise ValidationError("该档案已被其他微信账号认领")
+            if hasattr(user, "patient_profile") and user.patient_profile != profile:
+                raise ValidationError("您已绑定过其他患者档案")
+            profile.user = user
+            profile.claim_status = choices.ClaimStatus.CLAIMED
+            profile.save(update_fields=["user", "claim_status", "updated_at"])
+            return profile
+
+        relation_name = kwargs.get("relation_name", "")
+        receive_alert_msg = kwargs.get("receive_alert_msg", False)
+
+        PatientRelation.objects.update_or_create(
+            patient=profile,
+            user=user,
+            defaults={
+                "relation_type": relation_type,
+                "relation_name": relation_name,
+                "receive_alert_msg": receive_alert_msg,
+            },
+        )
+
+        return profile
 
     def create_full_patient_record(self, sales_user: CustomUser, data: dict) -> PatientProfile:
         """

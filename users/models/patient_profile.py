@@ -194,3 +194,23 @@ class PatientProfile(TimeStampedModel):
         return today.year - self.birth_date.year - (
             (today.month, today.day) < (self.birth_date.month, self.birth_date.day)
         )
+
+    @property
+    def masked_name(self) -> str:
+        """
+        【业务说明】脱敏展示姓名。
+        【规则】
+        - 1 个字：显示原名。
+        - 2 个字：显示首字 + *。
+        - ≥3 个字：显示首尾，中间以 * 填充。
+        """
+
+        if not self.name:
+            return ""
+        name = self.name.strip()
+        length = len(name)
+        if length <= 1:
+            return name
+        if length == 2:
+            return f"{name[0]}*"
+        return f"{name[0]}{'*' * (length - 2)}{name[-1]}"

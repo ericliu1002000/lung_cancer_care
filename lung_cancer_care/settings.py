@@ -26,6 +26,8 @@ ALLOWED_HOSTS_RAW = os.getenv("ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_RAW.split(",") if host.strip()]
 if DJANGO_ENV != "production" and not ALLOWED_HOSTS:
     ALLOWED_HOSTS = []
+    
+WEB_BASE_URL = os.getenv("WEB_BASE_URL", "http://localhost:8001").rstrip("/")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -50,6 +52,7 @@ INSTALLED_APPS = [
     'users',
     'web_doctor',
     'web_sales',
+    'web_patient',
     'wx',
     'health_data',
     'regions',
