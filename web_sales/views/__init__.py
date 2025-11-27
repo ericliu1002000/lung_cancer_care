@@ -4,6 +4,7 @@ from .dashboard import sales_dashboard
 from .account import sales_change_password
 from .patient_entry import patient_entry, check_patient_phone
 from .patient_detail import patient_detail, update_patient_doctor
+from .doctor_detail import doctor_detail
 
 __all__ = [
     "sales_dashboard",
@@ -12,4 +13,5 @@ __all__ = [
     "patient_detail",
     "check_patient_phone",
     "update_patient_doctor",
+    "doctor_detail",
 ]

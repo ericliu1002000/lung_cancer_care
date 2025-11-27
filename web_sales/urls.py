@@ -7,6 +7,7 @@ from .views import (
     patient_detail,
     check_patient_phone,
     update_patient_doctor,
+    doctor_detail,
 )
 
 app_name = "web_sales"
@@ -33,5 +34,10 @@ urlpatterns = [
         "sales/patient/<int:pk>/doctor/",
         update_patient_doctor,
         name="update_patient_doctor",
+    ),
+    path(
+        "sales/doctor/<int:pk>/detail/",
+        doctor_detail,
+        name="doctor_detail",
     ),
 ]

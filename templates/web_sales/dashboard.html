@@ -82,8 +82,8 @@
                   {% for doctor in doctors %}
                   <div
                     class="py-3 px-2 hover:bg-white/10 rounded-xl transition cursor-pointer"
-                    hx-get="#"
-                    hx-target="#sales-dashboard-panel"
+                    hx-get="{% url 'web_sales:doctor_detail' doctor.id %}"
+                    hx-target="#main-content-area"
                     hx-swap="innerHTML"
                   >
                     <div class="text-sm font-semibold">{{ doctor.name }}</div>
