@@ -33,13 +33,41 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
     except ValidationError:
         raise Http404("患者档案不存在")
 
-    _ensure_wechat_user(request)
-
     family_relation_choices = [
         (value, label)
         for value, label in choices.RelationType.choices
         if value != choices.RelationType.SELF
     ]
+    family_default = (
+        family_relation_choices[0][0]
+        if family_relation_choices
+        else choices.RelationType.SPOUSE
+    )
+
+    logged_in = _ensure_wechat_user(request)
+    if not logged_in:
+        return render(
+            request,
+            "web_patient/bind_landing.html",
+            {
+                "patient": patient,
+                "relation_self": choices.RelationType.SELF,
+                "family_relation_choices": family_relation_choices,
+                "family_default": family_default,
+            },
+        )
+
+    if request.user.is_authenticated:
+        already_bound = (
+            patient.user_id == request.user.id
+            or patient.relations.filter(user=request.user).exists()
+        )
+        if already_bound:
+            return render(
+                request,
+                "web_patient/bind_success.html",
+                {"patient": patient},
+            )
 
     return render(
         request,
@@ -48,6 +76,7 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
             "patient": patient,
             "relation_self": choices.RelationType.SELF,
             "family_relation_choices": family_relation_choices,
+            "family_default": family_default,
         },
     )
 

@@ -36,7 +36,7 @@ class ClaimStatus(models.IntegerChoices):
 class ServiceStatus(models.IntegerChoices):
     """【业务说明】会员等级；【用法】service_status。"""
 
-    BASIC = 1, "免费/游客"
+    BASIC = 1, "免费"
     MEMBER = 2, "付费会员"
     EXPIRED = 3, "已过期"
 

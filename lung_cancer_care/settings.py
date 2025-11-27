@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'web_doctor',
     'web_sales',
     'web_patient',
+    'market',
     'wx',
     'health_data',
     'regions',

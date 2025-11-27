@@ -133,7 +133,13 @@
                   >
                     <div class="text-sm font-semibold">{{ patient.name }}</div>
                     <div class="flex items-center justify-between text-xs text-white/70">
-                      <span>{{ patient.get_claim_status_display }}</span>
+                      <span>
+                        {% if patient.claim_status == 0 %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-400/30 text-amber-200">
+                          待认领
+                        </span>
+                        {% endif %}
+                      </span>
                       <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-200">
                         {{ patient.get_service_status_display }}
                       </span>
