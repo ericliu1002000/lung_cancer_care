@@ -10,7 +10,10 @@ from django.http import HttpResponseBadRequest
 
 
 def patient_dashboard(request: HttpRequest) -> HttpResponse:
-    """患者端首页：根据本人或家属身份展示档案。"""
+    """
+    【页面说明】患者端工作台 `/p/dashboard/`。
+    【模板】`web_patient/dashboard.html`，根据本人或家属身份展示功能入口与卡片。
+    """
     
     #个人中心， 一定会有code这个字段进来。所以如果没有，直接报错。
     code =  request.GET.get('code')
@@ -22,7 +25,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
     auth_service.wechat_login(request, code)
 
     patient = getattr(request.user, "patient_profile", None)
-    print(f"request.user.id is {request.user.id}")
+    
     is_family = False
 
     if patient is None:
@@ -98,6 +101,9 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def onboarding(request: HttpRequest) -> HttpResponse:
-    """无档案用户的引导页。"""
+    """
+    【页面说明】患者 onboarding 引导页 `/p/onboarding/`。
+    【模板】`web_patient/onboarding.html`，用于引导首访或无档案用户完善资料。
+    """
 
     return render(request, "web_patient/onboarding.html")

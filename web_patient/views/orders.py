@@ -12,7 +12,10 @@ from users.models import PatientRelation
 @login_required
 @check_patient
 def patient_orders(request):
-    """患者端订单列表。"""
+    """
+    【页面说明】患者端订单列表 `/p/orders/`。
+    【模板】`web_patient/patient_orders.html`，展示购买的服务与有效期信息。
+    """
 
     patient = getattr(request.user, "patient_profile", None)
 

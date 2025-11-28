@@ -13,7 +13,11 @@ patient_service = PatientService()
 
 
 def _ensure_wechat_user(request: HttpRequest) -> bool:
-    """确保当前请求绑定了微信用户。"""
+    """
+    【页面说明】绑定落地页内部调用的鉴权辅助。
+    【作用】在访问 `/p/bind/<patient_id>/` 时，如果 session 尚未建立，
+    利用 OAuth 回调带来的 `code` 参数调用微信登录接口完成静默登录。
+    """
 
     if request.user.is_authenticated:
         return True
@@ -26,7 +30,10 @@ def _ensure_wechat_user(request: HttpRequest) -> bool:
 
 
 def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
-    """展示绑定落地页。"""
+    """
+    【页面说明】患者绑定落地页 `/p/bind/<patient_id>/`。
+    【模板】`web_patient/bind_landing.html`，用于展示患者信息和亲属关系选项。
+    """
 
     try:
         patient = patient_service.get_profile_for_bind(patient_id)
@@ -83,7 +90,10 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
 
 @require_POST
 def bind_submit(request: HttpRequest, patient_id: int) -> HttpResponse:
-    """提交绑定申请。"""
+    """
+    【页面说明】绑定表单提交接口 `/p/bind/<patient_id>/submit/`。
+    【作用】处理落地页上的亲情账号/本人绑定操作，保存后渲染成功页。
+    """
 
     if not request.user.is_authenticated:
         messages.error(request, "请先通过微信确认身份后再绑定。")
