@@ -5,6 +5,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from users.decorators import check_sales
+from users.services.sales import SalesService
 
 
 @login_required
@@ -28,10 +29,13 @@ def sales_dashboard(request: HttpRequest) -> HttpResponse:
         "patient_total": len(patients),
     }
 
+    qrcode_url = SalesService.get_sales_qrcode_url(sales_profile)
+
     context = {
         "sales": sales_profile,
         "doctors": doctors,
         "patients": patients,
         "stats": stats,
+        "qrcode_url": qrcode_url,
     }
     return render(request, "web_sales/dashboard.html", context)

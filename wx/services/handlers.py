@@ -35,7 +35,8 @@ def _build_bind_link(profile_id: int) -> str:
 
 def _bind_prompt(profile_id: int) -> str:
     url = _build_bind_link(profile_id)
-    return f"您正在申请绑定患者档案，👉 <a href=\"{url}\">点击此处确认身份</a>"
+    reply_text = TextTemplateService.get_render_content("scan_patient_code",{url: url})
+    return reply_text
 
 
 def _get_event_key(message):
@@ -72,27 +73,27 @@ def _handle_sales_binding(event_key: str, user):
         if not patient_profile.sales:    
             patient_profile.sales = sale
             patient_profile.save(update_fields=["sales", "updated_at"])
-            
-            return f"绑定成功！您已连接专属服务顾问【{sales_name}】。"
+            replay_text = TextTemplateService.get_render_content("scan_sales_code_patient_nosale",{"sales_name": sales_name})
+            return replay_text
         #有病历，有销售
         else:
-            return "感谢关注"
-    
+            replay_text = TextTemplateService.get_render_content("scan_sales_code_patient_sale",{"sales_name": sales_name})
+            return replay_text
+
+
+    onboarding_path = reverse("web_patient:onboarding")
+    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
+    link = f"{base_url}{onboarding_path}" if base_url else onboarding_path            
+    replay_text = ""
     # 无病历，无销售
     if not user.bound_sales:
         user.bound_sales = sale
         user.save(update_fields=["bound_sales", "updated_at"])
+        replay_text = TextTemplateService.get_render_content("scan_sales_code_no_patient_no_sale",{"sales_name": sales_name, "url": link})
     #无病历，有销售
     else:
-        pass
-
-    onboarding_path = reverse("web_patient:onboarding")
-    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
-    link = f"{base_url}{onboarding_path}" if base_url else onboarding_path
-    return (
-        f"欢迎咨询！您已连接专属服务顾问【{sales_name}】。"
-        f"为了提供更专业的服务，👉 <a href=\"{link}\">点击此处完善康复档案</a>"
-    )
+        replay_text = TextTemplateService.get_render_content("scan_sales_code_no_patient_sale",{"url": link})
+    return replay_text
 
 
 def handle_message(message):
@@ -112,11 +113,12 @@ def handle_message(message):
     # 1. 关注事件 (Subscribe)
     # ---------------------------
     if message.type == 'event' and message.event == 'subscribe':
-        # 获取用户详情（昵称头像）- 可选，如果不急可以异步做
+        # 获取用户详情（昵称头像）
         user_info = wechat_client.user.get(user_openid) 
         user, created = auth_service.get_or_create_wechat_user(user_openid, user_info)
-        
-        reply_content = "欢迎关注！"
+        #获取订阅关注的文本
+        subscribe_welcome = TextTemplateService.get_render_content("subscribe_welcome")
+        reply_content = subscribe_welcome
         
         # 处理：关注时可能带有参数（扫码关注）
         # 格式通常是 qrscene_bind_patient_123
@@ -134,13 +136,13 @@ def handle_message(message):
 
         return TextReply(content=reply_content, message=message)
 
+
     # ---------------------------
     # 2. 扫码事件 (SCAN - 已关注用户扫码)
     # ---------------------------
     if message.type == 'event' and message.event == 'scan':
         # 确保用户存在（理论上已关注必定存在，但防万一）
         user = auth_service.get_or_create_wechat_user(user_openid)[0]
-        
         # 格式通常是 bind_patient_123 (没有 qrscene_ 前缀)
         event_key = _get_event_key(message)
         if event_key:

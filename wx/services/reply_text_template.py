@@ -53,25 +53,39 @@ class TextTemplateService:
                 "code": "subscribe_welcome",
                 "title": "关注欢迎语",
                 "content": "你好，欢迎关注肺部康复管理助手！发送【帮助】查看指令。",
-                "vars": "无",
+                "vars": "未关注用户第一次关注回复信息",
+            },
+
+            {
+                "code": "scan_patient_code",
+                "title": "扫描患者二维码",
+                "content": "您正在申请绑定患者档案，👉 <a href=\"{url}\">点击此处确认身份</a>",
+                "vars": "扫描患者二维码，如果是新关注会叠加在关注欢迎语后。{url}=链接",
+            },
+
+            {
+                "code": "scan_sales_code_patient_nosale",
+                "title": "患者扫描销售二维码（有病历无绑定销售）",
+                "content": "连接成功！您已连接专属服务顾问【{sales_name}】。",
+                "vars": "有病历无绑定销售患者， 扫描销售二维码,情况较少。 {sales_name}=销售名字.",
             },
             {
-                "code": "bind_success",
-                "title": "绑定成功通知",
-                "content": "绑定成功！{name}，您的专属顾问是{sales_name}。",
-                "vars": "{name}=用户昵称, {sales_name}=销售姓名",
+                "code": "scan_sales_code_patient_sale",
+                "title": "患者扫描销售二维码（有病历有绑定销售）",
+                "content": "感谢您的关注",
+                "vars": "有病历，有绑定销售，再次扫描销售二维码。 情况极少",
             },
             {
-                "code": "sales_bind_existing",
-                "title": "扫码绑定-已有档案",
-                "content": "您已绑定专属顾问【{sales_name}】，如有疑问可直接联系。",
-                "vars": "{sales_name}=销售姓名",
+                "code": "scan_sales_code_no_patient_no_sale",
+                "title": "患者扫描销售二维码（无病历无绑定销售）",
+                "content": "您已连接专属服务顾问【{sales_name}】。为了提供更专业的服务，👉 <a href=\"{url}\">点击此处完善康复档案</a>",
+                "vars": "无病历，无绑定销售，扫描销售二维码。符合大多数情况。{sales_name}=销售名字，{url}=链接. 新关注用户会叠加欢迎提示词",
             },
             {
-                "code": "sales_bind_new",
-                "title": "扫码绑定-新用户",
-                "content": "欢迎咨询！您已连接顾问【{sales_name}】。为了提供更专业的服务，👉 <a href='{url}'>点击此处完善康复档案</a>",
-                "vars": "{sales_name}=销售姓名, {url}=H5链接",
+                "code": "scan_sales_code_no_patient_sale",
+                "title": "患者扫描销售二维码（无病历有绑定销售）",
+                "content": "为了提供更专业的服务，👉 <a href=\"{url}\">点击此处完善康复档案</a>",
+                "vars": "无病历，有绑定销售，扫描销售二维码。情况较少，当前用户被其它销售开发过。{url}=链接. 新关注用户会叠加欢迎提示词",
             },
         ]
 
