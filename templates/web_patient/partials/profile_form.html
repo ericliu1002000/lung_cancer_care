@@ -72,12 +72,12 @@
 
     <div class="space-y-2">
       <label for="{{ form.birth_date.id_for_label }}" class="block text-base font-bold text-slate-900">出生日期</label>
-      <input
-        type="date"
-        name="{{ form.birth_date.name }}"
+      <input 
+        type="date" 
+        name="{{ form.birth_date.name }}" 
         id="{{ form.birth_date.id_for_label }}"
-        value="{{ form.birth_date.value|default:'' }}"
-        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none"
+        value="{{ form.birth_date.value|date:'Y-m-d' }}"
+        class="w-full max-w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none appearance-none"
       >
       {% if form.birth_date.errors %}
         <p class="text-red-600 text-sm font-medium">{{ form.birth_date.errors.0 }}</p>
