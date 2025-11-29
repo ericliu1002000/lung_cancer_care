@@ -1,0 +1,199 @@
+{% extends "layouts/base_portal.html" %}
+{% block body %}
+<div class="min-h-screen bg-[#F5F7FA] flex flex-col overflow-x-hidden">
+  
+  <div class="bg-white px-4 py-4 shadow-sm sticky top-0 z-10 flex items-center justify-center">
+    <h1 class="text-lg font-bold text-slate-900">完善康复档案</h1>
+  </div>
+
+  <div class="flex-1 px-4 py-6 w-full max-w-lg mx-auto">
+    <p class="text-sm text-slate-600 font-medium mb-6 leading-relaxed">
+      为了您的康复安全，请填写真实信息。<br>我们将严格保护您的隐私。
+    </p>
+
+    <form method="post" class="space-y-6" id="entry-form">
+      {% csrf_token %}
+      
+      <div class="space-y-2">
+        <label for="{{ form.name.id_for_label }}" class="block text-base font-bold text-slate-900">
+          您的真实姓名
+        </label>
+        <input 
+          type="text" 
+          name="name" 
+          id="{{ form.name.id_for_label }}"
+          value="{{ form.name.value|default:'' }}"
+          class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all outline-none placeholder:text-slate-400"
+          placeholder="请输入姓名"
+        >
+        {% if form.name.errors %}
+        <p class="text-red-600 text-sm font-medium mt-1">{{ form.name.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-base font-bold text-slate-900">性别</label>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="relative cursor-pointer">
+            <input type="radio" name="gender" value="1" class="peer sr-only" {% if form.gender.value == '1' %}checked{% endif %}>
+            <div class="h-12 flex items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base font-bold text-slate-600 transition-all peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-700">
+              男士
+            </div>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="radio" name="gender" value="2" class="peer sr-only" {% if form.gender.value == '2' %}checked{% endif %}>
+            <div class="h-12 flex items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base font-bold text-slate-600 transition-all peer-checked:border-rose-500 peer-checked:bg-rose-50 peer-checked:text-rose-600">
+              女士
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <label for="{{ form.birth_date.id_for_label }}" class="block text-base font-bold text-slate-900">
+          出生日期
+        </label>
+        <input 
+          type="date" 
+          name="birth_date" 
+          id="{{ form.birth_date.id_for_label }}"
+          value="{{ form.birth_date.value|default:'' }}"
+          class="w-full max-w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none appearance-none"
+        >
+      </div>
+
+      <hr class="border-slate-200 my-5">
+
+      <div class="space-y-2">
+        <label for="{{ form.phone.id_for_label }}" class="block text-base font-bold text-slate-900">
+          手机号码
+        </label>
+        <input 
+          type="tel" 
+          name="phone" 
+          id="id_phone"
+          value="{{ form.phone.value|default:'' }}"
+          maxlength="11"
+          class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-xl tracking-wider text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-base placeholder:tracking-normal placeholder:text-slate-400"
+          placeholder="请输入11位手机号"
+        >
+        {% if form.phone.errors %}
+        <p class="text-red-600 text-sm font-medium mt-1">{{ form.phone.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      <div class="space-y-2">
+        <label for="{{ form.verify_code.id_for_label }}" class="block text-base font-bold text-slate-900">
+          短信验证码
+        </label>
+        <div class="flex gap-2 items-stretch">
+          <input 
+            type="number" 
+            name="verify_code" 
+            id="{{ form.verify_code.id_for_label }}"
+            class="flex-1 min-w-0 h-12 rounded-lg border-2 border-slate-300 px-4 text-xl tracking-widest text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-base placeholder:tracking-normal placeholder:text-slate-400"
+            placeholder="4位数字"
+          >
+          <button 
+            type="button" 
+            id="btn-get-code"
+            class="shrink-0 w-28 h-12 rounded-lg bg-blue-100 text-blue-700 font-bold text-sm disabled:bg-slate-200 disabled:text-slate-400 transition-colors whitespace-nowrap"
+          >
+            获取验证码
+          </button>
+        </div>
+        {% if form.verify_code.errors %}
+        <p class="text-red-600 text-sm font-medium mt-1">{{ form.verify_code.errors.0 }}</p>
+        {% endif %}
+        {% if form.non_field_errors %}
+        <div class="p-3 bg-red-50 text-red-700 rounded-lg text-sm font-medium border border-red-200">
+          {{ form.non_field_errors.0 }}
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="pt-4 pb-8">
+        <button 
+          type="submit" 
+          class="w-full h-12 rounded-full bg-blue-600 text-white text-lg font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform"
+        >
+          确认提交档案
+        </button>
+        <p class="text-center text-xs text-slate-400 mt-4">
+          提交即代表同意《用户服务协议》
+        </p>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const phoneInput = document.getElementById('id_phone');
+    const codeBtn = document.getElementById('btn-get-code');
+    let countdown = 0;
+    let timer = null;
+
+    codeBtn.addEventListener('click', function() {
+      const phone = phoneInput.value.trim();
+      
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        alert('请先输入正确的11位手机号码');
+        phoneInput.focus();
+        return;
+      }
+
+      setLoading(true);
+
+      fetch("{% url 'web_patient:send_auth_code' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: 'phone=' + encodeURIComponent(phone)
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          startCountdown();
+          // alert('验证码已发送，请注意查收'); // 可选：去掉弹窗减少打扰
+        } else {
+          alert('发送失败：' + data.message);
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        alert('网络请求错误，请稍后重试');
+        setLoading(false);
+      });
+    });
+
+    function setLoading(isLoading) {
+      if (isLoading) {
+        codeBtn.disabled = true;
+        codeBtn.textContent = '发送中...';
+      } else {
+        codeBtn.disabled = false;
+        codeBtn.textContent = '获取验证码';
+      }
+    }
+
+    function startCountdown() {
+      countdown = 60;
+      codeBtn.disabled = true;
+      codeBtn.textContent = `${countdown}s后重发`; // 缩短文案防止按钮撑开
+      
+      timer = setInterval(() => {
+        countdown--;
+        if (countdown <= 0) {
+          clearInterval(timer);
+          setLoading(false);
+        } else {
+          codeBtn.textContent = `${countdown}s后重发`;
+        }
+      }, 1000);
+    }
+  });
+</script>
+{% endblock %}

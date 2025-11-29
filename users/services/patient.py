@@ -3,7 +3,6 @@ from typing import Optional
 
 # users/services/patient.py
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.utils import timezone
 from users.models import PatientProfile, CustomUser, PatientRelation
 from users import choices
@@ -11,6 +10,10 @@ from health_data.models import MedicalHistory
 from regions.models import Province, City
 # 引用 wx 的 client 来获取二维码，注意避免循环引用，可以在方法内引用或使用 lazy import
 from wechatpy import WeChatClient 
+from django.core.exceptions import ValidationError
+from django.db import transaction, models
+from users.models import PatientProfile, CustomUser
+from users import choices
 
 class PatientService:
     
@@ -120,29 +123,86 @@ class PatientService:
 
         return profile
 
-    def create_profile_by_self(self, user: CustomUser, data: dict) -> PatientProfile:
-        """
-        H5 自注册创建患者档案。
-        自动继承 bound_sales 作为新档案归属，并清空线索。
-        """
 
-        name = (data.get("name") or "").strip()
+
+    def save_profile_by_self(self, user: CustomUser, data: dict, profile_id: int = None) -> PatientProfile:
+        """
+        患者自助保存档案（支持新建、认领、编辑）。
+        
+        :param user: 当前登录用户
+        :param data: 表单数据 (name, gender, birth_date, phone, ...)
+        :param profile_id:如果存在，则为编辑模式；否则为建档/认领模式
+        """
         phone = (data.get("phone") or "").strip()
-        if not name or not phone:
-            raise ValidationError("姓名与电话为必填项")
+        name = (data.get("name") or "").strip()
+        
+        if not phone or not name:
+            raise ValidationError("姓名与手机号必填")
 
-        with transaction.atomic():
-            profile = PatientProfile.objects.create(
-                user=user,
-                name=name,
-                phone=phone,
-                source=choices.PatientSource.SELF,
-                sales=user.bound_sales,
-                claim_status=choices.ClaimStatus.CLAIMED,
-            )
-            if user.bound_sales_id:
-                user.bound_sales = None
-                user.save(update_fields=["bound_sales", "updated_at"])
+        # -------------------------------------------------------
+        # 场景 A: 编辑模式 (已知 ID)
+        # -------------------------------------------------------
+        if profile_id:
+            profile = PatientProfile.objects.filter(pk=profile_id).first()
+            if not profile:
+                raise ValidationError("档案不存在")
+            
+            # 权限校验：只能改属于自己的档案
+            if profile.user != user:
+                raise ValidationError("无权修改此档案")
+            
+            # 手机号变更检查
+            if profile.phone != phone:
+                # 检查新手机号是否被占用
+                if PatientProfile.objects.filter(phone=phone).exclude(pk=profile_id).exists():
+                    raise ValidationError("该手机号已被其他档案占用")
+            
+            # 执行更新
+            profile.name = name
+            profile.phone = phone
+            profile.gender = data.get("gender", profile.gender)
+            profile.birth_date = data.get("birth_date", profile.birth_date)
+            profile.address = data.get("address", "")
+            # ... 其他允许修改的字段
+            
+            profile.save()
+            return profile
+
+        # -------------------------------------------------------
+        # 场景 B: 建档/认领模式 (未知 ID，以手机号为锚点)
+        # -------------------------------------------------------
+        
+        # 1. 查重
+        existing_profile = PatientProfile.objects.filter(phone=phone).first()
+
+        if existing_profile:
+            # 如果档案存在，且已被别人绑定
+            if existing_profile.user and existing_profile.user != user:
+                raise ValidationError("该手机号已被其他微信账号绑定，请联系顾问处理。")
+            
+            # 认领/更新逻辑
+            profile = existing_profile
+        else:
+            # 纯新建逻辑
+            profile = PatientProfile(phone=phone)
+            profile.source = choices.PatientSource.SELF
+
+        # 2. 赋值/覆盖属性
+        profile.user = user
+        profile.name = name
+        profile.gender = data.get("gender", choices.Gender.UNKNOWN)
+        profile.birth_date = data.get("birth_date")
+        profile.claim_status = choices.ClaimStatus.CLAIMED
+        profile.address = data.get("address", "")
+
+        # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
+        if not profile.sales and user.bound_sales:
+            profile.sales = user.bound_sales
+            # 归属转移后，清空潜客标记
+            user.bound_sales = None 
+            user.save(update_fields=["bound_sales"])
+
+        profile.save()
         return profile
 
     

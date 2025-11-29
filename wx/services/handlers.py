@@ -10,6 +10,7 @@ from users.services.auth import AuthService
 from users.models import SalesProfile, DoctorProfile, PatientProfile
 from users import choices
 from wx.services.reply_text_template import TextTemplateService
+from wx.services.oauth import get_oauth_url
 
 logger = logging.getLogger(__name__)
 auth_service = AuthService()
@@ -19,11 +20,17 @@ auth_service = AuthService()
 # ==========================================
 def _get_event_key(message):
     """兼容关注(qrscene_)和扫码(无前缀)的参数提取"""
-    key = getattr(message, "event_key", None) or getattr(message, "key", None)
+    key = getattr(message, "scene_id", None) or getattr(message, "event_key", None) or getattr(message, "key", None) 
     if not key:
         return None
     # 移除关注事件的前缀
     return str(key).replace("qrscene_", "")
+
+def _get_full_url(path_name, **kwargs):
+    """辅助生成带域名的完整 URL"""
+    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
+    path = reverse(path_name, kwargs=kwargs)
+    return f"{base_url}{path}"
 
 # ==========================================
 # 2. 具体业务处理器 (Handlers)
@@ -51,9 +58,8 @@ def _handle_sales_scan(user, object_id):
 
     # 场景 B: 无病历 (白户/潜客)
     # 生成建档链接
-    onboarding_path = reverse("web_patient:onboarding")
-    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
-    link = f"{base_url}{onboarding_path}"
+    link = _get_full_url("web_patient:onboarding")
+    link = get_oauth_url(redirect_uri=link, state=f"sales_{object_id}")
     
     if not user.bound_sales:
         # 锁定潜客归属
@@ -67,17 +73,8 @@ def _handle_sales_scan(user, object_id):
 def _handle_patient_scan(user, object_id):
     """处理扫描患者档案码逻辑 (绑定家属/本人)"""
     # 简单的生成链接逻辑
-    from urllib.parse import quote
-    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
-    path = reverse("web_patient:bind_landing", args=[object_id])
-    redirect_uri = quote(f"{base_url}{path}", safe="")
-    
-    url = (
-        "https://open.weixin.qq.com/connect/oauth2/authorize"
-        f"?appid={WX_APPID}&redirect_uri={redirect_uri}"
-        "&response_type=code&scope=snsapi_base"
-        f"&state={object_id}#wechat_redirect"
-    )
+    full_redirect_uri = _get_full_url("web_patient:bind_landing")
+    url = get_oauth_url(redirect_uri=full_redirect_uri, state=str(object_id))
     return TextTemplateService.get_render_content("scan_patient_code", {"url": url})
 
 # ==========================================
@@ -96,9 +93,12 @@ QR_HANDLERS = {
 def handle_message(message):
     user_openid = message.source
     
+    print('-----------------')
+    print(f"mesasge type is [{message.type}] and event is [{message.event}], event_key is[{_get_event_key(message)}]")
+    print('-----------------')
     # 1. 统一处理关注/扫码事件
     if message.type == 'event':
-        if message.event == 'subscribe':
+        if message.event in ['subscribe', 'subscribe_scan']:
             # 获取并更新用户信息
             user_info = wechat_client.user.get(user_openid)
             user, created = auth_service.get_or_create_wechat_user(user_openid, user_info)

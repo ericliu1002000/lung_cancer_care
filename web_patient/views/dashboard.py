@@ -1,29 +1,22 @@
-from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from users.models import PatientRelation
 from django.http import HttpResponseBadRequest
+from users.decorators import auto_wechat_login
 
 
 
 
+@auto_wechat_login
 def patient_dashboard(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】患者端工作台 `/p/dashboard/`。
     【模板】`web_patient/dashboard.html`，根据本人或家属身份展示功能入口与卡片。
     """
     
-    #个人中心， 一定会有code这个字段进来。所以如果没有，直接报错。
-    code =  request.GET.get('code')
-    if not code:
-        return HttpResponseBadRequest('非法请求：缺少必要的认证参数 (code)')
     
-    from users.services.auth import AuthService
-    auth_service = AuthService()
-    auth_service.wechat_login(request, code)
-
     patient = getattr(request.user, "patient_profile", None)
     
     is_family = False
@@ -99,11 +92,14 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
     )
 
 
-@login_required
+
+@auto_wechat_login
 def onboarding(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】患者 onboarding 引导页 `/p/onboarding/`。
     【模板】`web_patient/onboarding.html`，用于引导首访或无档案用户完善资料。
     """
-
-    return render(request, "web_patient/onboarding.html")
+    context = {}
+    if not request.user.is_authenticated:
+        context["session_invalid"] = True
+    return render(request, "web_patient/onboarding.html", context)

@@ -12,6 +12,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 
 from users import choices
+from functools import wraps
 
 RoleCheck = Callable[[HttpRequest], bool]
 ViewFunc = Callable[[HttpRequest], HttpResponse]
@@ -112,8 +113,33 @@ def check_doctor_or_assistant_or_sales(view_func: ViewFunc) -> ViewFunc:
     【参数】view_func：目标视图。
     【返回值】包装后的视图。
     """
-
     return _build_role_decorator(choices.UserType.DOCTOR, choices.UserType.ASSISTANT, choices.UserType.SALES)(view_func)
+
+def auto_wechat_login(view_func: ViewFunc) -> ViewFunc:
+    """
+    【业务说明】微信 OAuth 自动登录装饰器。
+    【作用】如果 GET 请求中包含 `code` 参数，自动尝试调用微信登录服务更新 Session。
+    【用法】通常放在 @login_required 或 @check_xxx 之前（外层），优先执行。
+    【场景】菜单跳转、扫码回调等携带 code 的入口页面。
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        if request.method == "GET":
+            code = request.GET.get("code")
+            if code:
+                # 懒加载避免循环引用
+                from users.services.auth import AuthService
+                try:
+                    # 尝试登录，无论成功失败（code无效/过期），都继续向下执行
+                    # 如果成功，request.user 会被更新；如果失败，保持原状
+                    AuthService().wechat_login(request, code)
+                except Exception:
+                    # 生产环境建议 log 记录，这里静默失败，交给后续权限装饰器拦截
+                    pass
+                
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped_view
 
 
 __all__ = [
@@ -123,4 +149,5 @@ __all__ = [
     "check_admin",
     "check_assistant",
     "check_doctor_or_assistant",
+    "auto_wechat_login"
 ]
