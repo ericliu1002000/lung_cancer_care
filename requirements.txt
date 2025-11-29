@@ -7,3 +7,4 @@ segno
 wechatpy
 cryptography
 django-redis
+xpinyin

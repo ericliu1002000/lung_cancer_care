@@ -20,8 +20,8 @@ MODEL_ORDER = [
 ]
 
 
-def _sorted_app_list(self, request):
-    app_dict = self._build_app_dict(request)
+def _sorted_app_list(self, request, app_label=None):
+    app_dict = self._build_app_dict(request, app_label)
     app_list = []
     users_app = app_dict.pop("users", None)
     for label, app in app_dict.items():
@@ -36,6 +36,8 @@ def _sorted_app_list(self, request):
             key=lambda m: MODEL_ORDER.index(m["name"]) if m["name"] in MODEL_ORDER else len(MODEL_ORDER)
         )
         app_list.insert(0, users_app)
+    if app_label:
+        return [app for app in app_list if app["app_label"] == app_label]
     return app_list
 
 
