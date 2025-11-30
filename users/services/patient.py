@@ -164,12 +164,15 @@ class PatientService:
         # 场景 A: 编辑模式 (已知 ID)
         # -------------------------------------------------------
         if profile_id:
+            
             profile = PatientProfile.objects.filter(pk=profile_id).first()
             if not profile:
                 raise ValidationError("档案不存在")
             
             # 权限校验：只能改属于自己的档案
-            if profile.user != user:
+            is_owner = (profile.user_id == user.id)
+            is_relation = profile.relations.filter(user_id=user.id, is_active=True).exists()
+            if not is_owner and not is_relation:
                 raise ValidationError("无权修改此档案")
             
             # 手机号变更检查

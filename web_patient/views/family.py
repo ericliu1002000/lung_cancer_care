@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 from users.decorators import check_patient
 from users.models import PatientRelation
 from users.services.patient import PatientService
+from wx.services.oauth import generate_menu_auth_url
 
 patient_service = PatientService()
 
@@ -17,7 +18,7 @@ patient_service = PatientService()
 @check_patient
 def family_management(request: HttpRequest) -> HttpResponse:
     patient = request.patient
-    if patient is None:
+    if not patient:
         return redirect("web_patient:onboarding")
 
     qrcode_url = None
@@ -51,12 +52,12 @@ def unbind_family(request: HttpRequest) -> HttpResponse:
     relation_id = request.POST.get("relation_id")
     if not relation_id:
         messages.error(request, "未提供亲情账号 ID")
-        return redirect(reverse("web_patient:family_management"))
+        return redirect(generate_menu_auth_url("web_patient:family_management"))
     try:
         relation_id = int(relation_id)
     except ValueError:
         messages.error(request, "亲情账号 ID 无效")
-        return redirect(reverse("web_patient:family_management"))
+        return redirect(generate_menu_auth_url("web_patient:family_management"))
 
     try:
         patient_service.unbind_relation(request.patient, relation_id)
@@ -64,4 +65,4 @@ def unbind_family(request: HttpRequest) -> HttpResponse:
         messages.error(request, exc.message)
     else:
         messages.success(request, "已解绑该亲情账号")
-    return redirect(reverse("web_patient:family_management"))
+    return redirect(generate_menu_auth_url("web_patient:family_management"))

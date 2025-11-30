@@ -19,7 +19,7 @@ def patient_orders(request):
 
     patient = request.patient
 
-    if patient is None:
+    if not patient:
         return redirect("web_patient:onboarding")
 
     queryset = (

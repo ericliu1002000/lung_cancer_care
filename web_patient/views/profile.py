@@ -96,7 +96,9 @@ def profile_edit_form(request: HttpRequest, patient_id: int) -> HttpResponse:
 def profile_update(request: HttpRequest, patient_id: int) -> HttpResponse:
     patient = request.patient
     form = PatientSelfEntryForm(request.POST, instance=patient)
+    
     if form.is_valid():
+        
         try:
             updated_patient = PatientService().save_profile_by_self(
                 request.user,
@@ -104,6 +106,7 @@ def profile_update(request: HttpRequest, patient_id: int) -> HttpResponse:
                 profile_id=patient.pk,
             )
         except ValidationError as exc:
+            
             form.add_error(None, exc.message)
         else:
             messages.success(request, "个人资料已更新")

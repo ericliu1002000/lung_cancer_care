@@ -43,7 +43,7 @@
           <div class="flex items-center justify-between">
             <div>
               <p class="text-base font-semibold text-slate-900">{{ relation.relation_name|default:relation.get_relation_type_display }}</p>
-              <p class="text-sm text-slate-500 mt-1">{{ relation.user.phone|default:"未填写" }}</p>
+              <p class="text-sm text-slate-500 mt-1">{{ relation.get_relation_type_display|default:"未填写" }}</p>
             </div>
             <form method="post" action="{% url 'web_patient:unbind_family' %}" class="inline-flex" onsubmit="return confirm('确定要删除该亲情账号吗？');">
               {% csrf_token %}

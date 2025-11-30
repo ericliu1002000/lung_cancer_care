@@ -27,18 +27,20 @@ def get_actual_patient(request):
     # 2. 如果是家属（没有绑定自己的档案，或者正在代理操作）
     # 优先从 Session 中获取当前选中的 patient_id（支持一个家属管理多个患者）
     session_patient_id = request.session.get('active_patient_id')
+    
 
     if session_patient_id:
         # 校验家属是否有权管理该患者 (查询 PatientRelation)
         relation = PatientRelation.objects.filter(
             user=user, 
+            is_active=True,
             patient_id=session_patient_id
         ).first()
         if relation:
             return relation.patient
     
     # 3. 如果 Session 没指定，默认取最近绑定的一个患者
-    relation = PatientRelation.objects.filter(user=user).order_by('-created_at').first()
+    relation = PatientRelation.objects.filter(user=user, is_active=True).order_by('-created_at').first()
     if relation:
         # 自动帮用户种下 Session，方便后续使用
         request.session['active_patient_id'] = relation.patient_id

@@ -24,7 +24,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
 
     
     # 不是家属，也不是患者， 转向填写信息
-    if patient is None:
+    if not patient:
         onboarding_url = reverse("web_patient:onboarding")
         return redirect(onboarding_url)
 

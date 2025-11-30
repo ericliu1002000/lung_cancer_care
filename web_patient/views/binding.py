@@ -11,6 +11,7 @@ from users.services import AuthService, PatientService
 auth_service = AuthService()
 patient_service = PatientService()
 from users.decorators import auto_wechat_login
+from wx.services.oauth import generate_menu_auth_url
 
 
 @auto_wechat_login
@@ -148,5 +149,6 @@ def bind_submit(request: HttpRequest, patient_id: int) -> HttpResponse:
         "web_patient/bind_success.html",
         {
             "patient": patient,
+            "url": generate_menu_auth_url("web_patient:patient_dashboard")
         },
     )
