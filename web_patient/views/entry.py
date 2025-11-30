@@ -8,11 +8,13 @@ from django.views.decorators.http import require_POST
 from core.service.sms import SMSService
 from users.services.patient import PatientService
 from web_patient.forms import PatientEntryVerificationForm
+from users.decorators import check_patient
 
 patient_service = PatientService()
 
 
 @login_required
+@check_patient
 def patient_entry(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】患者自助建档页 `/p/entry/`。

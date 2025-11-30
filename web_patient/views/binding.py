@@ -10,25 +10,10 @@ from users.services import AuthService, PatientService
 
 auth_service = AuthService()
 patient_service = PatientService()
+from users.decorators import auto_wechat_login
 
 
-def _ensure_wechat_user(request: HttpRequest) -> bool:
-    """
-    【页面说明】绑定落地页内部调用的鉴权辅助。
-    【作用】在访问 `/p/bind/<patient_id>/` 时，如果 session 尚未建立，
-    利用 OAuth 回调带来的 `code` 参数调用微信登录接口完成静默登录。
-    """
-
-    if request.user.is_authenticated:
-        return True
-    code = request.GET.get("code")
-    success, result = auth_service.wechat_login(request, code)
-    if not success:
-        messages.error(request, result or "微信身份校验失败，请重新扫码。")
-        return False
-    return True
-
-
+@auto_wechat_login
 def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
     """
     【页面说明】患者绑定落地页 `/p/bind/<patient_id>/`。
@@ -39,6 +24,14 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
         patient = patient_service.get_profile_for_bind(patient_id)
     except ValidationError:
         raise Http404("患者档案不存在")
+
+    # 统计当前有效亲情账号数量（不含本人）
+    active_family_count = (
+        patient.relations.filter(is_active=True)
+        .exclude(relation_type=choices.RelationType.SELF)
+        .count()
+    )
+    can_add_family = active_family_count < 5
 
     family_relation_choices = [
         (value, label)
@@ -51,44 +44,54 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
         else choices.RelationType.SPOUSE
     )
 
-    logged_in = _ensure_wechat_user(request)
-    if not logged_in:
+    if not request.user.is_authenticated:
+        if not can_add_family:
+            messages.error(
+                request,
+                "出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。",
+            )
         return render(
             request,
             "web_patient/bind_landing.html",
             {
                 "patient": patient,
-                "relation_self": choices.RelationType.SELF,
                 "family_relation_choices": family_relation_choices,
                 "family_default": family_default,
+                "can_add_family": can_add_family,
             },
         )
 
-    if request.user.is_authenticated:
-        already_bound = (
-            patient.user_id == request.user.id
-            or patient.relations.filter(user=request.user).exists()
+    already_bound = (
+        patient.user_id == request.user.id
+        or patient.relations.filter(user=request.user, is_active=True).exists()
+    )
+    if already_bound:
+        return render(
+            request,
+            "web_patient/bind_success.html",
+            {"patient": patient},
         )
-        if already_bound:
-            return render(
-                request,
-                "web_patient/bind_success.html",
-                {"patient": patient},
-            )
+
+    if not can_add_family:
+        messages.error(
+            request,
+            "出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。",
+        )
 
     return render(
         request,
         "web_patient/bind_landing.html",
         {
             "patient": patient,
-            "relation_self": choices.RelationType.SELF,
             "family_relation_choices": family_relation_choices,
             "family_default": family_default,
+            "can_add_family": can_add_family,
         },
     )
 
 
 @require_POST
+@auto_wechat_login
 def bind_submit(request: HttpRequest, patient_id: int) -> HttpResponse:
     """
     【页面说明】绑定表单提交接口 `/p/bind/<patient_id>/submit/`。
@@ -100,14 +103,30 @@ def bind_submit(request: HttpRequest, patient_id: int) -> HttpResponse:
         return redirect(reverse("web_patient:bind_landing", args=[patient_id]))
 
     try:
-        patient_service.get_profile_for_bind(patient_id)
+        patient = patient_service.get_profile_for_bind(patient_id)
     except ValidationError:
         raise Http404("患者档案不存在")
 
     try:
-        relation_type = int(request.POST.get("relation_type", choices.RelationType.SELF))
+        relation_type = int(
+            request.POST.get("relation_type", choices.RelationType.SPOUSE)
+        )
     except (TypeError, ValueError):
-        relation_type = choices.RelationType.SELF
+        relation_type = choices.RelationType.SPOUSE
+
+    # 仅处理亲情账号绑定，限制最多 5 个
+    if relation_type != choices.RelationType.SELF:
+        active_family_count = (
+            patient.relations.filter(is_active=True)
+            .exclude(relation_type=choices.RelationType.SELF)
+            .count()
+        )
+        if active_family_count >= 5:
+            messages.error(
+                request,
+                "出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。",
+            )
+            return redirect(reverse("web_patient:bind_landing", args=[patient_id]))
 
     relation_name = (request.POST.get("relation_name") or "").strip()
     receive_notification = request.POST.get("receive_notification") == "on"

@@ -115,7 +115,7 @@ def check_doctor_or_assistant_or_sales(view_func: ViewFunc) -> ViewFunc:
     """
     return _build_role_decorator(choices.UserType.DOCTOR, choices.UserType.ASSISTANT, choices.UserType.SALES)(view_func)
 
-def auto_wechat_login(view_func: ViewFunc) -> ViewFunc:
+def auto_wechat_login(view_func: Callable) -> Callable:
     """
     【业务说明】微信 OAuth 自动登录装饰器。
     【作用】如果 GET 请求中包含 `code` 参数，自动尝试调用微信登录服务更新 Session。

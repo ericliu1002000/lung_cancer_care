@@ -8,6 +8,7 @@ from .profile import (
     profile_page,
     profile_update,
 )
+from .family import family_management, unbind_family
 
 __all__ = [
     "bind_landing",
@@ -21,4 +22,6 @@ __all__ = [
     "profile_card",
     "profile_edit_form",
     "profile_update",
+    "family_management",
+    "unbind_family",
 ]

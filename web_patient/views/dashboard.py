@@ -4,12 +4,13 @@ from django.urls import reverse
 
 from users.models import PatientRelation
 from django.http import HttpResponseBadRequest
-from users.decorators import auto_wechat_login
+from users.decorators import auto_wechat_login, check_patient
 
 
 
 
 @auto_wechat_login
+@check_patient
 def patient_dashboard(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】患者端工作台 `/p/dashboard/`。
@@ -17,26 +18,19 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
     """
     
     
-    patient = getattr(request.user, "patient_profile", None)
+    patient = request.patient
     
-    is_family = False
+    is_family = True
 
-    if patient is None:
-        relation = (
-            PatientRelation.objects.select_related("patient")
-            .filter(user=request.user)
-            .order_by("-created_at")
-            .first()
-        )
-        if relation and relation.patient:
-            patient = relation.patient
-            is_family = True
-
+    
+    # 不是家属，也不是患者， 转向填写信息
     if patient is None:
         onboarding_url = reverse("web_patient:onboarding")
         return redirect(onboarding_url)
 
-    orders_url = reverse("web_patient:orders")
+    if patient.user_id == request.user.id:
+        is_family = False
+    
 
     main_entries = [
         {
@@ -68,13 +62,16 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
             "url": "#",
         },
     ]
+
+    from wx.services.oauth import generate_menu_auth_url
+    # orders_url = reverse("web_patient:orders")
     service_entries = [
-        {"title": "我的订单", "url": orders_url},
+        {"title": "我的订单", "url": generate_menu_auth_url("web_patient:orders")},
         {"title": "智能设备", "url": "#"},
         {"title": "工作室", "url": "#"},
         {"title": "检查报告", "url": "#"},
         {"title": "提醒设置", "url": "#"},
-        {"title": "亲情账号", "url": "#"},
+        {"title": "亲情账号", "url": generate_menu_auth_url("web_patient:family_management")},
         {"title": "健康日历", "url": "#"},
         {"title": "设置", "url": "#"},
         {"title": "意见反馈", "url": "#"},
@@ -94,6 +91,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @auto_wechat_login
+@check_patient
 def onboarding(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】患者 onboarding 引导页 `/p/onboarding/`。

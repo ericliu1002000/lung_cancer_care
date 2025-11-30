@@ -10,7 +10,7 @@ from users.services.auth import AuthService
 from users.models import SalesProfile, DoctorProfile, PatientProfile
 from users import choices
 from wx.services.reply_text_template import TextTemplateService
-from wx.services.oauth import get_oauth_url
+from wx.services.oauth import get_oauth_url, generate_menu_auth_url
 
 logger = logging.getLogger(__name__)
 auth_service = AuthService()
@@ -26,11 +26,11 @@ def _get_event_key(message):
     # 移除关注事件的前缀
     return str(key).replace("qrscene_", "")
 
-def _get_full_url(path_name, **kwargs):
-    """辅助生成带域名的完整 URL"""
-    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
-    path = reverse(path_name, kwargs=kwargs)
-    return f"{base_url}{path}"
+# def _get_full_url(path_name, **kwargs):
+#     """辅助生成带域名的完整 URL"""
+#     base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
+#     path = reverse(path_name, kwargs=kwargs)
+#     return f"{base_url}{path}"
 
 # ==========================================
 # 2. 具体业务处理器 (Handlers)
@@ -58,8 +58,8 @@ def _handle_sales_scan(user, object_id):
 
     # 场景 B: 无病历 (白户/潜客)
     # 生成建档链接
-    link = _get_full_url("web_patient:onboarding")
-    link = get_oauth_url(redirect_uri=link, state=f"sales_{object_id}")
+    link = generate_menu_auth_url("web_patient:onboarding",state=f"sales_{object_id}")
+    # link = get_oauth_url(redirect_uri=link, state=f"sales_{object_id}")
     
     if not user.bound_sales:
         # 锁定潜客归属
@@ -73,8 +73,9 @@ def _handle_sales_scan(user, object_id):
 def _handle_patient_scan(user, object_id):
     """处理扫描患者档案码逻辑 (绑定家属/本人)"""
     # 简单的生成链接逻辑
-    full_redirect_uri = _get_full_url("web_patient:bind_landing")
-    url = get_oauth_url(redirect_uri=full_redirect_uri, state=str(object_id))
+    # full_redirect_uri = _get_full_url()
+    # url = get_oauth_url(redirect_uri=full_redirect_uri, state=str(object_id))
+    url = generate_menu_auth_url("web_patient:bind_landing", patient_id=object_id)
     return TextTemplateService.get_render_content("scan_patient_code", {"url": url})
 
 # ==========================================
@@ -144,11 +145,15 @@ def _dispatch_scan_logic(user, event_key):
         
     # 分割前缀和ID，例如 bind_sales 和 12
     try:
-        # 找到最后一个下划线，分割为 type 和 id
+    # 找到最后一个下划线，分割为 type 和 id
         prefix, object_id_str = event_key.rsplit('_', 1)
+        print('**'*10)
+        print(object_id_str)
+        print('**'*10)
         object_id = int(object_id_str)
         
         handler = QR_HANDLERS.get(prefix)
+        print(handler)
         if handler:
             return handler(user, object_id)
         

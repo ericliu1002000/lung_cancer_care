@@ -1,0 +1,69 @@
+{% extends "layouts/base_portal.html" %}
+{% block title %}亲情账号{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F7FA] py-6 px-4">
+  <div class="max-w-2xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold text-slate-900">亲情账号</h1>
+      <a href="{% url 'web_patient:patient_dashboard' %}" class="text-sm text-slate-500 hover:text-slate-700">返回主页</a>
+    </div>
+
+    {% if messages %}
+    <div class="space-y-2">
+      {% for message in messages %}
+      <div class="px-4 py-3 rounded-2xl text-sm font-medium {% if message.tags == 'success' %}bg-emerald-50 text-emerald-700{% else %}bg-rose-50 text-rose-700{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="bind-qrcode" class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-4 text-center">
+      <p class="text-sm uppercase tracking-[0.3em] text-slate-400">我的二维码</p>
+      {% if qrcode_url %}
+      <img src="{{ qrcode_url }}" alt="绑定二维码" class="w-48 h-48 mx-auto rounded-2xl border border-slate-100 shadow" />
+      {% else %}
+      <div class="w-48 h-48 mx-auto rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400">
+        无法加载二维码
+      </div>
+      {% endif %}
+      <p class="text-sm text-slate-500">请家属亲友扫描上方二维码即可加入</p>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-slate-900">亲情账号列表</h2>
+        <span class="text-xs text-slate-400">最多添加 5 个</span>
+      </div>
+      {% if relations %}
+      <div class="space-y-4">
+        {% for relation in relations %}
+        <div class="rounded-2xl border border-slate-100 p-4 bg-slate-50/80">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-base font-semibold text-slate-900">{{ relation.relation_name|default:relation.get_relation_type_display }}</p>
+              <p class="text-sm text-slate-500 mt-1">{{ relation.user.phone|default:"未填写" }}</p>
+            </div>
+            <form method="post" action="{% url 'web_patient:unbind_family' %}" class="inline-flex" onsubmit="return confirm('确定要删除该亲情账号吗？');">
+              {% csrf_token %}
+              <input type="hidden" name="relation_id" value="{{ relation.id }}">
+              <button type="submit" class="px-4 py-2 rounded-full text-sm font-semibold bg-rose-50 text-rose-600 border border-rose-100">删除</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-center text-sm text-slate-400 py-6">暂无亲情账号</div>
+      {% endif %}
+    </div>
+
+    <!-- <a href="#bind-qrcode" class="block">
+      <div class="w-full rounded-full bg-slate-900 text-white text-center py-3 font-semibold shadow-lg shadow-slate-900/20">
+        + 新增亲情账号
+      </div>
+    </a> -->
+  </div>
+</div>
+{% endblock %}

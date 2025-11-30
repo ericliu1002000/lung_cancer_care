@@ -6,12 +6,12 @@ from .client import wechat_client, WX_APPID, WX_APPSECRET
 from wechatpy.oauth import WeChatOAuth
 
 
-def get_oauth_url(redirect_uri, scope="snsapi_base", state="STATE"):
-    """生成 OAuth 授权地址。
-    作用：在前端引导用户跳转到微信授权页，授权后微信会携带 code 重定向到 redirect_uri。
-    使用场景：需要静默获取 openid（snsapi_base）或主动拉取用户信息（snsapi_userinfo）时。
-    """
-    return wechat_client.oauth.authorize_url(redirect_uri=redirect_uri, scope=scope, state=state)
+# def get_oauth_url(redirect_uri, scope="snsapi_base", state="STATE"):
+#     """生成 OAuth 授权地址。
+#     作用：在前端引导用户跳转到微信授权页，授权后微信会携带 code 重定向到 redirect_uri。
+#     使用场景：需要静默获取 openid（snsapi_base）或主动拉取用户信息（snsapi_userinfo）时。
+#     """
+#     return wechat_client.oauth.authorize_url(redirect_uri=redirect_uri, scope=scope, state=state)
 
 
 def _get_wechat_o_auth_cliet(redirect_uri=None, scope="snsapi_base", state="STATE"):

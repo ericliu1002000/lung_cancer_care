@@ -6,6 +6,8 @@ app_name = "web_patient"
 
 urlpatterns = [
     path("dashboard/", views.patient_dashboard, name="patient_dashboard"),
+    path("family/", views.family_management, name="family_management"),
+    path("family/unbind/", views.unbind_family, name="unbind_family"),
     path("profile/", views.profile_page, name="profile_page"),
     path("onboarding/", views.onboarding, name="onboarding"),
     path("entry/", views.patient_entry, name="entry"),

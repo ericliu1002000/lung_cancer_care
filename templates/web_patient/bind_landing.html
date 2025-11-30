@@ -1,7 +1,7 @@
 {% extends "layouts/base_portal.html" %}
 {% block body %}
 <div class="min-h-screen bg-gradient-to-b from-sky-50 to-white py-10 px-4">
-  <div class="max-w-3xl mx-auto space-y-6" x-data="{ role: 'self', familyRelation: '{{ family_default }}' }" x-cloak>
+  <div class="max-w-3xl mx-auto space-y-6">
     <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
       <p class="text-xs uppercase tracking-[0.3em] text-slate-400">康复守护计划</p>
       <div class="flex flex-wrap items-center gap-3 mt-3">
@@ -22,48 +22,30 @@
     {% endif %}
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {% if patient.claim_status == 0 %}
-      <button type="button"
-        class="p-6 rounded-3xl border text-left transition flex flex-col gap-3"
-        :class="role === 'self' ? 'border-slate-900 bg-slate-900 text-white shadow-2xl' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'"
-        @click="role = 'self'">
-        <p class="text-xs uppercase tracking-[0.3em]">我本人</p>
-        <h2 class="text-xl font-semibold">我是患者本人</h2>
-        <p class="text-sm" :class="role === 'self' ? 'text-slate-200' : 'text-slate-500'">确认后即可同步康复计划、消息提醒与关怀。</p>
-      </button>
-      {% endif %}
-      <button type="button"
-        class="p-6 rounded-3xl border text-left transition flex flex-col gap-3"
-        :class="role === 'family' ? 'border-sky-500 bg-sky-50 text-slate-900 shadow-2xl' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'"
-        @click="role = 'family'">
-        <p class="text-xs uppercase tracking-[0.3em]">亲友守护</p>
-        <h2 class="text-xl font-semibold">我是家属/监护人</h2>
-        <p class="text-sm" :class="role === 'family' ? 'text-slate-600' : 'text-slate-500'">记录与患者的关系，随时接收康复提醒与温馨提示。</p>
-      </button>
+      <div class="p-6 rounded-3xl border border-sky-100 bg-sky-50/60 text-left flex flex-col gap-3">
+        <p class="text-xs uppercase tracking-[0.3em] text-sky-500">亲友守护</p>
+        <h2 class="text-xl font-semibold text-slate-900">我是家属/监护人</h2>
+        <p class="text-sm text-slate-600">记录与患者的关系，随时接收康复提醒与温馨提示。</p>
+      </div>
     </div>
 
+    {% if can_add_family %}
     <form method="post" action="{% url 'web_patient:bind_submit' patient.id %}" class="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-5">
       {% csrf_token %}
-      <input type="hidden" name="relation_type" :value="role === 'self' ? '{{ relation_self }}' : familyRelation">
       <p class="text-sm text-slate-500">
-        <span x-text="role === 'self' ? '确认绑定后，系统将同步到您的微信账号。' : '请填写以下信息，让我们更好地认识您。'"></span>
+        请填写以下信息，让我们更好地认识您。
       </p>
 
-      <template x-if="role === 'self'">
-        <input type="hidden" name="receive_notification" value="on">
-      </template>
-
-      <div x-show="role === 'family'" x-transition class="space-y-5">
+      <div class="space-y-5">
         <div>
           <p class="text-sm font-medium text-slate-600 mb-2">选择与患者的关系</p>
           <div class="flex flex-wrap gap-3">
             {% for value, label in family_relation_choices %}
-            <label
-              class="px-4 py-2 rounded-2xl border text-sm font-medium cursor-pointer transition"
-              :class="familyRelation === '{{ value }}' ? 'border-sky-500 bg-sky-50 text-sky-700' : 'border-slate-200 text-slate-600 hover:border-slate-400'"
-            >
-              <input type="radio" class="sr-only" name="family_relation_choice" value="{{ value }}" @change="familyRelation='{{ value }}'">
-              {{ label }}
+            <label class="relative cursor-pointer">
+              <input type="radio" class="peer sr-only" name="relation_type" value="{{ value }}" {% if forloop.first %}checked{% endif %}>
+              <div class="px-4 py-2 rounded-2xl border text-sm font-medium transition border-slate-200 text-slate-600 hover:border-slate-400 peer-checked:border-sky-500 peer-checked:bg-sky-50 peer-checked:text-sky-700">
+                {{ label }}
+              </div>
             </label>
             {% endfor %}
           </div>
@@ -71,8 +53,7 @@
         <div>
           <label class="block text-sm font-medium text-slate-600">关系备注</label>
           <input type="text" name="relation_name" placeholder="如：王先生的父亲"
-            class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-100"
-            :disabled="role !== 'family'">
+            class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-sky-100">
         </div>
         <label class="flex items-center space-x-3 text-sm text-slate-600">
           <input type="checkbox" name="receive_notification" class="rounded border-slate-300 text-sky-500 focus:ring-sky-200" checked>
@@ -86,16 +67,22 @@
       </div>
 
       <div class="text-right">
-        <button type="submit" class="inline-flex items-center px-6 py-3 rounded-2xl text-sm font-semibold transition"
-          :class="role === 'self' ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-sky-600 text-white hover:bg-sky-500'">
-          <span x-text="role === 'self' ? '确认绑定' : '提交申请'"></span>
+        <button type="submit" class="inline-flex items-center px-6 py-3 rounded-2xl text-sm font-semibold bg-sky-600 text-white hover:bg-sky-500 transition">
+          <span>提交申请</span>
           <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7" />
           </svg>
         </button>
       </div>
     </form>
+    {% else %}
+    <div class="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-3">
+      <p class="text-sm font-medium text-slate-900">当前亲情账号数量已达上限</p>
+      <p class="text-sm text-slate-500">
+        出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。
+      </p>
+    </div>
+    {% endif %}
   </div>
 </div>
-<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
 {% endblock %}

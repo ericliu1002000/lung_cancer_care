@@ -12,18 +12,9 @@ from web_patient.forms import PatientSelfEntryForm
 
 
 def _get_primary_patient(request: HttpRequest) -> PatientProfile:
-    patient = getattr(request.user, "patient_profile", None)
+    patient = request.patient
     if patient:
         return patient
-
-    relation = (
-        PatientRelation.objects.select_related("patient")
-        .filter(user=request.user)
-        .order_by("-created_at")
-        .first()
-    )
-    if relation and relation.patient:
-        return relation.patient
 
     raise Http404("未找到患者档案")
 
@@ -42,7 +33,9 @@ def _get_patient_for_request(request: HttpRequest, patient_id: int) -> PatientPr
         return patient
 
     has_relation = (
-        PatientRelation.objects.filter(user=request.user, patient_id=patient_id)
+        PatientRelation.objects.filter(
+            user=request.user, patient_id=patient_id, is_active=True
+        )
         .only("id")
         .exists()
     )
@@ -59,7 +52,7 @@ def _hx_flag(request: HttpRequest) -> bool:
 @login_required
 @check_patient
 def profile_page(request: HttpRequest) -> HttpResponse:
-    patient = _get_primary_patient(request)
+    patient = request.patient
     return render(
         request,
         "web_patient/profile_info.html",
@@ -72,7 +65,7 @@ def profile_page(request: HttpRequest) -> HttpResponse:
 @login_required
 @check_patient
 def profile_card(request: HttpRequest, patient_id: int) -> HttpResponse:
-    patient = _get_patient_for_request(request, patient_id)
+    patient = request.patient
     return render(
         request,
         "web_patient/partials/profile_card.html",
@@ -83,7 +76,7 @@ def profile_card(request: HttpRequest, patient_id: int) -> HttpResponse:
 @login_required
 @check_patient
 def profile_edit_form(request: HttpRequest, patient_id: int) -> HttpResponse:
-    patient = _get_patient_for_request(request, patient_id)
+    patient = request.patient
     form = PatientSelfEntryForm(instance=patient)
     return render(
         request,
@@ -101,7 +94,7 @@ def profile_edit_form(request: HttpRequest, patient_id: int) -> HttpResponse:
 @check_patient
 @require_POST
 def profile_update(request: HttpRequest, patient_id: int) -> HttpResponse:
-    patient = _get_patient_for_request(request, patient_id)
+    patient = request.patient
     form = PatientSelfEntryForm(request.POST, instance=patient)
     if form.is_valid():
         try:

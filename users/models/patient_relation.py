@@ -46,6 +46,11 @@ class PatientRelation(TimeStampedModel):
         default=False,
         help_text="【业务说明】是否接收模板消息；【用法】用户自行勾选；【示例】False；【参数】bool；【返回值】bool",
     )
+    is_active = models.BooleanField(
+        "是否有效",
+        default=True,
+        help_text="【业务说明】软删除标记；【用法】解绑时置为 False；【示例】True；【参数】bool；【返回值】bool",
+    )
 
     class Meta:
         constraints = [

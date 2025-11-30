@@ -17,17 +17,7 @@ def patient_orders(request):
     【模板】`web_patient/patient_orders.html`，展示购买的服务与有效期信息。
     """
 
-    patient = getattr(request.user, "patient_profile", None)
-
-    if patient is None:
-        relation = (
-            PatientRelation.objects.select_related("patient")
-            .filter(user=request.user)
-            .order_by("-created_at")
-            .first()
-        )
-        if relation:
-            patient = relation.patient
+    patient = request.patient
 
     if patient is None:
         return redirect("web_patient:onboarding")

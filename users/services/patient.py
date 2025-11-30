@@ -118,10 +118,31 @@ class PatientService:
                 "relation_type": relation_type,
                 "relation_name": relation_name,
                 "receive_alert_msg": receive_alert_msg,
+                "is_active": True,
             },
         )
 
         return profile
+    
+    def unbind_relation(self, patient: PatientProfile, relation_id: int) -> PatientRelation:
+        """
+        【功能】患者端解绑亲情账号（软删除）。
+        """
+        
+        if patient is None:
+            raise ValidationError("未找到患者档案，无法解绑亲情账号")
+
+        relation = (
+            PatientRelation.objects.select_related("patient")
+            .filter(pk=relation_id, patient=patient, is_active=True)
+            .first()
+        )
+        if relation is None:
+            raise ValidationError("亲情账号不存在或已解绑")
+
+        relation.is_active = False
+        relation.save(update_fields=["is_active", "updated_at"])
+        return relation
 
 
 
@@ -182,7 +203,7 @@ class PatientService:
             if existing_profile.user and existing_profile.user != user:
                 raise ValidationError("该手机号已被其他微信账号绑定，请联系顾问处理。")
             
-            # 认领/更新逻辑
+            # 认领/更新逻辑(这里实际上就是一个孤立的patient)
             profile = existing_profile
         else:
             # 纯新建逻辑
