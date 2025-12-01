@@ -85,6 +85,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
             "is_family": is_family,
             "main_entries": main_entries,
             "service_entries": service_entries,
+            "buy_url": generate_menu_auth_url("market:product_buy")
         },
     )
 

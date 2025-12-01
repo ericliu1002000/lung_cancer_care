@@ -27,10 +27,15 @@
         </div>
       </div>
       <div class="mt-6 inline-flex flex-wrap gap-2 items-center px-5 py-3 rounded-2xl bg-orange-100 text-orange-800 text-base font-semibold shadow">
-        {% if patient.membership_expire_at %}
-        <span>VIP 有效期至：{{ patient.membership_expire_at|date:"Y年n月j日" }}</span>
+        {% if patient.is_member and patient.membership_expire_date %}
+        <span class="inline-flex items-center gap-2">
+          <span class="inline-flex items-center px-3 py-1 rounded-full bg-white/80 text-orange-700 text-sm font-semibold">
+            VIP
+          </span>
+          <span>有效期至：{{ patient.membership_expire_date|date:"Y年n月j日" }}</span>
+        </span>
         {% else %}
-        <span>未开通会员，<a href="#" class="underline underline-offset-2">点击了解权益</a></span>
+        <span>未开通会员，<a href="{{ buy_url }}" class="underline underline-offset-2">点击了解权益</a></span>
         {% endif %}
       </div>
     </div>

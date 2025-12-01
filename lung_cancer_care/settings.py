@@ -174,6 +174,17 @@ STATICFILES_DIRS = [
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
 
+CERTS_DIR = BASE_DIR / 'certs'
+# 微信支付 v2 证书配置
+WX_APPID = os.getenv("WX_APPID")
+WX_PAY_PUB_KEY_PATH = CERTS_DIR / 'wx_v2_certs/pub_key.pem'
+WX_PAY_CERT_PATH = CERTS_DIR / 'wx_v2_certs/apiclient_cert.pem'
+WX_PAY_KEY_PATH = CERTS_DIR / 'wx_v2_certs/apiclient_key.pem'
+WX_MCH_ID = os.getenv("WX_MCH_ID")
+WX_MCH_KEY = os.getenv("WX_MCH_KEY")
+WX_PAY_NOTIFY_URL = os.getenv("WX_PAY_NOTIFY_URL")
+
+
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
@@ -255,7 +266,7 @@ SMS_CONFIG = {
     'ORG_ID': os.environ.get('SMS_ORG_ID'),
     'USERNAME': os.environ.get('SMS_USERNAME'),
     'PASSWORD': os.environ.get('SMS_PASSWORD'), 
-    'SIGNATURE': '【岱劲健康】', # 建议配置签名，避免被拦截
+    'SIGNATURE': '【岱劲信息】', # 建议配置签名，避免被拦截
 }
 
 #智能手表配置

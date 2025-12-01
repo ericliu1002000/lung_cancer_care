@@ -204,12 +204,16 @@ class PatientProfile(TimeStampedModel):
             return f"{name[0]}*"
         return f"{name[0]}{'*' * (length - 2)}{name[-1]}"
 
-    def _compute_membership_state(self) -> str:
+    def _compute_membership(self) -> tuple[str, date | None]:
         """
-        返回会员状态：
-        - active：存在未过期的付费订单
-        - expired：曾付费但已过期
-        - none：从未付费
+        【业务说明】根据已支付订单计算会员状态与到期日期。
+        【返回值】
+        - (state, expire_date)
+        - state:
+          - "active"：存在未过期的付费订单
+          - "expired"：曾付费但已过期
+          - "none"：从未付费
+        - expire_date：当前有效会员或最后一次过期会员的结束日期；无则为 None。
         """
 
         from market.models import Order
@@ -221,30 +225,60 @@ class PatientProfile(TimeStampedModel):
             .order_by("-paid_at")
         )
 
-        had_paid = False
+        last_end_date: date | None = None
         for order in paid_orders:
-            had_paid = True
             duration = order.product.duration_days or 0
             if duration <= 0:
                 continue
             start_date = timezone.localtime(order.paid_at).date()
             end_date = start_date + timedelta(days=duration - 1)
             if today <= end_date:
-                return "active"
+                return "active", end_date
+            if not last_end_date or end_date > last_end_date:
+                last_end_date = end_date
 
-        if had_paid:
-            return "expired"
-        return "none"
+        if last_end_date:
+            return "expired", last_end_date
+        return "none", None
+
+    @property
+    def membership_expire_date(self) -> date | None:
+        """
+        【业务说明】返回会员有效期截止日期。
+        【返回值】date 或 None。
+        """
+
+        if not hasattr(self, "_membership_cache"):
+            self._membership_cache = self._compute_membership()
+        _, expire_date = self._membership_cache
+        return expire_date
+
+    @property
+    def is_member(self) -> bool:
+        """
+        【业务说明】当前是否为会员。
+        【规则】存在未过期的付费服务包订单。
+        """
+
+        if not hasattr(self, "_membership_cache"):
+            self._membership_cache = self._compute_membership()
+        state, _ = self._membership_cache
+        return state == "active"
 
     def has_active_membership(self) -> bool:
-        """是否拥有有效会员服务。"""
+        """
+        【兼容性说明】旧接口，内部委托给 is_member。
+        【建议】新代码请直接使用 patient.is_member。
+        """
 
-        return self._compute_membership_state() == "active"
+        return self.is_member
 
     def get_service_status_display(self) -> str:
         """兼容旧模板调用，返回当前会员状态文案。"""
 
-        state = self._compute_membership_state()
+        if not hasattr(self, "_membership_cache"):
+            self._membership_cache = self._compute_membership()
+        state, _ = self._membership_cache
         if state == "active":
             return "付费会员"
         if state == "expired":

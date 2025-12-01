@@ -15,10 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib.auth.views import LogoutView
 from django.http import HttpResponse
 from django.urls import include, path
-from django.conf import settings
 from django.conf.urls.static import static
 from devices.views.callback import smartwatch_data_callback
 import os
@@ -56,6 +57,7 @@ urlpatterns = [
     path('', include('web_doctor.urls')),
     path('', include('web_sales.urls')),
     path('p/', include('web_patient.urls', namespace='web_patient')),
+    path('market/', include('market.urls', namespace='market')),
     path('deviceupload/', smartwatch_data_callback, name='device_upload_root'),
 ]
 

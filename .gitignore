@@ -38,6 +38,7 @@ media/
 staticfiles/
 local_settings.py
 .env
+certs/
 .env.*
 .trae
 # AI模型文件

@@ -11,12 +11,12 @@ class Medication(models.Model):
         TARGETED = 1, "靶向治疗"
         CHEMO = 2, "化疗"
         IMMUNO = 3, "免疫治疗"
-        ANTI_VEGF = 4, "抗血管"
+        ANTI_VEGF = 4, "合并用药"
         OTHER = 9, "其它"
 
     class Method(models.IntegerChoices):
         ORAL = 1, "口服"
-        IV = 2, "静脉"
+        IV = 2, "静脉注射"
         OTHER = 9, "其它"
 
     name = models.CharField(
