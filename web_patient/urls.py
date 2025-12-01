@@ -30,4 +30,7 @@ urlpatterns = [
     path("orders/", views.patient_orders, name="orders"),
     path("bind/<int:patient_id>/", views.bind_landing, name="bind_landing"),
     path("bind/<int:patient_id>/submit/", views.bind_submit, name="bind_submit"),
+    path("devices/", views.device_list, name="device_list"),
+    path("devices/bind/", views.api_bind_device, name="api_bind_device"),
+    path("devices/unbind/", views.api_unbind_device, name="api_unbind_device"),
 ]

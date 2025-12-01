@@ -9,6 +9,7 @@ from .profile import (
     profile_update,
 )
 from .family import family_management, unbind_family
+from .device import device_list, api_bind_device, api_unbind_device
 
 __all__ = [
     "bind_landing",
@@ -24,4 +25,7 @@ __all__ = [
     "profile_update",
     "family_management",
     "unbind_family",
+    "device_list",
+    "api_bind_device",
+    "api_unbind_device",
 ]

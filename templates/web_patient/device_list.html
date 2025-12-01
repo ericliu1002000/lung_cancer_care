@@ -1,0 +1,229 @@
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+{% block title %}我的设备{% endblock %}
+{% block body %}
+<div class="min-h-screen bg-slate-50 pb-28">
+  <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+    <div class="max-w-3xl mx-auto flex items-center gap-4 px-4 py-4">
+      <a href="javascript:history.back();" class="w-11 h-11 flex items-center justify-center rounded-full bg-white shadow text-slate-600">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/>
+        </svg>
+      </a>
+      <div>
+        <p class="text-sm text-slate-500">智能设备中心</p>
+        <h1 class="text-2xl font-semibold text-slate-900">我的设备</h1>
+      </div>
+    </div>
+  </div>
+
+  <div id="device-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 pointer-events-none"></div>
+
+  <div class="max-w-3xl mx-auto px-4 py-6 space-y-6">
+    {% if devices %}
+      <div class="space-y-4">
+        {% for device in devices %}
+        <div class="relative rounded-3xl bg-white shadow-sm overflow-hidden px-5 py-4">
+          <div class="absolute top-4 right-4">
+            <button
+              class="w-11 h-11 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shadow-sm border border-rose-100"
+              onclick="confirmUnbind('{{ device.imei }}')"
+              aria-label="解绑设备"
+            >
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 3h6m2 0h3m-3 0v2m-8 0V3H7v2m1 0 1 15a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2l1-15m-8 0h8"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 11v6M14 11v6"/>
+              </svg>
+            </button>
+          </div>
+          <div class="flex items-center gap-4 pr-14">
+            <div class="w-14 h-14 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center">
+              {% if device.device_type == device.DeviceType.WATCH %}
+              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 6V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1m0 12v1a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-1m-3-9h12a2 2 0 0 1 2 2v3a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5v-3a2 2 0 0 1 2-2Z"/>
+              </svg>
+              {% else %}
+              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 3h14a2 2 0 0 1 2 2v9H3V5a2 2 0 0 1 2-2Zm17 11H2v3a2 2 0 0 0 2 2h3v2h10v-2h3a2 2 0 0 0 2-2v-3Z"/>
+              </svg>
+              {% endif %}
+            </div>
+            <div class="flex-1">
+              <p class="text-lg font-semibold text-slate-900">{{ device.model_name|default:"智能设备" }}</p>
+              <p class="text-sm text-slate-500 mt-1">绑定于 {{ device.bind_at|date:"Y年n月j日 H:i" }}</p>
+            </div>
+          </div>
+          <div class="mt-4 rounded-2xl bg-slate-50 px-4 py-3 space-y-1">
+            <p class="text-sm text-slate-500">IMEI</p>
+            <p class="font-mono text-base tracking-wide text-slate-800 break-all">{{ device.imei|default:"-" }}</p>
+            <p class="text-sm text-slate-500 mt-3">SN</p>
+            <p class="font-mono text-base tracking-wide text-slate-800 break-all">{{ device.sn|default:"-" }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="bg-white rounded-3xl shadow p-8 text-center space-y-6">
+        <img src="{% static 'images/empty_devices.svg' %}" alt="" class="mx-auto w-40 h-40 object-contain" onerror="this.style.display='none';">
+        <div class="space-y-2">
+          <p class="text-xl font-semibold text-slate-900">暂无绑定设备</p>
+          <p class="text-base text-slate-500">扫描设备包装内的二维码，即可完成绑定，开始同步心率、血氧等数据。</p>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="fixed bottom-0 left-0 right-0 z-30 bg-white/90 backdrop-blur border-t border-slate-200">
+    <div class="max-w-3xl mx-auto px-4 py-4">
+      <button
+        id="bind-btn"
+        class="w-full h-14 rounded-2xl bg-emerald-500 text-white text-lg font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+        onclick="scanAndBind()"
+        {% if not wx_config %}disabled{% endif %}
+      >
+        绑定新设备
+      </button>
+      {% if not wx_config %}
+      <p class="text-center text-sm text-rose-500 mt-2">微信配置异常，请稍后重试</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+<script>
+  const apiBindUrl = "{% url 'web_patient:api_bind_device' %}";
+  const apiUnbindUrl = "{% url 'web_patient:api_unbind_device' %}";
+
+  const deviceState = {
+    loading: false,
+  };
+
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('device-toast');
+    if (!container) return;
+    const colors = {
+      info: 'bg-slate-900 text-white',
+      success: 'bg-emerald-600 text-white',
+      error: 'bg-rose-600 text-white'
+    };
+    const div = document.createElement('div');
+    div.className = `${colors[type] || colors.info} rounded-2xl px-4 py-3 shadow-lg text-base text-center pointer-events-auto`;
+    div.textContent = message;
+    container.appendChild(div);
+    setTimeout(() => {
+      div.classList.add('opacity-0', '-translate-y-2', 'transition');
+      div.addEventListener('transitionend', () => div.remove());
+    }, 2200);
+  }
+
+  function getCsrfToken() {
+    const match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? match[1] : '';
+  }
+
+  function confirmUnbind(imei) {
+    if (!imei) {
+      showToast('设备信息缺失，无法解绑', 'error');
+      return;
+    }
+    if (!confirm('确定解绑该设备吗？解绑后将无法继续同步数据。')) {
+      return;
+    }
+    if (deviceState.loading) return;
+    deviceState.loading = true;
+    fetch(apiUnbindUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ imei }),
+      credentials: 'same-origin',
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast(data.message || '解绑成功', 'success');
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        showToast(data.message || '解绑失败', 'error');
+      }
+    })
+    .catch(() => {
+      showToast('网络异常，请稍后重试', 'error');
+    })
+    .finally(() => {
+      deviceState.loading = false;
+    });
+  }
+
+  {% if wx_config %}
+  wx.config({
+    debug: false,
+    appId: "{{ wx_config.appId }}",
+    timestamp: {{ wx_config.timestamp }},
+    nonceStr: "{{ wx_config.nonceStr }}",
+    signature: "{{ wx_config.signature }}",
+    jsApiList: ["scanQRCode"]
+  });
+  {% endif %}
+
+  function scanAndBind() {
+    if (deviceState.loading) return;
+    if (typeof wx === 'undefined') {
+      showToast('当前环境不支持扫码', 'error');
+      return;
+    }
+    deviceState.loading = true;
+    wx.ready(function() {
+      wx.scanQRCode({
+        needResult: 1,
+        scanType: ["qrCode", "barCode"],
+        success: function(res) {
+          const result = res.resultStr || '';
+          bindDevice(result);
+        },
+        fail: function() {
+          showToast('扫码失败，请重试', 'error');
+          deviceState.loading = false;
+        },
+        cancel: function() {
+          deviceState.loading = false;
+        }
+      });
+    });
+    wx.error(function() {
+      showToast('微信配置失败，请刷新后重试', 'error');
+      deviceState.loading = false;
+    });
+  }
+
+  function bindDevice(scanData) {
+    fetch(apiBindUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ scan_data: scanData }),
+      credentials: 'same-origin',
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        showToast(data.message || '绑定成功', 'success');
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        showToast(data.message || '绑定失败', 'error');
+      }
+    })
+    .catch(() => {
+      showToast('网络异常，请稍后重试', 'error');
+    })
+    .finally(() => {
+      deviceState.loading = false;
+    });
+  }
+</script>
+{% endblock %}

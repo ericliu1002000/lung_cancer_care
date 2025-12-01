@@ -67,7 +67,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
     # orders_url = reverse("web_patient:orders")
     service_entries = [
         {"title": "我的订单", "url": generate_menu_auth_url("web_patient:orders")},
-        {"title": "智能设备", "url": "#"},
+        {"title": "智能设备", "url": generate_menu_auth_url("web_patient:device_list")},
         {"title": "工作室", "url": "#"},
         {"title": "检查报告", "url": "#"},
         {"title": "提醒设置", "url": "#"},
