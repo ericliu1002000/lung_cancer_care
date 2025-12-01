@@ -1,0 +1,61 @@
+{% extends "layouts/base_portal.html" %}
+{% block title %}医生工作室{% endblock %}
+{% block body %}
+<div class="min-h-screen bg-slate-50 pb-20">
+  <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+    <div class="max-w-3xl mx-auto flex items-center gap-4 px-4 py-4">
+      <a href="{% url 'web_patient:patient_dashboard' %}" class="w-11 h-11 flex items-center justify-center rounded-full bg-white shadow text-slate-600">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/>
+        </svg>
+      </a>
+      <div>
+        <p class="text-sm text-slate-500">医生服务</p>
+        <h1 class="text-2xl font-semibold text-slate-900">医生工作室</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    {% if studio %}
+    <div class="bg-white rounded-3xl shadow-sm p-6 space-y-5">
+      <div class="flex items-center gap-3">
+        <div>
+          <p class="text-2xl font-semibold text-slate-900">{{ studio.name }}</p>
+          <p class="text-sm text-emerald-600 font-medium mt-1">专家团队</p>
+        </div>
+        <span class="ml-auto inline-flex items-center px-4 py-1.5 rounded-full bg-slate-100 text-slate-600 text-sm font-semibold">守护呼吸健康</span>
+      </div>
+      <div class="rounded-2xl bg-slate-50 px-4 py-3 space-y-3">
+        <div class="text-base text-slate-700">
+          <span class="font-semibold">工作室编号：</span>
+          <span class="font-mono text-lg tracking-wide text-slate-900">{{ studio.code|default:"未填写" }}</span>
+        </div>
+        <div class="text-base text-slate-700">
+          <span class="font-semibold">负责人：</span>
+          <span class="text-slate-900">{{ studio.owner_doctor.name|default:"未填写" }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-3xl shadow-sm p-6">
+      <h2 class="text-xl font-semibold text-slate-900 mb-4">工作室简介</h2>
+      <p class="text-base text-slate-700 leading-relaxed whitespace-pre-line">
+        {{ studio.intro|default:"暂无介绍。" }}
+      </p>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-3xl shadow-sm p-8 text-center space-y-4">
+      <svg class="mx-auto w-32 h-32 text-slate-200" viewBox="0 0 200 200" fill="currentColor">
+        <rect x="40" y="40" width="120" height="120" rx="24" fill="currentColor"/>
+        <path d="M100 70v60M70 100h60" stroke="#CBD5F5" stroke-width="10" stroke-linecap="round"/>
+      </svg>
+      <div class="space-y-2">
+        <p class="text-xl font-semibold text-slate-900">暂无指定工作室</p>
+        <p class="text-base text-slate-600 leading-relaxed">请联系您的主治医生或康复顾问进行绑定，我们将为您匹配专属团队。</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
