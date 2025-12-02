@@ -17,10 +17,8 @@ Including another URLconf
 from django.contrib import admin
 from django.conf import settings
 from django.conf.urls.static import static
-from django.contrib.auth.views import LogoutView
 from django.http import HttpResponse
 from django.urls import include, path
-from django.conf.urls.static import static
 from devices.views.callback import smartwatch_data_callback
 import os
 
@@ -36,14 +34,6 @@ def wechat_verify_view(request):
     # 微信要求返回纯文本内容
     return HttpResponse(content, content_type="text/plain")
     
-
-# 2. 修改 Admin 站点的文案配置
-admin.site.site_header = '肺部康复管理系统后台'  # 登录页的大标题 / 每一页顶部的标题
-admin.site.site_title = '肺部康复管理系统'     # 浏览器标签页的 Title
-admin.site.index_title = '后台管理首页'         # 登录进去后，面包屑导航后面的文字
-admin.site.logout = LogoutView.as_view(next_page='/admin/')
-
-
 
 urlpatterns = [
 

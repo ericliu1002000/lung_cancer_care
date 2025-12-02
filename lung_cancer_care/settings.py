@@ -42,7 +42,7 @@ DEBUG = DJANGO_ENV != "production"
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    'lung_cancer_care.admin_site.LungCancerAdminConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -61,6 +61,22 @@ INSTALLED_APPS = [
     'core',
     'devices'
 ]
+
+ADMIN_APP_ORDER = [
+    'core',
+    'users',
+    'web_doctor',
+    'web_patient',
+    'market',
+    'web_sales',
+    'devices',
+    'health_data',
+    'business_support',
+    'wx',
+    'regions',
+]
+
+LOGOUT_REDIRECT_URL = '/admin/'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

@@ -18,24 +18,19 @@ MODEL_ORDER = [
     "患者列表",
     "销售档案",
 ]
+_base_get_app_list = admin.site.get_app_list
 
 
 def _sorted_app_list(self, request, app_label=None):
-    app_dict = self._build_app_dict(request, app_label)
-    app_list = []
-    users_app = app_dict.pop("users", None)
-    for label, app in app_dict.items():
-        if app["app_label"] == "users" and users_app is None:
-            users_app = app
-        else:
-            app_list.append(app)
-    app_list.sort(key=lambda x: x["name"])
-    if users_app:
-        users_app["name"] = "用户模块"
-        users_app["models"].sort(
+    app_list = list(_base_get_app_list(request))
+    for app in app_list:
+        if app["app_label"] != "users":
+            continue
+        app["name"] = "用户模块"
+        app["models"].sort(
             key=lambda m: MODEL_ORDER.index(m["name"]) if m["name"] in MODEL_ORDER else len(MODEL_ORDER)
         )
-        app_list.insert(0, users_app)
+
     if app_label:
         return [app for app in app_list if app["app_label"] == app_label]
     return app_list
