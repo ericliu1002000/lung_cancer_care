@@ -1,7 +1,7 @@
 from django import forms
 
-from core.service.sms import SMSService
-from core.models import Feedback
+from business_support.service.sms import SMSService
+from business_support.models import Feedback
 from users import choices
 from users.models import PatientProfile
 

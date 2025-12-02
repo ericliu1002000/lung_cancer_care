@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from core.models import SystemDocument
+from business_support.models import SystemDocument
 
 
 @admin.register(SystemDocument)
@@ -44,4 +44,3 @@ class SystemDocumentAdmin(admin.ModelAdmin):
         if obj:
             base.append("key")
         return tuple(base)
-

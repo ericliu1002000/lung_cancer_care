@@ -11,7 +11,7 @@ from typing import Tuple
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Device
+from business_support.models import Device
 from users.models import PatientProfile
 
 

@@ -11,8 +11,8 @@ from django.shortcuts import render
 from django.utils.crypto import get_random_string
 from django.views.decorators.http import require_POST
 
-from core.models import Device
-from core.service.device import (
+from business_support.models import Device
+from business_support.service import (
     DeviceActionStatus,
     DeviceServiceError,
     bind_device,

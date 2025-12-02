@@ -7,7 +7,7 @@ from django.http import HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
 
-from core.models import Device
+from business_support.models import Device
 
 
 @admin.register(Device)

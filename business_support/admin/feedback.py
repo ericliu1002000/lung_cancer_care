@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from core.models import Feedback, FeedbackImage
+from business_support.models import Feedback, FeedbackImage
 
 
 class FeedbackImageInline(admin.TabularInline):

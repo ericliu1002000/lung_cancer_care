@@ -3,7 +3,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 from django.utils.safestring import mark_safe
 
-from core.models import SystemDocument
+from business_support.models import SystemDocument
 import markdown
 
 
@@ -29,4 +29,3 @@ def document_detail(request: HttpRequest, key: str) -> HttpResponse:
             "html_content": mark_safe(html_content),
         },
     )
-

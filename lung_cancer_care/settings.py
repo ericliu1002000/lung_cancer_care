@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'wx',
     'health_data',
     'regions',
+    'business_support',
     'core',
     'devices'
 ]

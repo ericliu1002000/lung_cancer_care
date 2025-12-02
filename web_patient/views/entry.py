@@ -5,7 +5,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from core.service.sms import SMSService
+from business_support.service.sms import SMSService
 from users.services.patient import PatientService
 from web_patient.forms import PatientEntryVerificationForm
 from users.decorators import check_patient

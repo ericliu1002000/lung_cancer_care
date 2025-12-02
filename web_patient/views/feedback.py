@@ -4,7 +4,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
-from core.models import FeedbackImage
+from business_support.models import FeedbackImage
 from users.decorators import check_patient
 from web_patient.forms import FeedbackForm
 
