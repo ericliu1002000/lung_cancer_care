@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Iterable, List, TypedDict
 
+from django.db.models import Q
+
 from core.models import Medication
 
 
@@ -19,6 +21,8 @@ class MedicationPlanItem(TypedDict):
     name: str
     type: str
     default_dosage: str
+    default_frequency: str
+    keywords: str
     schedule: list[int]
 
 
@@ -34,6 +38,7 @@ def get_active_medication_library() -> List[MedicationPlanItem]:
       - name: 药物名称（通用名）；
       - type: 药物类型展示文本；
       - default_dosage: 默认剂量描述；
+      - default_frequency: 默认频次描述；
       - schedule: 推荐执行天数模板（若为空则返回 []）。
     """
 
@@ -41,14 +46,71 @@ def get_active_medication_library() -> List[MedicationPlanItem]:
 
     items: List[MedicationPlanItem] = []
     for med in qs:
+        keywords = " ".join(
+            [
+                med.name or "",
+                med.trade_names or "",
+                med.name_abbr or "",
+                med.trade_names_abbr or "",
+            ]
+        ).strip()
         items.append(
             MedicationPlanItem(
                 lib_id=med.id,
                 name=med.name,
                 type=med.get_drug_type_display(),
                 default_dosage=med.default_dosage or "",
+                default_frequency=med.default_frequency or "",
+                keywords=keywords,
                 schedule=list(med.schedule_days_template or []),
             )
         )
     return items
 
+
+def search_medications(keyword: str, limit: int = 10) -> List[MedicationPlanItem]:
+    """
+    【功能说明】
+    - 按名称/商品名/拼音简码在药物知识库中进行模糊检索，返回匹配的药物列表。
+
+    【参数说明】
+    - keyword: 搜索关键字，支持中文名、商品名或拼音首字母简码；
+    - limit: 返回的最大条目数，默认 10。
+
+    【返回参数说明】
+    - 与 get_active_medication_library 相同的 MedicationPlanItem 列表，仅包含匹配结果。
+    """
+
+    qs = Medication.objects.filter(is_active=True)
+    keyword = (keyword or "").strip()
+    if keyword:
+        qs = qs.filter(
+            Q(name__icontains=keyword)
+            | Q(trade_names__icontains=keyword)
+            | Q(name_abbr__icontains=keyword)
+            | Q(trade_names_abbr__icontains=keyword)
+        )
+    qs = qs.order_by("name")[:limit]
+
+    items: List[MedicationPlanItem] = []
+    for med in qs:
+        keywords_full = " ".join(
+            [
+                med.name or "",
+                med.trade_names or "",
+                med.name_abbr or "",
+                med.trade_names_abbr or "",
+            ]
+        ).strip()
+        items.append(
+            MedicationPlanItem(
+                lib_id=med.id,
+                name=med.name,
+                type=med.get_drug_type_display(),
+                default_dosage=med.default_dosage or "",
+                default_frequency=med.default_frequency or "",
+                keywords=keywords_full,
+                schedule=list(med.schedule_days_template or []),
+            )
+        )
+    return items

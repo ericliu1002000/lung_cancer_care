@@ -30,6 +30,26 @@ urlpatterns = [
         name="patient_treatment_cycle_create",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/medication/add/",
+        views.patient_cycle_medication_add,
+        name="patient_cycle_medication_add",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/plan-toggle/",
+        views.patient_cycle_plan_toggle,
+        name="patient_cycle_plan_toggle",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/plan-item/<int:plan_item_id>/field/",
+        views.patient_plan_item_update_field,
+        name="patient_plan_item_update_field",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/plan-item/<int:plan_item_id>/day/<int:day>/",
+        views.patient_plan_item_toggle_day,
+        name="patient_plan_item_toggle_day",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",
         views.patient_workspace_section,
         name="patient_workspace_section",

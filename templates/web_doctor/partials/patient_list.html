@@ -7,6 +7,7 @@
                 hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
+                data-patient-item
             >
                 <p class="text-sm font-medium text-gray-900">{{ patient.name }}</p>
                 <p class="text-xs text-gray-500">
@@ -19,3 +20,33 @@
 {% else %}
     <li class="px-4 py-3 text-sm text-gray-400">暂无患者</li>
 {% endif %}
+
+<template id="patient-main-loading-template">
+  {% include "web_doctor/partials/patient_workspace_loading.html" %}
+</template>
+
+<script>
+(function () {
+  const tmpl = document.getElementById("patient-main-loading-template");
+  if (!tmpl) return;
+
+  // 监听患者列表区域内的点击，在 htmx 请求真正发出前先替换 main 内容为 loading
+  document.addEventListener("click", function (event) {
+    const btn = event.target.closest("button[hx-get][hx-target='#main-content']");
+    if (!btn) return;
+
+    // 高亮当前选中的患者按钮
+    document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
+      item.classList.remove("bg-indigo-50");
+    });
+    btn.classList.add("bg-indigo-50");
+
+    const main = document.querySelector("#main-content");
+    if (!main) return;
+    const clone = tmpl.content ? tmpl.content.cloneNode(true) : null;
+    if (!clone) return;
+    main.innerHTML = "";
+    main.appendChild(clone);
+  });
+})();
+</script>

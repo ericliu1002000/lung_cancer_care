@@ -18,11 +18,12 @@ from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
 from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle
-from core.models import MonitoringConfig
+from core.models import MonitoringConfig, TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
-from core.service.medication import get_active_medication_library
-from core.service.followup import get_active_followup_library
+from core.service.medication import get_active_medication_library, search_medications
+from core.service.followup import get_active_followup_library, get_followup_detail_items
 from core.service.checkup import get_active_checkup_library
+from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
 
 
@@ -121,7 +122,7 @@ def patient_workspace(request: HttpRequest, patient_id: int) -> HttpResponse:
     context = {"patient": patient, "active_tab": "settings"}
 
     # 默认加载“管理设置”内容，保证初次点击患者时中间区域完整
-    context.update(_build_settings_context(patient, tc_page=None))
+    context.update(_build_settings_context(patient, tc_page=None, selected_cycle_id=None))
 
     return render(
         request,
@@ -150,12 +151,25 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
 
     if section == "settings":
         template_name = "web_doctor/partials/settings/main.html"
-        context.update(_build_settings_context(patient, tc_page=request.GET.get("tc_page")))
+        selected_cycle_raw = request.GET.get("cycle_id")
+        try:
+            selected_cycle_id = int(selected_cycle_raw) if selected_cycle_raw else None
+        except (TypeError, ValueError):
+            selected_cycle_id = None
+        context.update(
+            _build_settings_context(
+                patient,
+                tc_page=request.GET.get("tc_page"),
+                selected_cycle_id=selected_cycle_id,
+            )
+        )
 
     return render(request, template_name, context)
 
 
-def _build_settings_context(patient: PatientProfile, tc_page: str | None = None) -> dict:
+def _build_settings_context(
+    patient: PatientProfile, tc_page: str | None = None, selected_cycle_id: int | None = None
+) -> dict:
     """
     构建“管理设置（settings）”Tab 所需的上下文数据：
     - 当前进行中的疗程（active_cycle）
@@ -168,12 +182,24 @@ def _build_settings_context(patient: PatientProfile, tc_page: str | None = None)
 
     # 患者全部疗程列表，按结束日期倒序排列（结束时间最新的在前）
     cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
-    paginator = Paginator(cycles_qs, 10)
+    paginator = Paginator(cycles_qs, 5)
     try:
         page_number = int(tc_page) if tc_page else 1
     except (TypeError, ValueError):
         page_number = 1
     cycle_page = paginator.get_page(page_number)
+
+    # 当前选中的疗程：
+    # - 若显式传入 selected_cycle_id，则优先使用；
+    # - 否则默认选中当前有效疗程 active_cycle。
+    selected_cycle: TreatmentCycle | None = None
+    if selected_cycle_id:
+        selected_cycle = patient.treatment_cycles.filter(pk=selected_cycle_id).first()
+    if selected_cycle is None:
+        selected_cycle = active_cycle
+
+    # 默认展开选中的疗程；若不存在则不展开任何卡片
+    expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
 
     monitoring_items = [
         {"label": "体温", "field_name": "enable_temp", "is_checked": monitoring_config.enable_temp},
@@ -184,22 +210,47 @@ def _build_settings_context(patient: PatientProfile, tc_page: str | None = None)
     ]
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
-    # 当前阶段仅用于前端展示计划模板，后续可与具体疗程计划绑定
-    medications = get_active_medication_library()
+    # 用药计划：若存在选中的疗程，则基于 PlanItemService 仅展示该疗程已选中的药品
+    medications = []
+    if selected_cycle:
+        cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+        for med in cycle_plan.get("medications", []):
+            if not med.get("is_active"):
+                continue
+            medications.append(
+                {
+                    "lib_id": med["library_id"],
+                    "name": med["name"],
+                    "type": med.get("type", ""),
+                    "default_dosage": med.get("current_dosage") or med.get("default_dosage") or "",
+                    "default_frequency": med.get("current_usage") or med.get("default_frequency") or "",
+                    "schedule": list(med.get("schedule_days") or []),
+                    "plan_item_id": med.get("plan_item_id"),
+                }
+            )
+    # 其它库仍使用简单的“可用列表”
+    med_library = get_active_medication_library()
     checkups = get_active_checkup_library()
     followups = get_active_followup_library()
+    followup_details = get_followup_detail_items()
 
     plan_view = {
         "medications": medications,
         "checkups": checkups,
         "followups": followups,
+        "med_library": med_library,
+        # 随访计划：当前版本使用统一的问卷内容选项，默认仅 KS(咳嗽/痰色) 选中
+        "followup_schedule": followups[0]["schedule"] if followups else [],
+        "followup_details": followup_details,
     }
 
     return {
         "active_cycle": active_cycle,
+        "selected_cycle": selected_cycle,
         "monitoring_config": monitoring_config,
         "monitoring_items": monitoring_items,
         "cycle_page": cycle_page,
+        "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
     }
 
@@ -288,9 +339,10 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
     if cycle_days <= 0:
         errors.append("周期天数必须大于 0。")
 
+    new_cycle: TreatmentCycle | None = None
     if not errors and start_date:
         try:
-            create_treatment_cycle(
+            new_cycle = create_treatment_cycle(
                 patient=patient,
                 name=name,
                 start_date=start_date,
@@ -310,7 +362,309 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
             "cycle_days": cycle_days_raw or "",
         },
     }
-    context.update(_build_settings_context(patient, tc_page=request.GET.get("tc_page")))
+    selected_cycle_id = new_cycle.id if new_cycle else None
+    context.update(
+        _build_settings_context(patient, tc_page=request.GET.get("tc_page"), selected_cycle_id=selected_cycle_id)
+    )
+
+    return render(
+        request,
+        "web_doctor/partials/settings/main.html",
+        context,
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_cycle_medication_add(request: HttpRequest, patient_id: int, cycle_id: int) -> HttpResponse:
+    """
+    为指定疗程新增一个用药计划条目：
+    - 支持通过药品名称/商品名/拼音简码模糊搜索；
+    - 命中后调用 PlanItemService.toggle_item_status 将该药物加入当前疗程。
+    - 操作完成后重新渲染“管理设置”Tab（包含疗程列表与用药计划）。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    cycle = get_object_or_404(TreatmentCycle, pk=cycle_id, patient=patient)
+    keyword = (request.POST.get("q") or "").strip()
+    library_id_raw = request.POST.get("library_id") or ""
+
+    errors: list[str] = []
+    # 优先使用下拉选中的 library_id；若未选中则退回到关键字模糊搜索
+    library_id: int | None = None
+    if library_id_raw:
+        try:
+            library_id = int(library_id_raw)
+        except (TypeError, ValueError):
+            errors.append("所选药品 ID 无效。")
+
+    if library_id is None:
+        if not keyword:
+            errors.append("请输入药品名称或拼音简码。")
+        else:
+            results = search_medications(keyword, limit=5)
+            if not results:
+                errors.append("未找到匹配的药物，请检查关键字。")
+            else:
+                library_id = results[0]["lib_id"]
+
+    if library_id is not None and not errors:
+        try:
+            PlanItemService.toggle_item_status(
+                cycle_id=cycle.id,
+                category=core_choices.PlanItemCategory.MEDICATION,
+                library_id=library_id,
+                enable=True,
+            )
+        except ValidationError as exc:
+            errors.append(str(exc))
+
+    # 仅重新构建当前疗程的计划表视图，并返回 plan_table 部分，避免整个页面重绘导致滚动跳动
+    settings_ctx = _build_settings_context(
+        patient,
+        tc_page=request.GET.get("tc_page"),
+        selected_cycle_id=cycle.id,
+    )
+    selected_cycle = settings_ctx.get("selected_cycle")
+
+    table_context: dict = {
+        "patient": patient,
+        "cycle": selected_cycle,
+        "plan_view": settings_ctx.get("plan_view"),
+    }
+
+    return render(
+        request,
+        "web_doctor/partials/settings/plan_table.html",
+        table_context,
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: int) -> HttpResponse:
+    """
+    切换某个标准库条目在指定疗程下的启用状态。
+    - 目前主要用于“用药计划”行首开关：关闭时禁用该药物在本疗程中的计划（由搜索框重新开启）。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    cycle = get_object_or_404(TreatmentCycle, pk=cycle_id, patient=patient)
+
+    category_raw = (request.POST.get("category") or "").strip().lower()
+    library_id_raw = request.POST.get("library_id")
+
+    errors: list[str] = []
+    if not library_id_raw:
+        errors.append("缺少标准库条目 ID。")
+    try:
+        library_id = int(library_id_raw) if library_id_raw else 0
+    except (TypeError, ValueError):
+        library_id = 0
+        errors.append("标准库条目 ID 无效。")
+
+    # 目前仅支持药物开关；后续可扩展到复查/随访
+    if category_raw in ("medication", "medicine"):
+        category = core_choices.PlanItemCategory.MEDICATION
+    else:
+        category = None
+        errors.append("不支持的计划类别。")
+
+    if not errors and category is not None and library_id:
+        enable_flag = "enable" in request.POST
+        try:
+            PlanItemService.toggle_item_status(
+                cycle_id=cycle.id,
+                category=category,
+                library_id=library_id,
+                enable=enable_flag,
+            )
+        except ValidationError as exc:
+            errors.append(str(exc))
+
+    # 若只是关闭（enable=False），前端通过 hx-swap="outerHTML" 清除该行即可，
+    # 不再返回任何内容，避免整个设置区域大范围重绘导致滚动跳动。
+    if not errors and "enable" not in request.POST:
+        return HttpResponse("")
+
+    # 打开或修正状态时，仅返回该药品对应的单行 HTML，替换当前行，减少滚动跳动。
+    medications: list[dict] = []
+    if not errors:
+        cycle_plan = PlanItemService.get_cycle_plan_view(cycle.id)
+        for med in cycle_plan.get("medications", []):
+            if med.get("library_id") != library_id:
+                continue
+            if not med.get("is_active"):
+                # 已处于未启用状态，则无行可展示
+                return HttpResponse("")
+            medications.append(
+                {
+                    "lib_id": med["library_id"],
+                    "name": med["name"],
+                    "type": med.get("type", ""),
+                    "default_dosage": med.get("current_dosage") or med.get("default_dosage") or "",
+                    "default_frequency": med.get("current_usage") or med.get("default_frequency") or "",
+                    "schedule": list(med.get("schedule_days") or []),
+                    "plan_item_id": med.get("plan_item_id"),
+                }
+            )
+            break
+
+    if errors or not medications:
+        # 出现错误时退回到原有行为：重新渲染整个设置区域，方便展示错误提示
+        context: dict = {
+            "patient": patient,
+            "active_tab": "settings",
+            "cycle_form_errors": errors,
+            "cycle_form_initial": {
+                "name": "",
+                "start_date": "",
+                "cycle_days": "",
+            },
+        }
+        context.update(
+            _build_settings_context(
+                patient,
+                tc_page=request.GET.get("tc_page"),
+                selected_cycle_id=cycle.id,
+            )
+        )
+
+        return render(
+            request,
+            "web_doctor/partials/settings/main.html",
+            context,
+        )
+
+    med_ctx = {
+        "patient": patient,
+        "cycle": cycle,
+        "med": medications[0],
+    }
+    return render(
+        request,
+        "web_doctor/partials/settings/plan_table_medication_row.html",
+        med_ctx,
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_plan_item_update_field(request: HttpRequest, patient_id: int, plan_item_id: int) -> HttpResponse:
+    """
+    更新某个计划条目的文本字段（剂量/用法等），用于用药计划的行内编辑。
+    - 视图负责权限校验与基本参数解析；
+    - 具体更新逻辑委托给 PlanItemService.update_item_field。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    try:
+        plan = PlanItem.objects.select_related("cycle__patient").get(pk=plan_item_id)
+    except PlanItem.DoesNotExist:
+        raise Http404("计划条目不存在")
+
+    if plan.cycle.patient_id != patient.id:
+        raise Http404("计划条目与患者不匹配")
+
+    field_name = (request.POST.get("field_name") or "").strip()
+    value = (request.POST.get("value") or "").strip()
+
+    errors: list[str] = []
+    if not field_name:
+        errors.append("字段名称缺失。")
+    else:
+        try:
+            PlanItemService.update_item_field(plan_item_id, field_name, value)
+        except ValidationError as exc:
+            errors.append(str(exc))
+
+    context: dict = {
+        "patient": patient,
+        "active_tab": "settings",
+        "cycle_form_errors": errors,
+        "cycle_form_initial": {
+            "name": "",
+            "start_date": "",
+            "cycle_days": "",
+        },
+    }
+    context.update(
+        _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=plan.cycle_id,
+        )
+    )
+
+    return render(
+        request,
+        "web_doctor/partials/settings/main.html",
+        context,
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_plan_item_toggle_day(
+    request: HttpRequest, patient_id: int, plan_item_id: int, day: int
+) -> HttpResponse:
+    """
+    切换某个计划条目在指定 DayIndex 下的勾选状态。
+    - 不依赖前端传入的 checked 状态，而是根据当前 schedule_days 自动取反，保证幂等。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    try:
+        plan = PlanItem.objects.select_related("cycle__patient").get(pk=plan_item_id)
+    except PlanItem.DoesNotExist:
+        raise Http404("计划条目不存在")
+
+    if plan.cycle.patient_id != patient.id:
+        raise Http404("计划条目与患者不匹配")
+
+    schedule = list(plan.schedule_days or [])
+    currently_checked = day in schedule
+
+    try:
+        PlanItemService.toggle_schedule_day(plan_item_id, day, not currently_checked)
+    except ValidationError as exc:
+        errors = [str(exc)]
+    else:
+        errors = []
+
+    context: dict = {
+        "patient": patient,
+        "active_tab": "settings",
+        "cycle_form_errors": errors,
+        "cycle_form_initial": {
+            "name": "",
+            "start_date": "",
+            "cycle_days": "",
+        },
+    }
+    context.update(
+        _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=plan.cycle_id,
+        )
+    )
 
     return render(
         request,

@@ -41,3 +41,29 @@ def get_active_followup_library() -> List[FollowupPlanItem]:
         )
     return items
 
+
+def get_followup_detail_items() -> List[dict]:
+    """
+    【功能说明】
+    - 基于 FollowupLibrary.FOLLOWUP_DETAILS 构建“问卷内容”选项列表；
+    - 用于随访计划中渲染 7 个子开关。
+
+    【返回参数说明】
+    - 返回字典列表，每项包含：
+      - code: 业务编码（HX/TT/...）；
+      - label: 展示文案（呼吸/疼痛/...）；
+      - is_checked: 是否默认选中（当前默认 KS=咳嗽/痰色）。
+    """
+
+    detail_map = getattr(FollowupLibrary, "FOLLOWUP_DETAILS", {}) or {}
+    items: List[dict] = []
+    for code, label in detail_map.items():
+        items.append(
+            {
+                "code": code,
+                "label": label,
+                "is_checked": code == "KS",
+            }
+        )
+    return items
+

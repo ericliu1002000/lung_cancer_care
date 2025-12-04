@@ -13,6 +13,10 @@ from .workspace import (
     patient_workspace_section,
     patient_monitoring_update,
     patient_treatment_cycle_create,
+    patient_cycle_medication_add,
+    patient_cycle_plan_toggle,
+    patient_plan_item_update_field,
+    patient_plan_item_toggle_day,
 )
 
 __all__ = [
@@ -25,4 +29,8 @@ __all__ = [
     "patient_workspace_section",
     "patient_monitoring_update",
     "patient_treatment_cycle_create",
+    "patient_cycle_medication_add",
+    "patient_cycle_plan_toggle",
+    "patient_plan_item_update_field",
+    "patient_plan_item_toggle_day",
 ]

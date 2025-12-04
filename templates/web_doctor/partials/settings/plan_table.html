@@ -1,0 +1,173 @@
+{# 单个疗程的计划视图：用药 + 复查 + 随访 #}
+
+<div id="plan-table-container" class="overflow-x-auto mt-3">
+  <table class="w-full text-left border-collapse">
+    <thead>
+      <tr class="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+        <th class="px-4 py-3 font-semibold w-48">项目名称</th>
+        <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
+        <th class="px-2 py-3 font-semibold w-24">默认频次</th>
+        {% for i in "x"|rjust:"21" %}
+        <th class="px-1 py-3 font-medium text-center text-[10px] text-slate-400 w-8">D{{ forloop.counter }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+
+    <tbody class="divide-y divide-slate-100 group-section">
+      <tr class="bg-slate-50/30">
+        <td colspan="24" class="px-4 py-2 text-xs font-bold text-indigo-600 bg-indigo-50/30">
+          <div class="flex items-center justify-between">
+            <span>💊 用药计划</span>
+            {% if cycle and patient %}
+            <div class="relative text-xs" data-med-search-container>
+              <form
+                method="post"
+                hx-post="{% url 'web_doctor:patient_cycle_medication_add' patient.id cycle.id %}"
+                hx-target="#plan-table-container"
+                hx-swap="outerHTML"
+                class="flex items-center gap-2"
+              >
+                {% csrf_token %}
+                <input type="hidden" name="library_id" value="" data-med-library-id>
+                <input
+                  type="text"
+                  name="q"
+                  placeholder="搜索药品/拼音，回车添加"
+                  class="h-7 w-52 rounded border border-slate-200 bg-white px-2 py-1 placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  autocomplete="off"
+                  data-med-search-input
+                >
+              </form>
+              <div
+                class="absolute mt-1 w-64 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-md shadow-md z-10 hidden"
+                data-med-search-list
+              >
+                {% for med in plan_view.med_library %}
+                <button
+                  type="button"
+                  class="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50 flex justify-between items-center hidden"
+                  data-med-option
+                  data-med-id="{{ med.lib_id }}"
+                  data-med-label="{{ med.name }}"
+                  data-med-keywords="{{ med.keywords }}"
+                >
+                  <span class="truncate">
+                    {{ med.name }}
+                    <span class="text-[10px] text-slate-400 ml-1">{{ med.type }}</span>
+                  </span>
+                  {% if med.default_dosage %}
+                  <span class="ml-2 text-[10px] text-slate-400">{{ med.default_dosage }}</span>
+                  {% endif %}
+                </button>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% for med in plan_view.medications %}
+        {% include "web_doctor/partials/settings/plan_table_medication_row.html" with med=med patient=patient cycle=cycle %}
+      {% endfor %}
+    </tbody>
+
+    <tbody class="divide-y divide-slate-100 border-t border-slate-200">
+      <tr class="bg-slate-50/30">
+        <td colspan="24" class="px-4 py-2 text-xs font-bold text-sky-600 bg-sky-50/30">
+          📄 复查计划
+        </td>
+      </tr>
+      {% for check in plan_view.checkups %}
+      <tr class="hover:bg-slate-50 transition-colors" data-checkup-row>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-3">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                class="sr-only peer"
+                data-checkup-toggle
+                checked
+              >
+              <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
+            <span class="text-sm font-medium text-slate-900">{{ check.name }}</span>
+          </div>
+        </td>
+        <td class="px-2 py-3 text-xs text-slate-400">-</td>
+        <td class="px-2 py-3 text-xs text-slate-400">-</td>
+        
+        {% for i in "x"|rjust:"21" %}
+        <td class="px-0.5 py-3 text-center">
+          <input
+            type="checkbox"
+            class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            data-checkup-slot
+            {% if forloop.counter in check.schedule %}checked{% endif %}
+          >
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+
+    <tbody class="divide-y divide-slate-100 border-t border-slate-200">
+      <tr class="bg-slate-50/30">
+        <td colspan="24" class="px-4 py-2 text-xs font-bold text-emerald-600 bg-emerald-50/30">
+          🧾 随访计划
+        </td>
+      </tr>
+      <tr class="hover:bg-slate-50 transition-colors" data-followup-row>
+        <td class="px-4 py-3 align-top">
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-3">
+               <label class="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="sr-only peer"
+                  data-followup-toggle
+                  checked
+                >
+                <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+              </label>
+              <span class="text-sm font-medium text-slate-900">随访问卷</span>
+            </div>
+          </div>
+        </td>
+        <td class="px-2 py-3 text-xs text-slate-400 align-top">-</td>
+        <td class="px-2 py-3 text-xs text-slate-400 align-top">-</td>
+        {% for i in "x"|rjust:"21" %}
+        <td class="px-0.5 py-3 text-center align-top">
+          <input
+            type="checkbox"
+            class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+            data-followup-slot
+            {% if forloop.counter in plan_view.followup_schedule %}checked{% endif %}
+          >
+        </td>
+        {% endfor %}
+      </tr>
+      <tr class="bg-emerald-50/20">
+        <td colspan="3" class="px-4 py-2 text-xs text-slate-500">
+          选择问卷内容
+        </td>
+        <td colspan="24" class="px-4 py-3">
+          <div class="flex flex-wrap gap-3 text-xs" data-followup-detail-container>
+            {% for item in plan_view.followup_details %}
+            <label class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border border-emerald-200 bg-white cursor-pointer" data-followup-detail>
+              <input
+                type="checkbox"
+                class="sr-only peer"
+                {% if item.is_checked %}checked{% endif %}
+              >
+              <span class="w-7 h-4 rounded-full bg-slate-200 flex items-center px-0.5 transition-colors peer-checked:bg-emerald-500">
+                <span class="h-3 w-3 rounded-full bg-white transition-transform duration-200 peer-checked:translate-x-3"></span>
+              </span>
+              <span class="text-slate-700">{{ item.label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>

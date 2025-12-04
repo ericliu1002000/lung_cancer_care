@@ -1,0 +1,87 @@
+{# 单条用药计划行（与当前疗程绑定） #}
+<tr class="hover:bg-slate-50 transition-colors">
+  <td class="px-4 py-3">
+    <div class="flex items-center gap-3">
+      <label class="relative inline-flex items-center cursor-pointer">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="category" value="medication">
+          <input type="hidden" name="library_id" value="{{ med.lib_id }}">
+          <input
+            type="checkbox"
+            class="sr-only peer"
+            name="enable"
+            value="1"
+            checked
+            hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-include="closest form"
+            hx-trigger="change"
+          >
+          <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+        </form>
+      </label>
+      <div>
+        <div class="text-sm font-medium text-slate-900">{{ med.name }}</div>
+        <div class="text-[10px] text-slate-400">{{ med.type|default:"" }}</div>
+      </div>
+    </div>
+  </td>
+  <td class="px-2 py-3">
+    <form
+      method="post"
+      hx-post="{% url 'web_doctor:patient_plan_item_update_field' patient.id med.plan_item_id %}"
+      hx-target="#patient-content"
+      hx-swap="none"
+      class="w-full"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="field_name" value="drug_dosage">
+      <input
+        type="text"
+        name="value"
+        value="{{ med.default_dosage }}"
+        hx-trigger="change"
+        data-plan-field="drug_dosage"
+        class="w-full text-xs border-b border-dashed border-slate-300 focus:border-indigo-500 focus:outline-none py-1 text-slate-700"
+      >
+    </form>
+  </td>
+  <td class="px-2 py-3">
+    <form
+      method="post"
+      hx-post="{% url 'web_doctor:patient_plan_item_update_field' patient.id med.plan_item_id %}"
+      hx-target="#patient-content"
+      hx-swap="none"
+      class="w-full"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="field_name" value="drug_usage">
+      <input
+        type="text"
+        name="value"
+        value="{{ med.default_frequency }}"
+        hx-trigger="change"
+        data-plan-field="drug_usage"
+        class="w-full text-xs border-b border-dashed border-slate-300 focus:border-indigo-500 focus:outline-none py-1 text-slate-700"
+      >
+    </form>
+  </td>
+  {% for i in "x"|rjust:"21" %}
+  <td class="px-0.5 py-3 text-center">
+    <form method="post">
+      {% csrf_token %}
+      <input
+        type="checkbox"
+        class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+        {% if forloop.counter in med.schedule %}checked{% endif %}
+        hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id med.plan_item_id forloop.counter %}"
+        hx-swap="none"
+        hx-include="closest form"
+        hx-trigger="change"
+      >
+    </form>
+  </td>
+  {% endfor %}
+</tr>
