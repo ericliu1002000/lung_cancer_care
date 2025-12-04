@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, TypedDict
+from typing import Iterable, List, TypedDict, Iterable as IterableType
 
 from core.models import FollowupLibrary
 
@@ -42,7 +42,7 @@ def get_active_followup_library() -> List[FollowupPlanItem]:
     return items
 
 
-def get_followup_detail_items() -> List[dict]:
+def get_followup_detail_items(selected_codes: IterableType[str] | None = None) -> List[dict]:
     """
     【功能说明】
     - 基于 FollowupLibrary.FOLLOWUP_DETAILS 构建“问卷内容”选项列表；
@@ -56,14 +56,14 @@ def get_followup_detail_items() -> List[dict]:
     """
 
     detail_map = getattr(FollowupLibrary, "FOLLOWUP_DETAILS", {}) or {}
+    selected_set = set(selected_codes or ["KS"])
     items: List[dict] = []
     for code, label in detail_map.items():
         items.append(
             {
                 "code": code,
                 "label": label,
-                "is_checked": code == "KS",
+                "is_checked": code in selected_set,
             }
         )
     return items
-

@@ -175,6 +175,35 @@ class PlanItemService:
 
     @classmethod
     @transaction.atomic
+    def toggle_followup_detail(cls, plan_item_id: int, code: str, enabled: bool) -> PlanItem:
+        """
+        【功能说明】
+        - 切换随访问卷 PlanItem.interaction_config 中某个问卷模块的开关状态。
+
+        【参数说明】
+        - plan_item_id: 随访计划条目 ID（category = FOLLOW_UP）。
+        - code: 问卷内容编码（来自 FollowupLibrary.FOLLOWUP_DETAILS 的 key）。
+        - enabled: True=选中该模块，False=取消。
+        """
+
+        plan = cls._get_plan_by_id(plan_item_id)
+        if plan.category != choices.PlanItemCategory.FOLLOW_UP:
+            raise ValidationError("仅随访问卷计划支持问卷内容配置。")
+
+        code = (code or "").strip()
+        if not code:
+            raise ValidationError("问卷内容编码不能为空。")
+
+        config = dict(plan.interaction_config or {})
+        details = dict(config.get("details") or {})
+        details[code] = bool(enabled)
+        config["details"] = details
+        plan.interaction_config = config
+        plan.save(update_fields=["interaction_config"])
+        return plan
+
+    @classmethod
+    @transaction.atomic
     def update_item_field(cls, plan_item_id: int, field_name: str, value: Any) -> PlanItem:
         """
         【功能说明】
@@ -272,6 +301,13 @@ class PlanItemService:
     def _build_interaction_config(category: int, library_obj) -> Dict[str, Any]:
         if category == choices.PlanItemCategory.CHECKUP and getattr(library_obj, "related_report_type", None):
             return {"related_report_type": library_obj.related_report_type}
+        if category == choices.PlanItemCategory.FOLLOW_UP:
+            # 默认问卷内容：基于 FOLLOWUP_DETAILS 全量构建 details 配置，KS 默认为选中
+            from core.models import FollowupLibrary  # 局部导入，避免循环依赖
+
+            detail_map = getattr(FollowupLibrary, "FOLLOWUP_DETAILS", {}) or {}
+            details = {code: (code == "KS") for code in detail_map.keys()}
+            return {"details": details}
         return {}
 
     @staticmethod

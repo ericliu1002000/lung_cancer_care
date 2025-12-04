@@ -459,30 +459,53 @@
 
 // 随访计划：总开关控制日期勾选和问卷内容开关可用性
 (function () {
-  const row = document.querySelector("[data-followup-row]");
-  if (!row) return;
-  const toggle = row.querySelector("[data-followup-toggle]");
-  const slots = row.querySelectorAll("[data-followup-slot]");
-  const detailsContainer = document.querySelector("[data-followup-detail-container]");
-  const details = detailsContainer ? detailsContainer.querySelectorAll("[data-followup-detail]") : [];
+  function initFollowupRow(root) {
+    const scope = root || document;
+    const row = scope.querySelector("[data-followup-row]");
+    if (!row || row.dataset.followupInitialized === "1") return;
 
-  if (!toggle || !slots.length) return;
+    const toggle = row.querySelector("[data-followup-toggle]");
+    const slots = row.querySelectorAll("[data-followup-slot]");
+    const detailsContainer = scope.querySelector("[data-followup-detail-container]");
+    const details = detailsContainer ? detailsContainer.querySelectorAll("[data-followup-detail]") : [];
 
-  function sync() {
-    const enabled = toggle.checked;
-    slots.forEach((input) => {
-      input.disabled = !enabled;
-      input.classList.toggle("opacity-50", !enabled);
-      input.classList.toggle("cursor-not-allowed", !enabled);
-    });
-    details.forEach((el) => {
-      el.classList.toggle("opacity-60", !enabled);
-    });
-    row.classList.toggle("opacity-70", !enabled);
+    if (!toggle || !slots.length) return;
+
+    function sync() {
+      const enabled = toggle.checked;
+      slots.forEach((input) => {
+        const isReadonly = input.hasAttribute("data-readonly");
+        if (isReadonly) {
+          input.disabled = true;
+          input.classList.add("opacity-50", "cursor-not-allowed");
+          return;
+        }
+        input.disabled = !enabled;
+        input.classList.toggle("opacity-50", !enabled);
+        input.classList.toggle("cursor-not-allowed", !enabled);
+      });
+      details.forEach((el) => {
+        el.classList.toggle("opacity-60", !enabled);
+      });
+      row.classList.toggle("opacity-70", !enabled);
+    }
+
+    toggle.addEventListener("change", sync);
+    sync();
+    row.dataset.followupInitialized = "1";
   }
 
-  toggle.addEventListener("change", sync);
-  sync();
+  // 初次渲染
+  initFollowupRow(document);
+
+  // plan 表格通过 HTMX 局部刷新后，重新处理随访行
+  document.body.addEventListener("htmx:afterSwap", function (event) {
+    const target = event.target;
+    if (!target) return;
+    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
+      initFollowupRow(target);
+    }
+  });
 })();
 
 // 用药计划：剂量/频次字段的“未保存 / 已保存”提示
@@ -516,6 +539,36 @@
     setTimeout(function () {
       input.classList.remove("plan-field-saved");
     }, 600);
+  });
+})();
+
+// 计划表通用错误提示：监听 HX-Trigger 触发的 plan-error 事件
+(function () {
+  if (window.__planErrorToastInstalled) return;
+  window.__planErrorToastInstalled = true;
+
+  function showPlanError(message) {
+    if (!message) return;
+    let container = document.getElementById("plan-error-toast");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "plan-error-toast";
+      container.className =
+        "fixed bottom-4 right-4 max-w-sm bg-rose-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50";
+      document.body.appendChild(container);
+    }
+    container.textContent = message;
+    container.style.display = "block";
+    clearTimeout(container._hideTimer);
+    container._hideTimer = setTimeout(function () {
+      container.style.display = "none";
+    }, 4000);
+  }
+
+  document.body.addEventListener("plan-error", function (event) {
+    const detail = event.detail || {};
+    const msg = detail.message || "";
+    showPlanError(msg);
   });
 })();
 </script>

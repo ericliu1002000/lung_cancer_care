@@ -215,6 +215,8 @@ def _build_settings_context(
     current_day_index: int | None = None
     medications: list[dict] = []
     checkups: list[dict] = []
+    followups: list[dict] = []
+    active_followup: dict | None = None
 
     if selected_cycle:
         # 计算当前日期在疗程中的 DayIndex（最小为 1）
@@ -238,7 +240,7 @@ def _build_settings_context(
                     "plan_item_id": med.get("plan_item_id"),
                 }
             )
-
+        
         # 复查计划：展示所有启用中的复查项目，与当前疗程下的计划状态融合
         for chk in cycle_plan.get("checkups", []):
             checkups.append(
@@ -252,20 +254,52 @@ def _build_settings_context(
                 }
             )
 
+        # 随访计划：同样从 PlanItem 视图中获取
+        for fu in cycle_plan.get("followups", []):
+            item = {
+                "lib_id": fu["library_id"],
+                "name": fu["name"],
+                "is_active": bool(fu.get("is_active")),
+                "schedule": list(fu.get("schedule_days") or []),
+                "plan_item_id": fu.get("plan_item_id"),
+                "detail_config": (fu.get("interaction_config") or {}).get("details", {}),
+            }
+            followups.append(item)
+
+        # 选出当前“活动”的随访计划，用于渲染问卷内容：
+        # 优先选 is_active 且已存在 PlanItem 的条目；否则选任意有 PlanItem 的条目；
+        # 若仍不存在，则退回到库中的第一条随访模板，至少保证界面上有一行可以开关。
+        for fu in followups:
+            if fu.get("is_active") and fu.get("plan_item_id"):
+                active_followup = fu
+                break
+        if active_followup is None:
+            for fu in followups:
+                if fu.get("plan_item_id"):
+                    active_followup = fu
+                    break
+        if active_followup is None and followups:
+            active_followup = followups[0]
+
     # 其它库仍使用简单的“可用列表”供前端搜索等使用
     med_library = get_active_medication_library()
-    # 随访仍暂时使用库模板，后续可与 PlanItem 对齐
-    followups = get_active_followup_library()
-    followup_details = get_followup_detail_items()
+    # 随访问卷问卷内容选项：基于当前活动随访 PlanItem 的 detail_config 计算选中状态
+    if active_followup:
+        detail_cfg = active_followup.get("detail_config") or {}
+        selected_codes = [code for code, flag in detail_cfg.items() if flag]
+        followup_details = get_followup_detail_items(selected_codes)
+    else:
+        followup_details = get_followup_detail_items()
 
     plan_view = {
         "medications": medications,
         "checkups": checkups,
         "followups": followups,
+        "active_followup": active_followup,
         "med_library": med_library,
         "current_day_index": current_day_index,
-        # 随访计划：当前版本使用统一的问卷内容选项，默认仅 KS(咳嗽/痰色) 选中
-        "followup_schedule": followups[0]["schedule"] if followups else [],
+        # 随访计划：当前仅展示活动随访问卷的计划与问卷内容
+        "followup_schedule": active_followup["schedule"] if active_followup else [],
         "followup_details": followup_details,
     }
 
@@ -498,22 +532,19 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         library_id = 0
         errors.append("标准库条目 ID 无效。")
 
-    # 支持药物 / 复查两类计划开关
+    # 支持药物 / 复查 / 随访三类计划开关
     if category_raw in ("medication", "medicine"):
         category = core_choices.PlanItemCategory.MEDICATION
     elif category_raw in ("checkup", "check", "exam"):
         category = core_choices.PlanItemCategory.CHECKUP
+    elif category_raw in ("followup", "follow_up", "fu"):
+        category = core_choices.PlanItemCategory.FOLLOW_UP
     else:
         category = None
         errors.append("不支持的计划类别。")
 
-    print(library_id)
-    print(category)
-    print(request.POST.items)
-
     if not errors and category is not None and library_id:
         enable_flag = "enable" in request.POST
-        print(enable_flag)
         try:
             PlanItemService.toggle_item_status(
                 cycle_id=cycle.id,
@@ -527,9 +558,40 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
     # 复查计划：只需更新状态，不重绘 DOM，由前端脚本控制视觉效果
     if category == core_choices.PlanItemCategory.CHECKUP:
         if errors:
-            # 前端 hx-swap="none"，简单返回 400 错误文本即可
-            return HttpResponse("\n".join(errors) or "复查计划更新失败。", status=400)
+            # 通过 HX-Trigger 向前端抛出统一的错误事件，便于在界面展示
+            response = HttpResponse("\n".join(errors) or "计划开关更新失败。", status=400)
+            response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace(
+                '"', '\\"'
+            )
+            return response
         return HttpResponse(status=204)
+
+    # 随访计划：开关变化后需要重新渲染整个计划表，以便携带最新的 plan_item_id 与问卷配置
+    if category == core_choices.PlanItemCategory.FOLLOW_UP:
+        if errors:
+            response = HttpResponse("\n".join(errors) or "计划开关更新失败。", status=400)
+            response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace(
+                '"', '\\"'
+            )
+            return response
+
+        # 重建当前患者 + 疗程的计划视图，仅返回 plan_table 部分
+        settings_ctx = _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=cycle.id,
+        )
+        selected_cycle = settings_ctx.get("selected_cycle")
+        table_context: dict = {
+            "patient": patient,
+            "cycle": selected_cycle,
+            "plan_view": settings_ctx.get("plan_view"),
+        }
+        return render(
+            request,
+            "web_doctor/partials/settings/plan_table.html",
+            table_context,
+        )
 
     # 以下逻辑仅适用于“用药计划”行首开关
 
@@ -562,7 +624,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             break
 
     if errors or not medications:
-        # 出现错误时退回到原有行为：重新渲染整个设置区域，方便展示错误提示
+        # 出现错误时，通过 HX-Trigger 抛出统一的错误事件，并退回到默认的设置页渲染
         context: dict = {
             "patient": patient,
             "active_tab": "settings",
@@ -581,11 +643,16 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             )
         )
 
-        return render(
+        response = render(
             request,
             "web_doctor/partials/settings/main.html",
             context,
         )
+        if errors:
+            response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace(
+                '"', '\\"'
+            )
+        return response
 
     med_ctx = {
         "patient": patient,
@@ -656,6 +723,43 @@ def patient_plan_item_update_field(request: HttpRequest, patient_id: int, plan_i
         "web_doctor/partials/settings/main.html",
         context,
     )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_followup_detail_toggle(
+    request: HttpRequest, patient_id: int, plan_item_id: int, code: str
+) -> HttpResponse:
+    """
+    切换随访问卷 PlanItem 的单个问卷模块开关状态（interaction_config.details[code]）。
+    - 由前端问卷内容区域的 checkbox 以 HTMX 方式调用，保持每次点击原子更新。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    try:
+        plan = PlanItem.objects.select_related("cycle__patient").get(pk=plan_item_id)
+    except PlanItem.DoesNotExist:
+        raise Http404("随访计划条目不存在")
+
+    if plan.cycle.patient_id != patient.id:
+        raise Http404("计划条目与患者不匹配")
+
+    enabled = "enabled" in request.POST
+
+    try:
+        PlanItemService.toggle_followup_detail(plan_item_id, code, enabled)
+    except ValidationError as exc:
+        message = str(exc) or "随访问卷内容更新失败。"
+        response = HttpResponse(message, status=400)
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
+        return response
+
+    # 不返回 HTML，HTMX 侧仅用于触发后端更新与 Toast
+    return HttpResponse(status=204)
 
 
 @login_required
