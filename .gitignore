@@ -29,6 +29,7 @@ pip-wheel-metadata/
 # VSCode / PyCharm
 .vscode/
 .idea/
+/static/demo/
 
 # Django
 *.db
