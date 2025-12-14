@@ -14,6 +14,8 @@ from .studio import my_studio
 from .feedback import feedback_view
 from .document import document_detail
 from .home import patient_home
+from .plan import management_plan, my_medication
+from .record import record_temperature, record_bp, record_spo2, record_weight, record_breath, record_sputum, record_pain, health_records,record_steps,record_checkup
 
 __all__ = [
     "bind_landing",
@@ -36,4 +38,16 @@ __all__ = [
     "feedback_view",
     "document_detail",
     "patient_home",
+    "management_plan",
+    "my_medication",
+    "record_temperature",
+    "record_bp",
+    "record_spo2",
+    "record_weight",
+    "record_breath",
+    "record_sputum",
+    "record_pain",
+    "health_records",
+    "record_steps",
+    "record_checkup"
 ]

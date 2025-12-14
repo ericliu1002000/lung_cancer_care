@@ -59,7 +59,6 @@ INSTALLED_APPS = [
     'regions',
     'business_support',
     'core',
-    'devices'
 ]
 
 ADMIN_APP_ORDER = [
@@ -69,7 +68,6 @@ ADMIN_APP_ORDER = [
     'web_patient',
     'market',
     'web_sales',
-    'devices',
     'health_data',
     'business_support',
     'wx',

@@ -14,13 +14,15 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.contrib import admin
+import os
+
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
 from django.http import HttpResponse
 from django.urls import include, path
-from devices.views.callback import smartwatch_data_callback
-import os
+
+from business_support.views import smartwatch_data_callback
 
 def wechat_verify_view(request):
     # 文件名必须与微信后台提供的一致
