@@ -24,14 +24,21 @@
     <div class="px-4 pt-6">
         
         <!-- Main Form Card -->
-        <div class="bg-white rounded-xl shadow-sm p-5">
+        <form method="POST" action="{% url 'web_patient:record_steps' %}?patient_id={{ patient_id }}" id="step-form" class="bg-white rounded-xl shadow-sm p-5">
+            {% csrf_token %}
             
             <!-- 1. Measurement Time -->
             <div class="mb-5">
-                <label class="block text-slate-700 font-bold mb-2">记录时间</label>
+                <label class="block text-slate-700 font-bold mb-2">测量时间</label>
                 <div class="flex items-center justify-between border-b border-slate-200 pb-3 active:opacity-60 transition cursor-pointer" onclick="document.getElementById('date-picker').showPicker()">
-                    <input type="datetime-local" id="date-picker" class="absolute opacity-0 w-0 h-0">
-                    <span class="text-slate-500 text-lg font-medium" id="time-display">{{ default_time }}</span>
+                     <!-- 关键修改：用 now_obj（原生datetime）生成input的value，default_time直接显示 -->
+                <input type="datetime-local" id="date-picker" name="record_time" 
+                    class="absolute opacity-0 w-0 h-0"
+                    {% if now_obj %}value="{{ now_obj|date:'Y-m-d\TH:i' }}"{% endif %}>
+                    <!-- 显示给用户的友好格式：直接用后端传的 default_time，无需过滤 -->
+                    <span class="text-slate-500 text-lg font-medium" id="time-display">
+                        {{ default_time }}
+                    </span>
                     <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
@@ -48,44 +55,32 @@
                 </div>
                 
                 <div class="flex items-end gap-2 border-b border-slate-200 pb-2">
-                    <input type="number" step="0.1" id="temperature-input" 
+                    <input type="number" step="0.1" id="temperature-input" name="steps"
                            class="w-full text-xl font-medium text-slate-800 placeholder-slate-300 outline-none bg-transparent"
                            placeholder="点此录入">
                     <div class=" text-slate-500 font-medium mb-1">步</span>
                 </div>
             </div>
-                <p id="error-msg" class="text-red-500 text-sm mt-2 hidden">请输入有效的体温数值</p>
-
-            <!-- 3. Instructions -->
-            {% comment %} <div class="mt-6 mb-6">
-                <h3 class="text-slate-700 font-bold mb-2 text-sm">注意事项：</h3>
-                <ul class="text-slate-500 text-sm space-y-1.5 leading-relaxed">
-                    <li>1、确保同一部位，同一体温计；</li>
-                    <li>2、腋下需 >5 分钟，口表/耳温按说明书。</li>
-                </ul>
-            </div> {% endcomment %}
+                <p id="error-msg" class="text-red-500 text-sm mt-2 hidden">请输入有效的步数值</p>
 
         </div>
+    </form>
 
   
-
-    </div>
     
          <!-- 4. Submit Button -->
         <button onclick="submitTemperature()" class="w-full mt-8 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-200 active:scale-[0.98] transition hover:bg-blue-700">
             确定
         </button>
-
+  </div>
 </div>
 
 <script>
     function submitTemperature() {
         const input = document.getElementById('temperature-input');
         const val = parseFloat(input.value);
-        // 模拟提交成功并跳转回首页，携带体温数据
-        // 在实际项目中，这里应该是一个 AJAX POST 请求
-        const openid = "{{ openid }}";
-        window.location.href = "{% url 'web_patient:patient_home' %}?openid=" + openid + "&step_val=" + val;
+       // 提交表单
+        document.getElementById('step-form').submit();
     }
     
     // Simple date picker handler to update display (Mock)

@@ -1,0 +1,286 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans flex flex-col">
+
+    <!-- Fixed Header Section -->
+    <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
+        <!-- 1. Title Bar -->
+        <div class="pt-safe-top">
+             <div class="flex items-center h-12 px-4 relative">
+                <a href="javascript:history.back()" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="w-full text-center text-lg font-bold text-slate-800">{{ title }}</h1>
+            </div>
+        </div>
+
+        <!-- 2. Date & Chart Switch -->
+        <div class="flex items-center border-t border-slate-100 h-12">
+            <!-- Date Picker -->
+            <div class="flex-1 flex items-center justify-center border-r border-slate-100 active:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('month-picker').showPicker()">
+                 <input type="month" id="month-picker" class="absolute inset-0 opacity-0 cursor-pointer" onchange="updateMonthDisplay(this)" value="{{ current_month }}">
+                 <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                 </svg>
+                 <span id="month-display" class="text-slate-800 font-medium ml-1">{{ current_month }}</span>
+                 <svg class="w-4 h-4 text-slate-500 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                 </svg>
+            </div>
+            <!-- Chart Switch -->
+            <div onclick="showChartToast()" class="flex-1 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+                <span class="text-slate-800 font-medium ml-1">切换图表</span>
+            </div>
+        </div>
+        
+        <!-- 3. Add Data Button -->
+         <a href="{% if record_type == 'temperature' %}{% url 'web_patient:record_temperature' %}{% elif record_type == 'bp' %}{% url 'web_patient:record_bp' %}{% elif record_type == 'sputum' %}{% url 'web_patient:record_sputum' %}{% elif record_type == 'weight' %}{% url 'web_patient:record_weight' %}{% elif record_type == 'spo2' %}{% url 'web_patient:record_spo2' %}{% else %}#{% endif %}?patient_id={{ request.GET.patient_id }}" class="h-12 flex items-center justify-center border-t border-slate-100 active:bg-slate-50 transition cursor-pointer">
+            <svg class="w-5 h-5 text-blue-600 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span class="text-blue-600 font-bold ml-1">新增数据</span>
+        </a>
+    </div>
+
+    <!-- Scrollable List Area -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-3 pb-20">
+        {% for record in records %}
+        <div class="bg-white rounded-xl shadow-sm p-4 relative group" data-id="{{ record.id }}">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4 border-b border-slate-50 pb-2">
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="font-bold text-slate-800 text-base">{{ record.date }}</span>
+                    <span class="text-slate-500 font-medium">{{ record.weekday }}</span>
+                    <span class="text-slate-400">{{ record.time }}</span>
+                </div>
+                <div class="flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                     {% if record.is_manual %}
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    {% else %}
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                    {% endif %}
+                    {{ record.source_display }}
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="{% if record.data|length > 2 %}grid grid-cols-3 gap-4 text-center{% else %}space-y-2{% endif %} mb-4 p-4" style="background: #f3f4f6;">
+                {% for item in record.data %}
+                    {% if record.data|length > 2 %}
+                        <!-- 3 Columns Layout (BP/HR) -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-xs text-slate-400 mb-1">{{ item.label }}</span>
+                            <span class="text-xl font-bold text-slate-900">{{ item.value }}</span>
+                        </div>
+                    {% else %}
+                        <!-- Standard Layout -->
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-slate-500 font-medium min-w-[3em]">{{ item.label }}{% if item.label|length > 0 %}:{% endif %}</span>
+                            <span class="{% if item.is_large %}text-xl{% else %}text-base{% endif %} font-bold text-slate-900">{{ item.value }}</span>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
+                <div>
+                    <button onclick="handleDelete('{{ record.id }}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
+                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        删除
+                    </button>
+                </div>
+
+                {% if record.can_edit %}
+                <button onclick="openEditModal('{{ record.id }}')" class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">
+                    编辑
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% include "components/confirm_modal.html" %}
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="fixed inset-0 z-50 hidden" style="background: rgba(0,0,0,0.5)">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in-up">
+            <h3 class="text-lg font-bold text-slate-800 mb-4 text-center">编辑记录</h3>
+            <div id="edit-fields" class="space-y-4 mb-6">
+                <!-- Fields injected by JS -->
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeEditModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold active:bg-slate-50">取消</button>
+                <button onclick="submitEdit()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold shadow-lg shadow-blue-200 active:scale-95">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="device-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 pointer-events-none"></div>
+
+<script>
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('device-toast');
+        if (!container) return;
+        const colors = {
+          info: 'bg-slate-900 text-white',
+          success: 'bg-emerald-600 text-white',
+          error: 'bg-rose-600 text-white'
+        };
+        const div = document.createElement('div');
+        div.className = `${colors[type] || colors.info} rounded-2xl px-4 py-3 shadow-lg text-base text-center pointer-events-auto`;
+        div.textContent = message;
+        container.appendChild(div);
+        setTimeout(() => {
+          div.classList.add('opacity-0', '-translate-y-2', 'transition');
+          div.addEventListener('transitionend', () => div.remove());
+        }, 2200);
+      }
+
+    // 删除逻辑
+    function handleDelete(id) {
+        showConfirmModal({
+            title: '删除此记录?',
+            content: '记录删除后将无法找回，确认要删除吗？',
+            onConfirm: () => {
+                // 1. 模拟调用 API 删除
+                console.log(`Deleting record ${id}...`);
+                
+                // 2. 从 DOM 中移除
+                const card = document.querySelector(`div[data-id="${id}"]`);
+                if(card) {
+                    card.style.transition = 'all 0.3s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.9)';
+                    setTimeout(() => {
+                        card.remove();
+                        // 如果列表为空，显示空状态（可选）
+                        if(document.querySelectorAll('div[data-id]').length === 0) {
+                            location.reload(); 
+                        }
+                    }, 300);
+                }
+                
+                // 3. 提示成功
+                showToast('删除成功', 'success');
+            }
+        });
+    }
+
+    // 切换图表提示
+    function showChartToast() {
+        showToast('即将上线，敬请期待');
+    }
+    
+    // 更新月份显示
+    function updateMonthDisplay(input) {
+        if(input.value) {
+            document.getElementById('month-display').innerText = input.value;
+            // 这里可以添加页面跳转逻辑，带上新的月份参数
+            // window.location.href = `?month=${input.value}&type=...`;
+        }
+    }
+
+    // Popover Logic
+    function togglePopover(btn, event) {
+        // Stop event from bubbling to document click listener
+        if(event) event.stopPropagation();
+
+        // Find the popover relative to the button
+        const popover = btn.nextElementSibling;
+        
+        // Close all other open popovers first
+        document.querySelectorAll('.popover-open').forEach(el => {
+            if(el !== popover) {
+                el.classList.add('hidden');
+                el.classList.remove('popover-open');
+            }
+        });
+        
+        // Toggle current
+        popover.classList.toggle('hidden');
+        popover.classList.toggle('popover-open');
+    }
+    
+    // Close popovers when clicking anywhere else
+    document.addEventListener('click', function(e) {
+        // If click is inside a popover, don't close it
+        if(e.target.closest('.popover-open')) return;
+        
+        document.querySelectorAll('.popover-open').forEach(el => {
+            el.classList.add('hidden');
+            el.classList.remove('popover-open');
+        });
+    });
+
+    // Edit Modal Logic
+    const recordsData = [
+        {% for record in records %}
+        {
+            id: "{{ record.id }}",
+            data: [
+                {% for field in record.data %}
+                { label: "{{ field.label }}", value: "{{ field.value }}", key: "{{ field.key }}" },
+                {% endfor %}
+            ]
+        },
+        {% endfor %}
+    ];
+
+    function openEditModal(id) {
+        const record = recordsData.find(r => r.id == id);
+        if(!record) return;
+
+        const container = document.getElementById('edit-fields');
+        container.innerHTML = ''; // Clear
+
+        record.data.forEach(field => {
+            const div = document.createElement('div');
+            // Extract numeric value if possible for input
+            let val = field.value.replace(/[^\d.]/g, ''); 
+            // Handle special cases like cough/sputum which are strings
+            if(field.key === 'cough' || field.key === 'sputum') val = ''; 
+            
+            let inputHtml = '';
+            if(field.key === 'temperature' || field.key === 'ssy' || field.key === 'szy' || field.key === 'heart' || field.key === 'weight' || field.key === 'spo2') {
+                 inputHtml = `<input type="number" step="0.1" value="${val}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+            } else {
+                 inputHtml = `<input type="text" value="${field.value}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+            }
+
+            div.innerHTML = `
+                <label class="block text-sm font-bold text-slate-600 mb-1">${field.label}</label>
+                ${inputHtml}
+            `;
+            container.appendChild(div);
+        });
+
+        document.getElementById('edit-modal').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').classList.add('hidden');
+    }
+
+    function submitEdit() {
+        // Here you would submit the data to backend
+        alert('修改已提交（演示）');
+        closeEditModal();
+        location.reload(); // Mock reload
+    }
+</script>
+{% endblock %}

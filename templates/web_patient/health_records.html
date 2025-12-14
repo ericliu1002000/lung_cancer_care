@@ -49,7 +49,7 @@
                     
                     <!-- Content -->
                     <div>
-                        <h3 class="font-bold text-slate-800 text-base mb-1 max-w-[240px]">{{ stat.title }}</h3>
+                        <h3 class="font-bold text-slate-800 text-base mb-1 " style="max-width: 220px;">{{ stat.title }}</h3>
                         <div class="flex items-center gap-4 text-sm text-slate-500 font-medium">
                             <span>记录：{{ stat.count }}次</span>
                             <div class="flex items-center gap-1">
@@ -65,7 +65,7 @@
                 </div>
 
                 <!-- Button -->
-                <button class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
                     查看详情
                 </button>
             </div>

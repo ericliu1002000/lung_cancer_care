@@ -1,63 +1,132 @@
-import logging
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpRequest, HttpResponse
 from users.models import CustomUser
 from users import choices
 from wx.services.oauth import generate_menu_auth_url
+from users.decorators import auto_wechat_login, check_patient
+from health_data.services.health_metric import HealthMetricService
+import os
+from decimal import Decimal
+import datetime
 
-logger = logging.getLogger(__name__)
+TEST_PATIENT_ID = os.getenv("TEST_PATIENT_ID") or None
 
-def patient_home(request):
+# 定义计划类型与健康指标的映射关系
+PLAN_METRIC_MAPPING = {
+    "step": {
+        "key": "steps",
+        "name": "步数",
+        "format_func": lambda x: f"{x['value_display']}"
+    },
+    "temperature": {
+        "key": "temperature",  # 假设接口中体温字段为temperature，可根据实际调整
+        "name": "体温",
+        "format_func": lambda x: f"{x['value_display']}"
+    },
+    "bp_hr": {
+        "key": ["blood_pressure", "heart_rate"],
+        "name": "血压心率",
+        "format_func": lambda x: f"血压{x['blood_pressure']['value_display']}mmHg，心率{x['heart_rate']['value_display']}"
+    },
+    "spo2": {
+        "key": "blood_oxygen",
+        "name": "血氧饱和度",
+        "format_func": lambda x: f"{x['value_display']}"
+    },
+    "weight": {
+        "key": "weight",
+        "name": "体重",
+        "format_func": lambda x: f"{x['value_display']}"
+    },
+    "breath": {
+        "key": "dyspnea",
+        "name": "呼吸情况",
+        "format_func": lambda x: "正常" if x else "异常"  # 根据实际数据格式调整
+    },
+    "sputum": {
+        "key": ["sputum_color", "cough"],
+        "name": "咳嗽与痰色",
+        "format_func": lambda x: f"咳嗽：{x['cough'] or '无'}，痰色：{x['sputum_color'] or '无'}"
+    },
+    "pain": {
+        "key": ["pain_incision", "pain_shoulder", "pain_bone", "pain_head"],
+        "name": "疼痛情况",
+        "format_func": lambda x: 
+            f"切口：{x['pain_incision'] or '无'}，肩部：{x['pain_shoulder'] or '无'}，骨骼：{x['pain_bone'] or '无'}，头部：{x['pain_head'] or '无'}"
+    },
+    "medication": {
+        "key": "medication",  # 假设接口中有用药字段，可根据实际调整
+        "name": "用药提醒",
+        "format_func": lambda x: "已服药" if x else "未服药"
+    },
+    "followup": {
+        "key": "followup",  # 假设接口中有随访字段，可根据实际调整
+        "name": "随访",
+        "format_func": lambda x: "已完成" if x else "未完成"
+    },
+    "checkup": {
+        "key": "checkup",  # 假设接口中有复查字段，可根据实际调整
+        "name": "复查",
+        "format_func": lambda x: "已完成" if x else "未完成"
+    }
+}
+
+@auto_wechat_login
+@check_patient
+def patient_home(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】患者端首页 `/p/home/`
     【模板】`web_patient/patient_home.html`，根据本人或家属身份展示功能入口与卡片。
     """
+    patient = request.patient
+    is_family = True
     
-    # 获取 onboarding 页面的 URL，用于未登录时的跳转
-    onboarding_url = reverse("web_patient:onboarding")
+    # 不是家属，也不是患者，转向填写信息
+    if not patient:
+        onboarding_url = reverse("web_patient:onboarding")
+        return redirect(onboarding_url)  
 
-    # 模拟获取用户信息
-    openid = "oR9yO2JHqO_YZxc2PdPAMCk7qhVU"
-  
-    patient = {
-       "is_member": "1",
-       "membership_expire_date": "2026-01-01 00:00:00",
-       "name": "患者",
-       "age": "80",
-       "openId": "oR9yO2JHqO_YZxc2PdPAMCk7qhVU"
-    }
-    # 模拟每日计划数据
-    daily_plans = [ {
-                "type": "medication",
-                "title": "用药提醒",
-                "subtitle": "您今天还未服药",
-                "status": "pending",
-                "action_text": "去服药",
-                "icon_class": "bg-blue-100 text-blue-600", 
-            },{
-                "type": "step",
-                "title": "今日步数",
-                "subtitle": "您今天还未记录",
-                "status": "pending",
-                "action_text": "去填写",
-                "icon_class": "bg-blue-100 text-blue-600", 
-            },
+    if patient.user_id == request.user.id:
+        is_family = False
+    
+    # ========== 核心调整：仅在URL参数指示完成时，才从接口获取健康数据并回显 ==========
+    # 确定患者ID（测试ID或实际患者ID）
+    patient_id = TEST_PATIENT_ID if TEST_PATIENT_ID else (patient.id if patient else None)
+    
+    # 模拟每日计划数据（默认全部未完成）
+    daily_plans = [
+        {
+            "type": "medication",
+            "title": "用药提醒",
+            "subtitle": "您今天还未服药",
+            "status": "pending",
+            "action_text": "去服药",
+            "icon_class": "bg-blue-100 text-blue-600",
+        },
+        {
+            "type": "step",
+            "title": "今日步数",
+            "subtitle": "您今天还未记录",
+            "status": "pending",
+            "action_text": "去填写",
+            "icon_class": "bg-blue-100 text-blue-600",
+        },
         {
             "type": "temperature",
             "title": "测量体温",
             "subtitle": "请记录今日体温",
             "status": "pending",
             "action_text": "去填写",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
-            {
+        {
             "type": "bp_hr",
             "title": "血压心率",
             "subtitle": "请记录今日血压心率情况",
             "status": "pending",
             "action_text": "去填写",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
         {
             "type": "spo2",
@@ -65,23 +134,23 @@ def patient_home(request):
             "subtitle": "请记录今日血氧饱和度",
             "status": "pending",
             "action_text": "去填写",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
-            {
+        {
             "type": "weight",
             "title": "体重记录",
             "subtitle": "请记录今日体重",
             "status": "pending",
             "action_text": "去填写",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
-            {
+        {
             "type": "breath",
             "title": "呼吸情况",
             "subtitle": "请自测呼吸情况",
             "status": "pending",
             "action_text": "去自测",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
         {
             "type": "sputum",
@@ -89,7 +158,7 @@ def patient_home(request):
             "subtitle": "请自测咳嗽与痰色",
             "status": "pending",
             "action_text": "去自测",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
         {
             "type": "pain",
@@ -97,7 +166,7 @@ def patient_home(request):
             "subtitle": "请记录今日疼痛情况",
             "status": "pending",
             "action_text": "去记录",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
         {
             "type": "followup",
@@ -105,344 +174,138 @@ def patient_home(request):
             "subtitle": "请及时完成您的第1次随访",
             "status": "pending",
             "action_text": "去完成",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
-            {
+        {
             "type": "checkup",
             "title": "第1次复查",
             "subtitle": "请及时完成您的第1次复查",
             "status": "pending",
             "action_text": "去完成",
-                "icon_class": "bg-blue-100 text-blue-600",
+            "icon_class": "bg-blue-100 text-blue-600",
         },
     ]
 
-    # 处理体温录入返回的逻辑
-    # 如果 URL 中携带了 temp_val 参数，说明刚刚完成了体温录入
-    # 模拟重新获取计划列表数据
-    temp_val = request.GET.get('temp_val')
-    bp_val = request.GET.get('bp_val')
+    def get_metric_value(metric_key, data):
+        """获取指标值，处理单个key和多个key的情况"""
+        if isinstance(metric_key, list):
+            combined_data = {k: data.get(k) for k in metric_key}
+            has_data = any(v is not None for v in combined_data.values())
+            return combined_data if has_data else None
+        else:
+            return data.get(metric_key) if data.get(metric_key) is not None else None
+
+    # 定义需要检查的成功参数及其对应的计划类型
+    # 如果URL中存在这些参数，说明刚刚提交成功，需要拉取最新数据回显
+    success_params_map = {
+       'temperature': 'temperature',
+        'bp_hr': 'bp_hr',
+        'spo2': 'spo2',
+        'weight': 'weight',
+        'breath_val': 'breath',
+        'sputum_val': 'sputum',
+        'pain_val': 'pain',
+        'step': 'step',
+        'medication_taken': 'medication',
+        'checkup_completed': 'checkup',
+    }
+    # 检查是否有任何成功参数
+    should_fetch_data = False
+    completed_task_types = set()
     
-    if temp_val:
-        # 这里模拟后端接口逻辑：
-        # 1. 接收到前端传来的 temp_val (提交成功标识)
-        # 2. 重新查询数据库（这里直接修改模拟数据）
-        # 3. 返回更新后的数据
-        for plan in daily_plans:
-            if plan['type'] == 'temperature':
-                plan['status'] = 'completed'
-                plan['subtitle'] = f"今日已记录：{temp_val}°C"
-                plan['action_text'] = f"已记录今日体温-{temp_val}°C"
-                
-    # 处理步数录入返回的逻辑
-    # 如果 URL 中携带了 temp_val 参数，说明刚刚完成了体温录入
-    # 模拟重新获取计划列表数据
-    step_val = request.GET.get('step_val')
-    if step_val:
-        # 这里模拟后端接口逻辑：
-        # 1. 接收到前端传来的 temp_val (提交成功标识)
-        # 2. 重新查询数据库（这里直接修改模拟数据）
-        # 3. 返回更新后的数据
-        for plan in daily_plans:
-            if plan['type'] == 'step':
-                plan['status'] = 'completed'
-                plan['subtitle'] = f"今日已记录：{step_val}步"
-                plan['action_text'] = f"已记录今日体温-{temp_val}°C"
-                
-    if bp_val:
-        # bp_val 格式假设为 "120/80,75" (收缩压/舒张压,心率)
+    for param, task_type in success_params_map.items():
+        if request.GET.get(param):
+            should_fetch_data = True
+            completed_task_types.add(task_type)
+    
+    # 如果需要，从接口拉取一次数据
+    listData = {}
+    if should_fetch_data and patient_id:
         try:
-            bp_str, hr_str = bp_val.split(',')
-            for plan in daily_plans:
-                if plan['type'] == 'bp_hr':
-                    plan['status'] = 'completed'
-                    plan['subtitle'] = f"今日已记录：血压{bp_str}mmHg，心率{hr_str}次/分"
-                    plan['action_text'] = f"已记录今日血压心率"
-        except ValueError:
-            pass
+            listData = HealthMetricService.query_last_metric(int(patient_id))
+            print(f"==提交后拉取健康指标数据=={listData}")
+        except Exception as e:
+            print(f"获取健康指标数据失败：{e}")
+            listData = {}
+
+    # 遍历计划列表，仅更新刚刚完成的任务
+    for plan in daily_plans:
+        plan_type = plan["type"]
+        
+        # 仅处理刚刚完成的任务类型
+        if plan_type in completed_task_types:
+            # 标记为完成
+            plan["status"] = "completed"
             
-    # 处理血氧录入返回逻辑
-    spo2_val = request.GET.get('spo2_val')
-    if spo2_val:
-        for plan in daily_plans:
-            if plan['type'] == 'spo2':
-                plan['status'] = 'completed'
-                plan['subtitle'] = f"今日已记录：{spo2_val}%"
-                plan['action_text'] = f"已记录今日血氧"
+            # 尝试使用接口数据回显
+            metric_config = PLAN_METRIC_MAPPING.get(plan_type)
+            print(f"格式化显示值: {metric_config}")
+            updated_from_api = False
+            
+            if metric_config and listData:
+                metric_data = get_metric_value(metric_config["key"], listData)
+                print(f"格式化显示值: {metric_data}")
+                if metric_data:
+                    try:
+                        display_value = metric_config["format_func"](metric_data)
+                        plan["subtitle"] = f"今日已记录：{display_value}"
+                        updated_from_api = True
+                    except Exception as e:
+                        print(f"格式化显示值失败: {e}")
 
-    # 处理体重录入返回逻辑
-    weight_val = request.GET.get('weight_val')
-    if weight_val:
-        for plan in daily_plans:
-            if plan['type'] == 'weight':
-                plan['status'] = 'completed'
-                plan['subtitle'] = f"今日已记录：{weight_val}KG"
-                plan['action_text'] = f"已记录今日体重"
+            
 
-    # 处理呼吸情况自测返回逻辑
-    breath_val = request.GET.get('breath_val')
-    if breath_val:
-        for plan in daily_plans:
-            if plan['type'] == 'breath':
-                plan['status'] = 'completed'
-                plan['subtitle'] = "今日已记录呼吸情况"
-                plan['action_text'] = "已记录今日呼吸情况"
 
-    # 处理咳嗽与痰色自测返回逻辑
-    sputum_val = request.GET.get('sputum_val')
-    if sputum_val:
-        for plan in daily_plans:
-            if plan['type'] == 'sputum':
-                plan['status'] = 'completed'
-                plan['subtitle'] = "今日已记录咳嗽与痰色情况"
-                plan['action_text'] = "已记录"
-
-    # 处理疼痛记录返回逻辑
-    pain_val = request.GET.get('pain_val')
-    if pain_val:
-        for plan in daily_plans:
-            if plan['type'] == 'pain':
-                plan['status'] = 'completed'
-                plan['subtitle'] = "今日已记录疼痛情况"
-                plan['action_text'] = "已记录"
-                
-    # 处理复查上报返回逻辑
-    checkup_completed = request.GET.get('checkup_completed')
-    if checkup_completed:
-        for plan in daily_plans:
-            if plan['type'] == 'checkup':
-                plan['status'] = 'completed'
-                plan['subtitle'] = "本次复查已上报"
-                plan['action_text'] = "已完成"
-
-    # 处理用药提醒返回逻辑
-    medication_taken = request.GET.get('medication_taken')
-    if medication_taken:
-        for plan in daily_plans:
-            if plan['type'] == 'medication':
-                plan['status'] = 'completed'
-                plan['subtitle'] = "您今天已服药"
-                plan['action_text'] = "已服药"
+    # ========== 任务URL映射（如果需要保留） ==========
+     # "temperature": generate_menu_auth_url("web_patient:record_temperature"),
+        # "bp_hr": generate_menu_auth_url("web_patient:record_bp"),
+        # "spo2": generate_menu_auth_url("web_patient:record_spo2"),
+        # "weight": generate_menu_auth_url("web_patient:record_weight"),
+        # "breath": generate_menu_auth_url("web_patient:record_breath"),
+        # "sputum": generate_menu_auth_url("web_patient:record_sputum"),
+        # "pain": generate_menu_auth_url("web_patient:record_pain"),
+        # "followup": generate_menu_auth_url("web_patient:record_temperature"),
+        # "checkup": generate_menu_auth_url("web_patient:record_checkup"),
+    task_url_mapping = {
+        "step": reverse("web_patient:record_steps"),
+        "temperature": reverse("web_patient:record_temperature"),
+        "bp_hr": reverse("web_patient:record_bp"),
+        "spo2": reverse("web_patient:record_spo2"),
+        "weight": reverse("web_patient:record_weight"),
+        "breath": reverse("web_patient:record_breath"),
+        "sputum": reverse("web_patient:record_sputum"),
+        "pain": reverse("web_patient:record_pain"),
+        "followup": reverse("web_patient:record_temperature"), # 暂时指向temperature，需确认
+        "checkup": reverse("web_patient:record_checkup"),
+    }
+    
+    # 为每个计划生成授权URL
+    # for plan in daily_plans:
+    #     task_type = plan["type"]
+    #     base_url = generate_menu_auth_url(task_url_mapping.get(task_type, "#"))
+    #     plan["auth_url"] = base_url
 
     context = {
-        "patient": patient, # 传递用户信息
+        "patient": patient,
+        "is_family": is_family,
         "service_days": 135,
-        "is_member": True, # For "Member open" text
-        "is_family": False,
-        "onboarding_url": onboarding_url,
+        "is_member": True,
+        "onboarding_url": reverse("web_patient:onboarding") if not patient else "",
         "daily_plans": daily_plans,
-        "buy_url": generate_menu_auth_url("market:product_buy")
-
+        "buy_url": generate_menu_auth_url("market:product_buy"),
+        "patient_id": patient_id,
+        "menuUrl": task_url_mapping
     }
     return render(request, "web_patient/patient_home.html", context)
 
-
-
-# import logging
-# from django.shortcuts import render, redirect
-# from django.urls import reverse
-# from django.http import HttpRequest, HttpResponse
-# from users.models import CustomUser
-# from users import choices
-# from wx.services.oauth import generate_menu_auth_url
-# from users.decorators import auto_wechat_login, check_patient
-
-# logger = logging.getLogger(__name__)
-
-# # @auto_wechat_login
-# @check_patient
-# def patient_home(request: HttpRequest) -> HttpResponse:
-#     """
-#     【页面说明】患者端首页 `/p/home/`
-#     【模板】`web_patient/patient_home.html`，根据本人或家属身份展示功能入口与卡片。
-#     """
-    
-#     # 获取 onboarding 页面的 URL，用于未登录时的跳转
-#     onboarding_url = reverse("web_patient:onboarding")
-
-#     # 模拟获取用户信息
-#     openid = "oR9yO2JHqO_YZxc2PdPAMCk7qhVU"
-#     user = CustomUser.objects.filter(wx_openid=openid).first()
-    
-#     if not user:
-#         user = CustomUser.objects.create(
-#             wx_openid=openid,
-#             wx_nickname="微信用户",
-#             user_type=choices.UserType.PATIENT,
-#             is_active=True,
-#         )
-#         logger.info(f"Created new user with openid: {openid}")
-    
-#     logger.info(f"aaaa: {user.__dict__}")
-
-#     # ========== 新增：任务类型与URL名称的映射（核心改造） ==========
-#     # 键：plan.type，值：URL名称（需与urls.py中定义的name一致）
-#     task_url_mapping = {
-#         "temperature": "web_patient:record_temperature",
-#         "bp_hr": "web_patient:record_bp",
-#         "spo2": "web_patient:record_spo2",
-#         "weight": "web_patient:record_weight",
-#         "breath": "web_patient:record_breath",
-#         "sputum": "web_patient:record_sputum",
-#         "pain": "web_patient:record_pain",
-#         "followup": "web_patient:record_temperature",  # 替换为实际的随访URL名称
-#         "checkup": "web_patient:record_temperature",    # 替换为实际的复查URL名称
-#     }
-
-#     # 模拟每日计划数据
-#     daily_plans = [
-#         {
-#             "type": "temperature",
-#             "title": "测量体温",
-#             "subtitle": "请记录今日体温",
-#             "status": "pending",
-#             "action_text": "去填写",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "bp_hr",
-#             "title": "血压心率",
-#             "subtitle": "请记录今日血压心率情况",
-#             "status": "pending",
-#             "action_text": "去填写",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "spo2",
-#             "title": "血氧饱和度",
-#             "subtitle": "请记录今日血氧饱和度",
-#             "status": "pending",
-#             "action_text": "去填写",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "weight",
-#             "title": "体重记录",
-#             "subtitle": "请记录今日体重",
-#             "status": "pending",
-#             "action_text": "去填写",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "breath",
-#             "title": "呼吸情况",
-#             "subtitle": "请自测呼吸情况",
-#             "status": "pending",
-#             "action_text": "去自测",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "sputum",
-#             "title": "咳嗽与痰色情况自测",
-#             "subtitle": "请自测咳嗽与痰色",
-#             "status": "pending",
-#             "action_text": "去自测",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "pain",
-#             "title": "疼痛情况记录",
-#             "subtitle": "请记录今日疼痛情况",
-#             "status": "pending",
-#             "action_text": "去记录",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "followup",
-#             "title": "第1次随访",
-#             "subtitle": "请及时完成您的第1次随访",
-#             "status": "pending",
-#             "action_text": "去完成",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#         {
-#             "type": "checkup",
-#             "title": "第1次复查",
-#             "subtitle": "请及时完成您的第1次复查",
-#             "status": "pending",
-#             "action_text": "去完成",
-#             "icon_class": "bg-blue-100 text-blue-600",
-#         },
-#     ]
-
-#     # ========== 新增：为每个计划生成授权后的完整URL ==========
-#     for plan in daily_plans:
-#         task_type = plan["type"]
-#         # 生成带微信授权的基础URL
-#         base_url = generate_menu_auth_url(task_url_mapping.get(task_type, "#"))
-#         # 拼接openid参数（确保目标页面能获取用户信息）
-#         # plan["auth_url"] = f"{base_url}?openid={user.wx_openid}" if user else base_url
-#         plan["auth_url"] = f"{base_url}"
-
-#     # 处理各类录入返回的逻辑（保持原有代码不变）
-#     temp_val = request.GET.get('temp_val')
-#     bp_val = request.GET.get('bp_val')
-    
-#     if temp_val:
-#         for plan in daily_plans:
-#             if plan['type'] == 'temperature':
-#                 plan['status'] = 'completed'
-#                 plan['subtitle'] = f"今日已记录：{temp_val}°C"
-#                 plan['action_text'] = f"已记录今日体温-{temp_val}°C"
-                
-#     if bp_val:
-#         try:
-#             bp_str, hr_str = bp_val.split(',')
-#             for plan in daily_plans:
-#                 if plan['type'] == 'bp_hr':
-#                     plan['status'] = 'completed'
-#                     plan['subtitle'] = f"今日已记录：血压{bp_str}mmHg，心率{hr_str}次/分"
-#                     plan['action_text'] = f"已记录今日血压心率"
-#         except ValueError:
-#             pass
-            
-#     spo2_val = request.GET.get('spo2_val')
-#     if spo2_val:
-#         for plan in daily_plans:
-#             if plan['type'] == 'spo2':
-#                 plan['status'] = 'completed'
-#                 plan['subtitle'] = f"今日已记录：{spo2_val}%"
-#                 plan['action_text'] = f"已记录今日血氧"
-
-#     weight_val = request.GET.get('weight_val')
-#     if weight_val:
-#         for plan in daily_plans:
-#             if plan['type'] == 'weight':
-#                 plan['status'] = 'completed'
-#                 plan['subtitle'] = f"今日已记录：{weight_val}KG"
-#                 plan['action_text'] = f"已记录今日体重"
-
-#     breath_val = request.GET.get('breath_val')
-#     if breath_val:
-#         for plan in daily_plans:
-#             if plan['type'] == 'breath':
-#                 plan['status'] = 'completed'
-#                 plan['subtitle'] = "今日已记录呼吸情况"
-#                 plan['action_text'] = "已记录今日呼吸情况"
-
-#     sputum_val = request.GET.get('sputum_val')
-#     if sputum_val:
-#         for plan in daily_plans:
-#             if plan['type'] == 'sputum':
-#                 plan['status'] = 'completed'
-#                 plan['subtitle'] = "今日已记录咳嗽与痰色情况"
-#                 plan['action_text'] = "已记录"
-
-#     pain_val = request.GET.get('pain_val')
-#     if pain_val:
-#         for plan in daily_plans:
-#             if plan['type'] == 'pain':
-#                 plan['status'] = 'completed'
-#                 plan['subtitle'] = "今日已记录疼痛情况"
-#                 plan['action_text'] = "已记录"
-
-#     context = {
-#         "user": user,
-#         "service_days": 135,
-#         "is_member": True,
-#         "is_family": False,
-#         "onboarding_url": onboarding_url,
-#         "daily_plans": daily_plans,  # 已包含auth_url字段
-#         "buy_url": generate_menu_auth_url("market:product_buy")
-#     }
-#     return render(request, "web_patient/patient_home.html", context)
+@auto_wechat_login
+@check_patient
+def onboarding(request: HttpRequest) -> HttpResponse:
+    """
+    【页面说明】患者 onboarding 引导页 `/p/onboarding/`。
+    【模板】`web_patient/onboarding.html`，用于引导首访或无档案用户完善资料。
+    """
+    context = {}
+    if not request.user.is_authenticated:
+        context["session_invalid"] = True
+    return render(request, "web_patient/onboarding.html", context)

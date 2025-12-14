@@ -79,7 +79,9 @@ class HealthMetricService:
         elif metric_type == "WS":
             cls.save_weight(payload)
         else:
-            logger.info("收到未知 type=%s 的数据，暂不处理。payload=%s", metric_type, payload)
+            logger.info(
+                "收到未知 type=%s 的数据，暂不处理。payload=%s", metric_type, payload
+            )
 
     # ============
     # 5 类指标保存
@@ -299,7 +301,9 @@ class HealthMetricService:
         )
 
     @classmethod
-    def query_metrics_by_type(cls, patient_id: int, metric_type: str, limit: int = 30) -> dict:
+    def query_metrics_by_type(
+        cls, patient_id: int, metric_type: str, limit: int = 30
+    ) -> dict:
         """
         查询指定患者、指定类型的历史健康指标数据。
 
@@ -340,9 +344,7 @@ class HealthMetricService:
         real_limit = min(limit, 100)
 
         # 2. 查询数据库
-        qs = HealthMetric.objects.filter(
-            patient_id=patient_id, metric_type=metric_type
-        )
+        qs = HealthMetric.objects.filter(patient_id=patient_id, metric_type=metric_type)
 
         # 获取总数
         total_count = qs.count()
@@ -442,7 +444,6 @@ class HealthMetricService:
             }
 
         return result
-
 
     # ============
     # 客观指标数据手动录入接口
