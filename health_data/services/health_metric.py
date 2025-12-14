@@ -6,7 +6,7 @@
 2. 通过 deviceNo -> Device -> current_patient 找到患者，统一由这里决定是否落库。
 3. 不同指标（血压 / 血氧 / 心率 / 步数 / 体重）通过统一入口分发到各自的保存方法。
 4. 控制写入频率：
-   - 步数：同一患者、同一天只保留一条记录，后续数据做累加。
+   - 步数：同一患者、同一天只保留一条记录，始终保留“当天最后一条上报记录”的步数。
    - 其他四类（血压、血氧、心率、体重）：同一患者、同一天最多写入 MAX_DAILY_RECORDS 条。
 """
 
@@ -21,7 +21,7 @@ from typing import Optional
 from django.utils import timezone
 
 from business_support.models import Device
-from health_data.models import HealthMetric, MetricType
+from health_data.models import HealthMetric, MetricSource, MetricType
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +113,13 @@ class HealthMetricService:
             )
             return
 
-        HealthMetric.objects.create(
+        cls._persist_metric(
             patient_id=context.patient_id,
-            task_id=None,
             metric_type=MetricType.BLOOD_PRESSURE,
             value_main=Decimal(str(sbp)),
             value_sub=Decimal(str(dbp)),
             measured_at=context.measured_at,
+            source=MetricSource.DEVICE,
         )
 
     @classmethod
@@ -152,13 +152,12 @@ class HealthMetricService:
             )
             return
 
-        HealthMetric.objects.create(
+        cls._persist_metric(
             patient_id=context.patient_id,
-            task_id=None,
             metric_type=MetricType.BLOOD_OXYGEN,
             value_main=Decimal(str(avg_oxy)),
-            value_sub=None,
             measured_at=context.measured_at,
+            source=MetricSource.DEVICE,
         )
 
     @classmethod
@@ -192,13 +191,12 @@ class HealthMetricService:
             )
             return
 
-        HealthMetric.objects.create(
+        cls._persist_metric(
             patient_id=context.patient_id,
-            task_id=None,
             metric_type=MetricType.HEART_RATE,
             value_main=Decimal(str(heart_rate)),
-            value_sub=None,
             measured_at=context.measured_at,
+            source=MetricSource.DEVICE,
         )
 
     @classmethod
@@ -246,13 +244,12 @@ class HealthMetricService:
             metric.measured_at = context.measured_at
             metric.save(update_fields=["value_main", "measured_at"])
         else:
-            HealthMetric.objects.create(
+            cls._persist_metric(
                 patient_id=context.patient_id,
-                task_id=None,
                 metric_type=MetricType.STEPS,
                 value_main=step_delta,
-                value_sub=None,
                 measured_at=context.measured_at,
+                source=MetricSource.DEVICE,
             )
 
     @classmethod
@@ -292,13 +289,93 @@ class HealthMetricService:
             )
             return
 
-        HealthMetric.objects.create(
+        cls._persist_metric(
             patient_id=context.patient_id,
-            task_id=None,
             metric_type=MetricType.WEIGHT,
             value_main=weight,
-            value_sub=None,
             measured_at=context.measured_at,
+            source=MetricSource.DEVICE,
+        )
+
+    # ============
+    # 手动录入接口
+    # ============
+    @classmethod
+    def save_manual_metric(
+        cls,
+        patient_id: int,
+        metric_type: str,
+        measured_at: datetime,
+        value_main: Optional[Decimal] = None,
+        value_sub: Optional[Decimal] = None,
+    ) -> HealthMetric:
+        """
+        手动录入健康指标数据的通用入口。
+
+        【功能说明】
+        该方法供 View 层调用，用于保存用户手动填写的各类健康数据（如体能评分、疼痛评分、痰色等）。
+        与设备自动上传不同，手动录入的数据不做“每日条数限制”，每次调用都会生成一条新记录。
+        数据来源（source）会自动标记为 MANUAL。
+
+        【参数解释】
+        :param patient_id: int
+            患者 ID（对应 PatientProfile.id）。
+        :param metric_type: str
+            指标类型枚举值。
+            必须使用 health_data.models.MetricType 中的常量，例如：
+            - MetricType.PHYSICAL_PERFORMANCE ("physical_performance")
+            - MetricType.SPUTUM_COLOR ("sputum_color")
+            - MetricType.PAIN_HEAD ("pain_head")
+        :param measured_at: datetime
+            测量时间（带时区）。通常由前端传入用户选择的时间。
+        :param value_main: Optional[Decimal]
+            主数值。
+            - 对于数值型指标（如体重），直接存入。
+            - 对于评分/枚举型指标（如痰色、疼痛等级），存入对应的分值（整数转 Decimal）。
+              具体分值定义请参考 health_data.models.METRIC_SCALES 字典。
+        :param value_sub: Optional[Decimal]
+            副数值。
+            - 目前主要用于血压（舒张压），其他指标通常留空（None）。
+
+        【返回值】
+        :return: HealthMetric
+            创建成功的数据库模型实例。
+
+        【成功与失败】
+        - 成功：返回 HealthMetric 对象，表示数据已成功写入数据库。
+        - 失败：
+            1. 如果参数类型错误（如 Decimal 转换失败），Python 会抛出 TypeError 或 InvalidOperation。
+            2. 如果数据库约束失败（如 patient_id 不存在），会抛出 IntegrityError。
+            View 层应当捕获这些异常，或者在调用前确保数据格式正确。
+        """
+        return cls._persist_metric(
+            patient_id=patient_id,
+            metric_type=metric_type,
+            value_main=value_main,
+            value_sub=value_sub,
+            measured_at=measured_at,
+            source=MetricSource.MANUAL,
+        )
+
+    # ============
+    # 内部持久化
+    # ============
+    @staticmethod
+    def _persist_metric(
+        patient_id: int,
+        metric_type: str,
+        measured_at: datetime,
+        source: str,
+        value_main: Optional[Decimal] = None,
+        value_sub: Optional[Decimal] = None,
+    ) -> HealthMetric:
+        return HealthMetric.objects.create(
+            patient_id=patient_id,
+            metric_type=metric_type,
+            source=source,
+            value_main=value_main,
+            value_sub=value_sub,
+            measured_at=measured_at,
         )
 
     # ============
@@ -308,6 +385,7 @@ class HealthMetricService:
     def _build_context(cls, payload: dict) -> Optional[_Context]:
         """
         从回调 payload 中提取“患者 + 测量时间”的统一上下文。
+        这里接收的数据来自设备
 
         - 根据 deviceNo 查找 Device（优先当作 imei，其次尝试 sn）。
         - 使用 Device.current_patient 作为最终关联患者；
@@ -345,10 +423,14 @@ class HealthMetricService:
     @staticmethod
     def _parse_measured_at(record_time) -> datetime:
         """
-        将设备上报的“北京时间毫秒时间戳”转换为带时区的 datetime。
+        将设备上报的毫秒时间戳转换为带时区的 datetime。
+        这里接收的数据来自设备
 
-        - 正常情况下：recordTime 为 Unix 毫秒时间戳，对应 Asia/Shanghai（当前时区）。
-        - 异常或缺失时：回退为当前时间。
+        - 正常情况下：recordTime 为 Unix 毫秒时间戳（设备上报时间，不带时区信息），
+          这里按当前 Django 时区（TIME_ZONE = Asia/Shanghai）进行解析。
+        - 由于 USE_TZ = True，落库时会自动转换为 UTC，因此直接看数据库原始值时，
+          会比北京时间小 8 小时，这是预期行为。
+        - 异常或缺失 recordTime 时：回退为当前时间。
         """
         if record_time is None:
             return timezone.now()
@@ -369,6 +451,8 @@ class HealthMetricService:
         判断在“患者 + 指标类型 + 日期”维度上，是否允许继续写入新记录。
 
         步数不走这个限制，而是通过 save_steps 的“当日单条累加”策略控制。
+
+        这里接收的数据来自设备
         """
         date = measured_at.date()
         count = HealthMetric.objects.filter(
