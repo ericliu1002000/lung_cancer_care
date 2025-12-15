@@ -92,7 +92,7 @@
         const errorMsg = document.getElementById('error-msg');
         const val = parseFloat(input.value);
 
-        if (!val || val < 30 || val > 45) {
+        if (!val ) {
             errorMsg.classList.remove('hidden');
             input.focus();
             return;

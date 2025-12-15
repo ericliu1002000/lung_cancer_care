@@ -45,7 +45,7 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 record_time = datetime.strptime(record_time_str, '%Y-%m-%d %H:%M:%S')
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
-                    metric_type=MetricType.WEIGHT,
+                    metric_type=MetricType.BODY_TEMPERATURE,
                     value_main=Decimal(weight_val),
                     measured_at=record_time  # Service 内部会处理时间格式
                 )

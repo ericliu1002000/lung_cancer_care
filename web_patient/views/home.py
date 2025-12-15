@@ -20,7 +20,7 @@ PLAN_METRIC_MAPPING = {
         "format_func": lambda x: f"{x['value_display']}"
     },
     "temperature": {
-        "key": "temperature",  # 假设接口中体温字段为temperature，可根据实际调整
+        "key": "body_temperature",  # 假设接口中体温字段为temperature，可根据实际调整
         "name": "体温",
         "format_func": lambda x: f"{x['value_display']}"
     },
@@ -220,7 +220,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     
     # 如果需要，从接口拉取一次数据
     listData = {}
-    if should_fetch_data and patient_id:
+    if  patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
             print(f"==提交后拉取健康指标数据=={listData}")
@@ -231,27 +231,29 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     # 遍历计划列表，仅更新刚刚完成的任务
     for plan in daily_plans:
         plan_type = plan["type"]
+        metric_config = PLAN_METRIC_MAPPING.get(plan_type)
         
-        # 仅处理刚刚完成的任务类型
-        if plan_type in completed_task_types:
-            # 标记为完成
+        # 如果没有配置，跳过（保留默认值）
+        if not metric_config:
+            continue
+        
+        # 获取该计划对应的指标数据
+        metric_data = get_metric_value(metric_config["key"], listData)
+        
+        # 有有效数据 → 更新为已完成状态并展示数据
+        if metric_data:
             plan["status"] = "completed"
-            
-            # 尝试使用接口数据回显
-            metric_config = PLAN_METRIC_MAPPING.get(plan_type)
-            print(f"格式化显示值: {metric_config}")
-            updated_from_api = False
-            
-            if metric_config and listData:
-                metric_data = get_metric_value(metric_config["key"], listData)
-                print(f"格式化显示值: {metric_data}")
-                if metric_data:
-                    try:
-                        display_value = metric_config["format_func"](metric_data)
-                        plan["subtitle"] = f"今日已记录：{display_value}"
-                        updated_from_api = True
-                    except Exception as e:
-                        print(f"格式化显示值失败: {e}")
+            try:
+                display_value = metric_config["format_func"](metric_data)
+                plan["subtitle"] = f"今日已记录：{display_value}"
+            except Exception as e:
+                print(f"格式化{plan_type}显示值失败: {e}")
+                plan["subtitle"] = "今日已记录：数据已更新"
+        # 无有效数据 → 检查是否是刚提交的任务（兜底标记为完成）
+        elif plan_type in completed_task_types:
+            plan["status"] = "completed"
+            plan["subtitle"] = "今日已记录：提交成功"
+        # 无数据且非刚提交 → 保留默认值，不做处理
 
             
 
