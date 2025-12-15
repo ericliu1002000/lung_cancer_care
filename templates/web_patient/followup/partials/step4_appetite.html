@@ -1,0 +1,71 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+    <div class="p-5 border-b border-slate-100 text-center">
+        <h3 class="text-lg font-bold text-slate-800">您最近的食欲情况如何？</h3>
+    </div>
+    
+    <div class="p-5 space-y-8">
+        
+        <!-- Q1 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">1. 您现在的进食量大约是患病前的多少？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_intake" value="差不多" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">与患病前差不多或更多。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_intake" value="70-90%" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">约为患病前的 70%~90%。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_intake" value="50-60%" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">约为患病前的 50%~60%。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_intake" value="少于一半" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">少于患病前的一半，或不吃。</span></label>
+            </div>
+        </div>
+
+        <!-- Q2 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">2. 最近一个月内，您的体重是否有下降？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_weight_loss" value="无下降" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">无下降或体重增加。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_weight_loss" value="1-3kg" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">下降约 1~3 kg。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_weight_loss" value=">3kg" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">下降 > 3 kg。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_weight_loss" value="不清楚" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">不清楚，近期未监测体重。</span></label>
+            </div>
+        </div>
+
+        <!-- Q3 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">3. 请为您的食欲打分，0分表示“完全没有食欲/看见食物就恶心”，10分表示“食欲好/很想吃饭”</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_score" value="8-10" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">8~10分。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_score" value="5-7" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">5~7分。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_score" value="3-4" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">3~4分。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_score" value="0-2" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">0~2分。</span></label>
+            </div>
+        </div>
+
+        <!-- Q4 Multi -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">4. 是否存在以下影响进食的症状？（可多选）</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="恶心呕吐" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">恶心/呕吐。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="吞咽困难" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">吞咽困难/吞咽痛。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="口腔溃疡" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">口腔溃疡/口干。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="味觉改变" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">味觉或嗅觉改变（觉得食物有苦味/金属味）。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="呼吸急促" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">呼吸急促/气喘（吃几口就喘）。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="便秘腹泻" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">便秘或腹泻。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="疼痛" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">疼痛（胸痛、全身痛等）。</span></label>
+                <label class="flex items-start gap-3"><input type="checkbox" name="appetite_symptoms" value="一吃就饱" class="w-4 h-4 text-blue-600 rounded mt-1"><span class="text-slate-700">一吃就饱。</span></label>
+            </div>
+        </div>
+        
+        <!-- Q5 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">5. 您最近活动能力如何？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_activity" value="活动自如" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">活动自如，能进行日常散步等活动。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_activity" value="容易疲劳" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">容易疲劳，多数时间需要卧床休息，但能下地。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="appetite_activity" value="卧床" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">超过一半时间必须卧床。</span></label>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<button type="button" onclick="nextStep(4)" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
+    下一题
+</button>

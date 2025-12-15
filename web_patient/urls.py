@@ -19,6 +19,7 @@ urlpatterns = [
     path("record/sputum/", views.record_sputum, name="record_sputum"),
     path("record/pain/", views.record_pain, name="record_pain"),
     path("record/checkup/", views.record_checkup, name="record_checkup"),
+    path("followup/daily/", views.daily_survey, name="daily_survey"),
     path("record/steps/", views.record_steps, name="record_steps"),
     path("family/", views.family_management, name="family_management"),
     path("family/unbind/", views.unbind_family, name="unbind_family"),

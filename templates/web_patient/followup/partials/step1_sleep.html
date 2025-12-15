@@ -1,0 +1,116 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+    <div class="p-5 border-b border-slate-100 text-center">
+        <h3 class="text-lg font-bold text-slate-800">睡眠质量评分</h3>
+    </div>
+    
+    <div class="p-5 space-y-8">
+        <!-- Q1 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-4">1. 您最近的睡眠质量是…</p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 active:bg-blue-50 transition">
+                    <input type="radio" name="sleep_quality" value="非常差" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <span class="text-slate-700">非常差</span>
+                </label>
+                <label class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 active:bg-blue-50 transition">
+                    <input type="radio" name="sleep_quality" value="差" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <span class="text-slate-700">差</span>
+                </label>
+                <label class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 active:bg-blue-50 transition">
+                    <input type="radio" name="sleep_quality" value="一般" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <span class="text-slate-700">一般</span>
+                </label>
+                <label class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 active:bg-blue-50 transition">
+                    <input type="radio" name="sleep_quality" value="好" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <span class="text-slate-700">好</span>
+                </label>
+                <label class="flex items-center gap-3 p-3 rounded-lg border border-slate-200 active:bg-blue-50 transition">
+                    <input type="radio" name="sleep_quality" value="非常好" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500">
+                    <span class="text-slate-700">非常好</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Helper for repeating options -->
+        <div class="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg mb-4">
+            以下问题请回答频率：完全没有 / 一点点 / 有些 / 相当多 / 非常
+        </div>
+
+        <!-- Q2 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">2. 困倦入睡困难</p>
+            <div class="space-y-2">
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_drowsy" value="完全没有" class="w-4 h-4 text-blue-600"><span class="text-slate-600">完全没有</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_drowsy" value="一点点" class="w-4 h-4 text-blue-600"><span class="text-slate-600">一点点</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_drowsy" value="有些" class="w-4 h-4 text-blue-600"><span class="text-slate-600">有些</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_drowsy" value="相当多" class="w-4 h-4 text-blue-600"><span class="text-slate-600">相当多</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_drowsy" value="非常" class="w-4 h-4 text-blue-600"><span class="text-slate-600">非常</span></label>
+            </div>
+        </div>
+
+        <!-- Q3 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">3. 有醒来问题</p>
+            <div class="space-y-2">
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_waking" value="完全没有" class="w-4 h-4 text-blue-600"><span class="text-slate-600">完全没有</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_waking" value="一点点" class="w-4 h-4 text-blue-600"><span class="text-slate-600">一点点</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_waking" value="有些" class="w-4 h-4 text-blue-600"><span class="text-slate-600">有些</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_waking" value="相当多" class="w-4 h-4 text-blue-600"><span class="text-slate-600">相当多</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_trouble_waking" value="非常" class="w-4 h-4 text-blue-600"><span class="text-slate-600">非常</span></label>
+            </div>
+        </div>
+
+        <!-- Q4 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">4. 难以入睡</p>
+             <div class="space-y-2">
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_hard_to_fall" value="完全没有" class="w-4 h-4 text-blue-600"><span class="text-slate-600">完全没有</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_hard_to_fall" value="一点点" class="w-4 h-4 text-blue-600"><span class="text-slate-600">一点点</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_hard_to_fall" value="有些" class="w-4 h-4 text-blue-600"><span class="text-slate-600">有些</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_hard_to_fall" value="相当多" class="w-4 h-4 text-blue-600"><span class="text-slate-600">相当多</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_hard_to_fall" value="非常" class="w-4 h-4 text-blue-600"><span class="text-slate-600">非常</span></label>
+            </div>
+        </div>
+
+        <!-- Q5 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">5. 努力无法入睡</p>
+             <div class="space-y-2">
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_cant_fall_effort" value="完全没有" class="w-4 h-4 text-blue-600"><span class="text-slate-600">完全没有</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_cant_fall_effort" value="一点点" class="w-4 h-4 text-blue-600"><span class="text-slate-600">一点点</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_cant_fall_effort" value="有些" class="w-4 h-4 text-blue-600"><span class="text-slate-600">有些</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_cant_fall_effort" value="相当多" class="w-4 h-4 text-blue-600"><span class="text-slate-600">相当多</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_cant_fall_effort" value="非常" class="w-4 h-4 text-blue-600"><span class="text-slate-600">非常</span></label>
+            </div>
+        </div>
+
+        <!-- Q6 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">6. 彻夜无法入睡</p>
+             <div class="space-y-2">
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_awake_all_night" value="完全没有" class="w-4 h-4 text-blue-600"><span class="text-slate-600">完全没有</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_awake_all_night" value="一点点" class="w-4 h-4 text-blue-600"><span class="text-slate-600">一点点</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_awake_all_night" value="有些" class="w-4 h-4 text-blue-600"><span class="text-slate-600">有些</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_awake_all_night" value="相当多" class="w-4 h-4 text-blue-600"><span class="text-slate-600">相当多</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_awake_all_night" value="非常" class="w-4 h-4 text-blue-600"><span class="text-slate-600">非常</span></label>
+            </div>
+        </div>
+
+        <!-- Q7 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">7. 对睡眠质量满意度</p>
+             <div class="space-y-2">
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_satisfaction" value="完全没有" class="w-4 h-4 text-blue-600"><span class="text-slate-600">完全没有</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_satisfaction" value="一点点" class="w-4 h-4 text-blue-600"><span class="text-slate-600">一点点</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_satisfaction" value="有些" class="w-4 h-4 text-blue-600"><span class="text-slate-600">有些</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_satisfaction" value="相当多" class="w-4 h-4 text-blue-600"><span class="text-slate-600">相当多</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="sleep_satisfaction" value="非常" class="w-4 h-4 text-blue-600"><span class="text-slate-600">非常</span></label>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<button type="button" onclick="nextStep(1)" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
+    下一题
+</button>

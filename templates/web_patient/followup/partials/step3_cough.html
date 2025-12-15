@@ -1,0 +1,68 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+    <div class="p-5 border-b border-slate-100 text-center">
+        <h3 class="text-lg font-bold text-slate-800">咳嗽与痰色</h3>
+    </div>
+    
+    <div class="p-5 space-y-8">
+        
+        <!-- Q1 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">1. 最近的咳嗽情况如何？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="cough_status" value="无咳嗽" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">近期无咳嗽情况。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_status" value="轻微咳嗽" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">偶尔有点轻微咳嗽，但不影响说话和吃饭，也不用吃药。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_status" value="频繁咳嗽" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">需要吃止咳药才能正常生活，或者咳嗽时较为频繁，做事受限。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_status" value="严重咳嗽" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">严重影响睡眠，甚至吃饭、穿衣都受到影响，感觉很痛苦。</span></label>
+            </div>
+        </div>
+
+        <!-- Q2 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">2. 最近痰液性状如何？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_status" value="无痰" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">无痰，或只是干咳。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_status" value="清痰" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">像唾沫或清痰一样，不浑浊。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_status" value="黄痰" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">痰有点黄，颜色略深，但不算很浓稠。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_status" value="深黄绿痰" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">痰呈深黄色/绿色等（颜色较深）。</span></label>
+            </div>
+        </div>
+
+        <!-- Q3 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">3. 痰中是否带血？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_blood" value="无血" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">完全没有，痰很干净。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_blood" value="血丝" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">痰里夹有几条红血丝，或者偶尔带点红色。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_blood" value="明显血" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">咳出来的是明显的血，大概有一两口那么多。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="sputum_blood" value="大量血" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">血量很多，止不住。</span></label>
+            </div>
+        </div>
+
+        <!-- Q4 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">4. 发生以上情况时体温情况如何？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="cough_temperature" value="正常" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">正常，37℃左右。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_temperature" value="低热" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">有点低热（37.3℃~38.0℃）。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_temperature" value="高热" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">发高热（38.0℃以上，或者感觉发冷发热打寒战）。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_temperature" value="不清楚" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">未测量，不清楚。</span></label>
+            </div>
+        </div>
+        
+        <!-- Q5 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">5. 发生以上情况时血氧饱和度如何？</p>
+            <div class="space-y-3">
+                <label class="flex items-start gap-3"><input type="radio" name="cough_spo2" value="正常" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">正常，95以上。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_spo2" value="略低" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">略低，90~94之间。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_spo2" value="很低" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">很低，低于90。</span></label>
+                <label class="flex items-start gap-3"><input type="radio" name="cough_spo2" value="不清楚" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">未测量，不清楚。</span></label>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<button type="button" onclick="nextStep(3)" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
+    下一题
+</button>

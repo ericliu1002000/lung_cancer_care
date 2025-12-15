@@ -1,3 +1,4 @@
+import re
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpRequest, HttpResponse
@@ -487,33 +488,29 @@ def health_records(request: HttpRequest) -> HttpResponse:
     2. 支持空状态展示。
     """
     
-    openid = request.GET.get('openid')
-    user = None
-    patient_id = None
-    if openid:
-        user = CustomUser.objects.filter(wx_openid=openid).first()
-        if user and hasattr(user, 'patient_profile'):
-             patient_id = user.patient_profile.id
+    patient_id = request.GET.get('patient_id') 
     
+    # 如果没有获取到 patient_id，尝试使用测试 ID
+    if not patient_id:
+        patient_id = TEST_PATIENT_ID
+
     # 模拟数据：健康指标记录
     # 实际开发中应从数据库统计
     health_stats = [
-        {"type": "temperature", "title": "体温", "count": 25, "abnormal": 5, "icon": "temperature"},
-        {"type": "breath", "title": "呼吸", "count": 35, "abnormal": 5, "icon": "breath"},
-        {"type": "sputum", "title": "咳嗽/痰色", "count": 35, "abnormal": 5, "icon": "sputum"},
-        {"type": "pain", "title": "疼痛", "count": 35, "abnormal": 5, "icon": "pain"},
-        {"type": "weight", "title": "体重", "count": 35, "abnormal": 5, "icon": "weight"},
-        {"type": "spo2", "title": "血氧", "count": 35, "abnormal": 5, "icon": "spo2"},
-        {"type": "bp", "title": "血压心率", "count": 35, "abnormal": 5, "icon": "bp"},
-        {"type": "platelet", "title": "血小板……等检验指标……以此类推", "count": 35, "abnormal": 5, "icon": "lab"},
+        {"type": "temperature", "title": "体温", "count": 0, "abnormal": 0, "icon": "temperature"},
+        {"type": "breath", "title": "呼吸", "count": 0, "abnormal": 0, "icon": "breath"},
+        {"type": "sputum", "title": "咳嗽/痰色", "count": 0, "abnormal": 0, "icon": "sputum"},
+        {"type": "pain", "title": "疼痛", "count": 0, "abnormal": 0, "icon": "pain"},
+        {"type": "weight", "title": "体重", "count": 0, "abnormal": 0, "icon": "weight"},
+        {"type": "spo2", "title": "血氧", "count": 0, "abnormal": 0, "icon": "spo2"},
+        {"type": "bp", "title": "血压心率", "count": 0, "abnormal": 0, "icon": "bp"},
+        {"type": "platelet", "title": "血小板……等检验指标……以此类推", "count": 0, "abnormal": 0, "icon": "lab"},
     ]
     
     # 模拟空数据测试
     # health_stats = []
 
     context = {
-        "user": user,
-        "openid": openid,
         "patient_id": patient_id,
         "health_stats": health_stats
     }
@@ -562,86 +559,130 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     """
     record_type = request.GET.get('type')
     title = request.GET.get('title', '历史记录')
-    # patient_id = request.GET.get('patient_id') # 暂未使用
-
-    # 模拟数据生成
-    records = []
+    patient_id = request.GET.get('patient_id') 
     
-    # 模拟数据辅助函数
-    def create_record(day, time, source_type, data_fields):
-        weekday_map = {0: "星期一", 1: "星期二", 2: "星期三", 3: "星期四", 4: "星期五", 5: "星期六", 6: "星期日"}
-        # 固定使用 2025-11 作为模拟月份
-        date_str = f"2025-11-{day:02d}"
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        
-        return {
-            "id": int(day), # 简单使用日期作为ID
-            "date": date_str,
-            "weekday": weekday_map[dt.weekday()],
-            "time": time,
-            "source": source_type, # 'manual' or 'device'
-            "source_display": "手动填写" if source_type == 'manual' else "设备上传",
-            "is_manual": source_type == 'manual',
-            "can_edit": source_type == 'manual' and day == 14, # 仅允许编辑“今天”(模拟为14号)的数据
-            "data": data_fields
-        }
+    # 如果没有传 patient_id，尝试使用测试 ID
+    if not patient_id:
+        patient_id = TEST_PATIENT_ID
 
-    # 根据类型生成不同结构的模拟数据
-    if record_type == 'temperature':
-        records = [
-            create_record(14, "14:26", "manual", [{"label": "体温", "value": "36.5℃", "is_large": True, "key": "temperature"}]),
-            create_record(13, "14:26", "device", [{"label": "体温", "value": "36.5℃", "is_large": True, "key": "temperature"}]),
-            create_record(9, "14:26", "manual", [{"label": "体温", "value": "37.5℃", "is_large": True, "key": "temperature"}]),
-            create_record(1, "14:26", "manual", [{"label": "体温", "value": "36.5℃", "is_large": True, "key": "temperature"}]),
-        ]
-    elif record_type == 'bp': # 血压心率
-        records = [
-            create_record(14, "14:26", "manual", [
-                {"label": "收缩压", "value": "119", "is_large": True, "key": "ssy"},
-                {"label": "舒张压", "value": "85", "is_large": True, "key": "szy"},
-                {"label": "心率", "value": "80", "is_large": True, "key": "heart"}
-            ]),
-            create_record(14, "14:00", "device", [
-                {"label": "收缩压", "value": "119", "is_large": True, "key": "ssy"},
-                {"label": "舒张压", "value": "85", "is_large": True, "key": "szy"},
-                {"label": "心率", "value": "80", "is_large": True, "key": "heart"}
-            ]),
-        ]
-    elif record_type == 'sputum': # 咳嗽痰色
-        records = [
-            create_record(14, "14:26", "manual", [
-                {"label": "咳嗽", "value": "(0) 今日无咳嗽", "is_large": False, "key": "cough"},
-                {"label": "痰色", "value": "(0) 无痰", "is_large": False, "key": "sputum"}
-            ]),
-            create_record(13, "14:26", "device", [ # 修正：原图显示设备上传
-                {"label": "咳嗽", "value": "(2) 多次影响活动或夜间休息", "is_large": False, "key": "cough"},
-                {"label": "痰色", "value": "(3) 绿色", "is_large": False, "key": "sputum"}
-            ]),
-             create_record(9, "14:26", "manual", [
-                {"label": "咳嗽", "value": "(2) 多次影响活动或夜间休息", "is_large": False, "key": "cough"},
-                {"label": "痰色", "value": "(3) 绿色", "is_large": False, "key": "sputum"}
-            ]),
-             create_record(1, "14:26", "manual", [
-                {"label": "咳嗽", "value": "(2) 多次影响活动或夜间休息", "is_large": False, "key": "cough"},
-                {"label": "痰色", "value": "(3) 绿色", "is_large": False, "key": "sputum"}
-            ]),
-        ]
-    # 其他类型使用默认/空数据，或添加简单的模拟
-    elif record_type == 'weight':
-         records = [
-            create_record(14, "08:00", "manual", [{"label": "体重", "value": "65.5kg", "is_large": True, "key": "weight"}]),
-            create_record(10, "08:00", "device", [{"label": "体重", "value": "66.0kg", "is_large": True, "key": "weight"}]),
-        ]
-    elif record_type == 'spo2':
-         records = [
-            create_record(14, "10:00", "device", [{"label": "血氧", "value": "98%", "is_large": True, "key": "spo2"}]),
-        ]
+    
+    # 获取当前月份（YYYY-MM）
+    current_month = request.GET.get('month', datetime.now().strftime("%Y-%m"))
+    
+    # 计算查询的时间范围
+    try:
+        start_date = datetime.strptime(current_month, "%Y-%m")
+        # 下个月的第一天
+        if start_date.month == 12:
+            end_date = start_date.replace(year=start_date.year + 1, month=1)
+        else:
+            end_date = start_date.replace(month=start_date.month + 1)
+    except ValueError:
+        start_date = datetime.now().replace(day=1)
+        if start_date.month == 12:
+            end_date = start_date.replace(year=start_date.year + 1, month=1)
+        else:
+            end_date = start_date.replace(month=start_date.month + 1)
+        current_month = start_date.strftime("%Y-%m")
+
+    # 分页参数
+    page = int(request.GET.get('page', 1))
+    limit = int(request.GET.get('limit', 30))
+    offset = (page - 1) * limit
+
+    # 调用 Service 获取数据
+    records = []
+    total_count = 0
+    has_more = False
+    
+    if patient_id and record_type:
+        try:
+            # 映射前端 type 到后端 MetricType
+            metric_type_map = {
+                "temperature": MetricType.BODY_TEMPERATURE,
+                "bp": MetricType.BLOOD_PRESSURE,
+                "spo2": MetricType.BLOOD_OXYGEN,
+                "weight": MetricType.WEIGHT,
+                "breath": MetricType.DYSPNEA, # 假设呼吸对应 dyspnea
+                "sputum": MetricType.SPUTUM_COLOR, # 假设痰色对应 sputum_color
+                "step": MetricType.STEPS,
+                "pain": MetricType.PAIN_INCISION, # 暂定
+            }
+            
+            db_metric_type = metric_type_map.get(record_type)
+            
+            if db_metric_type:
+                data = HealthMetricService.query_metrics_by_type(
+                    patient_id=int(patient_id),
+                    metric_type=db_metric_type,
+                    limit=limit,
+                    start_date=start_date,
+                    end_date=end_date
+                )
+                print(f"列表数据==={data}")
+
+                total_count = data.get('total', 0)
+                raw_list = data.get('list', [])
+                has_more = (offset + len(raw_list)) < total_count
+                
+                weekday_map = {0: "星期一", 1: "星期二", 2: "星期三", 3: "星期四", 4: "星期五", 5: "星期六", 6: "星期日"}
+                
+                for item in raw_list:
+                    # measured_at 是带时区的 datetime
+                    dt = item['measured_at'].astimezone(timezone.get_current_timezone())
+                    date_str = dt.strftime("%Y-%m-%d")
+                    time_str = dt.strftime("%H:%M")
+                    
+                    # 构造 data_fields
+                    data_fields = []
+                    if record_type == 'temperature':
+                        data_fields.append({"label": "体温", "value": item['value_display'], "is_large": True, "key": "temperature"})
+                    elif record_type == 'weight':
+                        data_fields.append({"label": "体重", "value": item['value_display'], "is_large": True, "key": "weight"})
+                    elif record_type == 'spo2':
+                        data_fields.append({"label": "血氧", "value": item['value_display'], "is_large": True, "key": "spo2"})
+                    elif record_type == 'bp':
+                        data_fields = [
+                            {"label": "收缩压", "value": str(int(item['value_main'])), "is_large": True, "key": "ssy"},
+                            {"label": "舒张压", "value": str(int(item['value_sub'] or 0)), "is_large": True, "key": "szy"},
+                            # {"label": "心率", "value": "80", "is_large": True, "key": "heart"} # 暂无心率关联
+                        ]
+                    # ... 其他类型处理
+                    else:
+                         data_fields.append({"label": title, "value": item['value_display'], "is_large": True, "key": "common"})
+
+                    records.append({
+                        "id": item['id'],
+                        "date": date_str,
+                        "weekday": weekday_map[dt.weekday()],
+                        "time": time_str,
+                        "source": item['source'],
+                        "source_display": "手动填写" if item['source'] == 'manual' else "设备上传",
+                        "is_manual": item['source'] == 'manual',
+                        "can_edit": item['source'] == 'manual' and dt.date() == datetime.now().date(),
+                        "data": data_fields
+                    })
+                    
+        except Exception as e:
+            print(f"查询详情失败: {e}")
+
+    # 如果是 AJAX 请求，返回 JSON
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        from django.http import JsonResponse
+        return JsonResponse({
+            "records": records,
+            "has_more": has_more,
+            "next_page": page + 1 if has_more else None
+        })
 
     context = {
         "record_type": record_type,
         "title": title,
         "records": records,
-        "current_month": "2025-11", # 模拟当前月份
+        "current_month": current_month,
+        "patient_id": patient_id,
+        "has_more": has_more,
+        "next_page": page + 1 if has_more else None
     }
     
     return render(request, "web_patient/health_record_detail.html", context)

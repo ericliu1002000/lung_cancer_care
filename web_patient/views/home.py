@@ -90,7 +90,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if patient.user_id == request.user.id:
         is_family = False
     
-    # ========== 核心调整：仅在URL参数指示完成时，才从接口获取健康数据并回显 ==========
     # 确定患者ID（测试ID或实际患者ID）
     patient_id = TEST_PATIENT_ID if TEST_PATIENT_ID else (patient.id if patient else None)
     
@@ -220,7 +219,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     
     # 如果需要，从接口拉取一次数据
     listData = {}
-    if  patient_id:
+    if should_fetch_data and patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
             print(f"==提交后拉取健康指标数据=={listData}")
@@ -277,7 +276,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "breath": reverse("web_patient:record_breath"),
         "sputum": reverse("web_patient:record_sputum"),
         "pain": reverse("web_patient:record_pain"),
-        "followup": reverse("web_patient:record_temperature"), # 暂时指向temperature，需确认
+        "followup": reverse("web_patient:daily_survey"), 
         "checkup": reverse("web_patient:record_checkup"),
     }
     
@@ -292,7 +291,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "is_family": is_family,
         "service_days": 135,
         "is_member": True,
-        "onboarding_url": reverse("web_patient:onboarding") if not patient else "",
         "daily_plans": daily_plans,
         "buy_url": generate_menu_auth_url("market:product_buy"),
         "patient_id": patient_id,

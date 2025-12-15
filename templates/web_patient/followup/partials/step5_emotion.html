@@ -1,0 +1,246 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+    <div class="p-5 border-b border-slate-100 text-center">
+        <h3 class="text-lg font-bold text-slate-800">心理情绪问卷</h3>
+        <p class="text-xs text-slate-500 mt-2">通过过去一周（过去7天），请根据实际情况作答</p>
+    </div>
+    
+    <div class="p-5 space-y-8">
+        
+         <!-- Helper for repeating options -->
+         <div class="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg mb-4 sticky top-0 z-10 border border-slate-100 shadow-sm">
+            <p class="font-bold mb-1">选项说明：</p>
+            <div class="grid grid-cols-4 gap-2 text-center text-xs">
+                <span>没有</span>
+                <span>有时</span>
+                <span>经常</span>
+                <span>总是</span>
+            </div>
+        </div>
+
+        <!-- 1-16 Loop -->
+        <!-- Since I can't easily loop with custom strings without context, I'll list them -->
+        
+        <!-- Q1 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">1. 最近是否感到紧张、焦虑或担心？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q1" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q1" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q1" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q1" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+        
+        <!-- Q2 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">2. 是否难以停止或控制担忧？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q2" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q2" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q2" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q2" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q3 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">3. 是否对许多不同事情过分担忧？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q3" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q3" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q3" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q3" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q4 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">4. 是否很难放松？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q4" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q4" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q4" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q4" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q5 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">5. 是否感到坐立不安或容易激动？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q5" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q5" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q5" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q5" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q6 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">6. 是否容易烦躁或易怒？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q6" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q6" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q6" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q6" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q7 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">7. 是否担心会有不好的事情发生？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q7" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q7" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q7" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q7" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <div class="h-px bg-slate-100 my-4"></div>
+
+        <!-- Q8 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">8. 对做事是否缺乏兴趣或乐趣？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q8" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q8" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q8" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q8" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q9 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">9. 是否感到心情低落、抑郁或绝望？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q9" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q9" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q9" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q9" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q10 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">10. 是否入睡困难、早醒或睡眠过多？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q10" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q10" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q10" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q10" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q11 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">11. 是否感到疲倦或缺乏精力？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q11" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q11" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q11" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q11" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q12 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">12. 食欲是否不振或饮食过量？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q12" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q12" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q12" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q12" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q13 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">13. 是否觉得自己很糟糕、失败或让家人失望？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q13" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q13" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q13" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q13" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q14 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">14. 是否注意力不集中，比如看电视或阅读困难？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q14" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q14" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q14" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q14" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q15 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">15. 是否动作或说话变慢，或过度烦躁坐立不安？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q15" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q15" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q15" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q15" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <!-- Q16 -->
+        <div>
+            <p class="font-medium text-slate-800 mb-2">16. 是否出现过自伤或轻生的念头？</p>
+            <div class="grid grid-cols-4 gap-2">
+                 <label class="text-center"><input type="radio" name="emotion_q16" value="没有" class="block mx-auto mb-1"><span class="text-xs">没有</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q16" value="有时" class="block mx-auto mb-1"><span class="text-xs">有时</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q16" value="经常" class="block mx-auto mb-1"><span class="text-xs">经常</span></label>
+                 <label class="text-center"><input type="radio" name="emotion_q16" value="总是" class="block mx-auto mb-1"><span class="text-xs">总是</span></label>
+            </div>
+        </div>
+
+        <div class="h-px bg-slate-100 my-4"></div>
+
+        <!-- Q17 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">17. 以上问题对工作/学习/家庭生活的影响程度？</p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-3"><input type="radio" name="emotion_impact" value="没有影响" class="w-4 h-4 text-blue-600"><span class="text-slate-700">没有影响</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="emotion_impact" value="轻度影响" class="w-4 h-4 text-blue-600"><span class="text-slate-700">轻度影响</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="emotion_impact" value="中度影响" class="w-4 h-4 text-blue-600"><span class="text-slate-700">中度影响</span></label>
+                <label class="flex items-center gap-3"><input type="radio" name="emotion_impact" value="重度影响" class="w-4 h-4 text-blue-600"><span class="text-slate-700">重度影响</span></label>
+            </div>
+        </div>
+
+        <!-- Q18 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">18. 影响情绪的生活事件（可多选）</p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="经济压力" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">经济压力</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="家庭关系" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">家庭关系</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="工作学习压力" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">工作/学习压力</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="疾病相关担忧" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">疾病相关担忧</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="睡眠问题" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">睡眠问题</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="社交冲突" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">社交冲突</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_stressors" value="其他" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">其他</span></label>
+            </div>
+        </div>
+
+        <!-- Q19 -->
+        <div>
+            <p class="font-bold text-slate-800 mb-3">19. 已采取的应对方式（可多选）</p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_coping" value="运动散步" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">运动/散步</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_coping" value="与亲友交流" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">与亲友交流</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_coping" value="专业咨询" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">专业咨询/心理支持</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_coping" value="药物治疗" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">药物治疗</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_coping" value="放松训练" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">放松训练/冥想</span></label>
+                <label class="flex items-center gap-3"><input type="checkbox" name="emotion_coping" value="其他" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-700">其他</span></label>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<button type="button" onclick="nextStep(5)" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
+    下一题
+</button>
