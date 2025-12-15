@@ -15,10 +15,10 @@ from users.models import PatientProfile, CustomUser, PatientRelation
 # 引用 wx 的 client 来获取二维码，注意避免循环引用，可以在方法内引用或使用 lazy import
 
 
+
 class PatientService:
 
-    #生成一个方法， 获取守护时间。
-    #即用户所有的订单已过去的天数
+    
     def get_guard_days(self, patient: PatientProfile) -> int:
         """
         【业务说明】按自然日统计患者已享受的“守护时间”总天数。
