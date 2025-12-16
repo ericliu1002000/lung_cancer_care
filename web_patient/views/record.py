@@ -51,9 +51,11 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                     measured_at=record_time  # Service 内部会处理时间格式
                 )
                 print(f"体温数据保存成功: patient_id={patient_id}, weight={weight_val}")
-                # 提交成功后，重定向回首页并携带参数
-                redirect_url = reverse("web_patient:patient_home")
+                next_url = request.GET.get('next') or request.POST.get('next')
                 messages.success(request, "提交成功！")
+                if next_url:
+                    return redirect(next_url)
+                redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?temperature=true&patient_id={patient_id}")
             except Exception as e:
                 print(f"保存体重数据失败: {e}")
@@ -110,9 +112,11 @@ def record_steps(request: HttpRequest) -> HttpResponse:
                     measured_at=record_time  # Service 内部会处理时间格式
                 )
                 print(f"步数数据保存成功: patient_id={patient_id}, weight={weight_val}")
-                # 提交成功后，重定向回首页并携带参数
-                redirect_url = reverse("web_patient:patient_home")
+                next_url = request.GET.get('next') or request.POST.get('next')
                 messages.success(request, "提交成功！")
+                if next_url:
+                    return redirect(next_url)
+                redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?step=true&patient_id={patient_id}")
             except Exception as e:
                 print(f"保存步数数据失败: {e}")
@@ -179,9 +183,11 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 #     measured_at=record_time  # Service 内部会处理时间格式
                 # )
                 print(f"血氧数据保存成功: patient_id={patient_id}")
-                # 提交成功后，重定向回首页并携带参数
-                redirect_url = reverse("web_patient:patient_home")
+                next_url = request.GET.get('next') or request.POST.get('next')
                 messages.success(request, "提交成功！")
+                if next_url:
+                    return redirect(next_url)
+                redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?bp_hr=true&patient_id={patient_id}")
             except Exception as e:
                 print(f"保存血氧数据失败: {e}")
@@ -239,9 +245,11 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                     measured_at=record_time  # Service 内部会处理时间格式
                 )
                 print(f"血氧数据保存成功: patient_id={patient_id}, weight={weight_val}")
-                # 提交成功后，重定向回首页并携带参数
-                redirect_url = reverse("web_patient:patient_home")
+                next_url = request.GET.get('next') or request.POST.get('next')
                 messages.success(request, "提交成功！")
+                if next_url:
+                    return redirect(next_url)
+                redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?spo2=true&patient_id={patient_id}")
             except Exception as e:
                 print(f"保存血氧数据失败: {e}")
@@ -300,9 +308,11 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                     measured_at=record_time  # Service 内部会处理时间格式
                 )
                 print(f"体重数据保存成功: patient_id={patient_id}, weight={weight_val}")
-                # 提交成功后，重定向回首页并携带参数
-                redirect_url = reverse("web_patient:patient_home")
+                next_url = request.GET.get('next') or request.POST.get('next')
                 messages.success(request, "提交成功！")
+                if next_url:
+                    return redirect(next_url)
+                redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?weight=true&patient_id={patient_id}")
             except Exception as e:
                 print(f"保存体重数据失败: {e}")

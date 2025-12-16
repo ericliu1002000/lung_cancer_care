@@ -213,6 +213,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         'step': 'step',
         'medication_taken': 'medication',
         'checkup_completed': 'checkup',
+        'followup': 'followup',
     }
     # 检查是否有任何成功参数
     should_fetch_data = False

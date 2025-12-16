@@ -41,6 +41,7 @@
       class="bg-white rounded-xl shadow-sm p-5"
     >
       {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.GET.next }}">
 
       <div class="bg-white rounded-xl shadow-sm p-5">
         <!-- 1. Measurement Time -->

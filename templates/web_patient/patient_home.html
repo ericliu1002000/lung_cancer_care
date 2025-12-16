@@ -713,7 +713,7 @@ function handleTaskClick(title, type) {
        if (urlA) {
             // 判断URL是否已经包含参数
             const separator = urlA.includes('?') ? '&' : '?';
-            window.location.href = urlA + separator + "patient_id=" + patientId;
+            window.location.href = urlA + separator + "patient_id=" + "12";
        } else {
             console.error("未找到对应类型的跳转链接:", type);
             // 可以在这里添加默认跳转或提示

@@ -1,64 +1,25 @@
 <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
     <div class="p-5 border-b border-slate-100 text-center">
-        <h3 class="text-lg font-bold text-slate-800">近期疼痛情况</h3>
+        <h3 class="text-lg font-bold text-slate-800">{{ pain_survey.title }}</h3>
     </div>
     
     <div class="p-5 space-y-8">
         
-        <!-- Helper for repeating options -->
-        <div class="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg mb-4">
-            <p class="font-bold mb-1">请根据以下标准选择：</p>
-            <ul class="list-disc pl-4 space-y-1">
-                <li>无疼痛</li>
-                <li>轻度：能做家务/正常活动，睡眠基本不受影响</li>
-                <li>中度：活动或睡眠受影响，需要（或增加）止痛药</li>
-                <li>重度：明显受限或无法入睡，需立即处理/尽快就医</li>
-            </ul>
-        </div>
+       
 
-        <!-- Q1 -->
+        {% for question in pain_survey.questions %}
         <div>
-            <p class="font-bold text-slate-800 mb-3">1. 近期术口/胸腔/肋间部位有无疼痛？</p>
+            <p class="font-bold text-slate-800 mb-3">{{ question.text }}</p>
             <div class="space-y-3">
-                <label class="flex items-start gap-3"><input type="radio" name="pain_chest" value="无疼痛" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">无疼痛</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_chest" value="轻度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">轻度：能做家务/正常活动，睡眠基本不受影响</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_chest" value="中度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">中度：活动或睡眠受影响，需要（或增加）止痛药</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_chest" value="重度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">重度：明显受限或无法入睡，需立即处理/尽快就医</span></label>
+                {% for option in question.options %}
+                <label class="flex items-start gap-3">
+                    <input type="radio" name="{{ question.id }}" value="{{ option.value }}" class="w-4 h-4 text-blue-600 mt-1">
+                    <span class="text-slate-700">{{ option.label }}</span>
+                </label>
+                {% endfor %}
             </div>
         </div>
-
-        <!-- Q2 -->
-        <div>
-            <p class="font-bold text-slate-800 mb-3">2. 近期肩峰/肩背/肩胛部位有无疼痛？</p>
-            <div class="space-y-3">
-                <label class="flex items-start gap-3"><input type="radio" name="pain_shoulder" value="无疼痛" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">无疼痛</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_shoulder" value="轻度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">轻度：能做家务/正常活动，睡眠基本不受影响</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_shoulder" value="中度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">中度：活动或睡眠受影响，需要（或增加）止痛药</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_shoulder" value="重度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">重度：明显受限或无法入睡，需立即处理/尽快就医</span></label>
-            </div>
-        </div>
-
-        <!-- Q3 -->
-        <div>
-            <p class="font-bold text-slate-800 mb-3">3. 近期肋骨/脊柱/骨盆/四肢部位有无疼痛？</p>
-            <div class="space-y-3">
-                <label class="flex items-start gap-3"><input type="radio" name="pain_limbs" value="无疼痛" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">无疼痛</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_limbs" value="轻度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">轻度：能做家务/正常活动，睡眠基本不受影响</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_limbs" value="中度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">中度：活动或睡眠受影响，需要（或增加）止痛药</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_limbs" value="重度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">重度：明显受限或无法入睡，需立即处理/尽快就医</span></label>
-            </div>
-        </div>
-
-        <!-- Q4 -->
-        <div>
-            <p class="font-bold text-slate-800 mb-3">4. 近期头部有无疼痛？</p>
-            <div class="space-y-3">
-                <label class="flex items-start gap-3"><input type="radio" name="pain_head" value="无疼痛" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">无疼痛</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_head" value="轻度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">轻度：能做家务/正常活动，睡眠基本不受影响</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_head" value="中度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">中度：活动或睡眠受影响，需要（或增加）止痛药</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="pain_head" value="重度" class="w-4 h-4 text-blue-600 mt-1"><span class="text-slate-700">重度：明显受限或无法入睡，需立即处理/尽快就医</span></label>
-            </div>
-        </div>
+        {% endfor %}
 
     </div>
 </div>

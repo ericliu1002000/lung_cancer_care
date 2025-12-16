@@ -1,61 +1,53 @@
 <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
     <div class="p-5 border-b border-slate-100 text-center">
-        <h3 class="text-lg font-bold text-slate-800">体能与呼吸困难评分</h3>
+        <h3 class="text-lg font-bold text-slate-800">{{ physical_survey.title }}</h3>
     </div>
     
     <div class="p-5 space-y-8">
-        
-        <!-- Score Selector -->
+        {% for question in physical_survey.questions %}
         <div>
-            <p class="text-slate-700 mb-3">请为您目前的疲惫程度打分，0分表示精力充沛，10分表示精疲力竭，完全动不了。</p>
+            {% if question.type == 'select' %}
+            <p class="text-slate-700 mb-3 font-medium">{{ question.text }}</p>
+            
+            <!-- Custom Select UI (Ant Design Mobile Style) -->
             <div class="relative">
-                <select name="fatigue_score" class="w-full p-3 pr-10 bg-slate-50 border border-slate-200 rounded-lg appearance-none text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="" disabled selected>请选择您的分值</option>
-                    <option value="0">0 - 精力充沛</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                    <option value="6">6</option>
-                    <option value="7">7</option>
-                    <option value="8">8</option>
-                    <option value="9">9</option>
-                    <option value="10">10 - 精疲力竭</option>
+                <select name="{{ question.id }}" id="{{ question.id }}" 
+                    class="w-full h-12 pl-3 pr-10 bg-white border border-slate-200 rounded-lg appearance-none text-slate-800 text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer"
+                    onchange="this.classList.toggle('text-slate-400', this.value === ''); this.classList.toggle('text-slate-800', this.value !== '')">
+                    <option value="" disabled selected class="text-slate-400">{{ question.placeholder }}</option>
+                    {% for option in question.options %}
+                    <option value="{{ option.value }}" class="text-slate-800">{{ option.label }}</option>
+                    {% endfor %}
                 </select>
-                <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-500">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                
+                <!-- Arrow Icon -->
+                <div class="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                    </svg>
                 </div>
             </div>
-        </div>
+            <!-- Helper text if needed -->
+            <!-- <p class="text-xs text-slate-400 mt-2 ml-1">点击选择分值</p> -->
 
-        <!-- Q1 -->
-        <div>
-            <p class="font-bold text-slate-800 mb-3">您近期日常活动能力如何？</p>
+            {% else %}
+            <p class="font-bold text-slate-800 mb-3">{{ question.text }}</p>
             <div class="space-y-3">
-                <label class="flex items-start gap-3"><input type="radio" name="activity_level" value="完全正常" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">完全正常，没有任何症状，和生病前一样能进行各种活动（包括跑步、提重物等）。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="activity_level" value="轻微不适" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">有轻微症状（如咳嗽、轻微疼痛），不能做剧烈运动，但可以进行轻体力工作（如简单的家务、办公室工作）。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="activity_level" value="生活能自理" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">生活能自理（吃饭、穿衣、洗澡），白天能起床走动，但无法进行工作。白天卧床时间少于一半。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="activity_level" value="生活部分自理" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">生活只能部分自理，大部分时间需要卧床或坐在椅子上。白天卧床时间超过一半。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="activity_level" value="完全不能自理" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">完全不能自理，需要别人完全照顾，全天卧床或坐在椅子上。</span></label>
+                {% for option in question.options %}
+                <label class="flex items-start gap-3 p-3 rounded-lg border border-transparent hover:bg-slate-50 active:bg-blue-50 transition-colors cursor-pointer">
+                    <div class="flex items-center h-5">
+                        <input type="radio" name="{{ question.id }}" value="{{ option.value }}" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mt-0.5">
+                    </div>
+                    <span class="text-slate-700 text-sm leading-5">{{ option.label }}</span>
+                </label>
+                {% endfor %}
             </div>
+            {% endif %}
         </div>
-
-        <!-- Q2 -->
-        <div>
-            <p class="font-bold text-slate-800 mb-3">您在活动时感到气短/呼吸困难的程度？</p>
-            <div class="space-y-3">
-                <label class="flex items-start gap-3"><input type="radio" name="breath_difficulty" value="剧烈运动气喘" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">我仅在剧烈运动（如快跑、爬高层楼梯）时才感到气喘。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="breath_difficulty" value="平地快走气喘" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">我在平地快走或上小斜坡时会感到气喘。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="breath_difficulty" value="平地慢走气喘" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">我在平地行走时，因为气喘必须比同龄人走得慢，或者自己走几分钟就得停下来喘口气。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="breath_difficulty" value="走100米气喘" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">我在平地走约100米，或才几分钟，就不得不停下来喘口气。</span></label>
-                <label class="flex items-start gap-3"><input type="radio" name="breath_difficulty" value="严重气喘" class="w-4 h-4 text-blue-600 mt-1 shrink-0"><span class="text-slate-700">我因为气喘太严重而无法离开房间，或者穿脱衣服都会气喘。</span></label>
-            </div>
-        </div>
-
+        {% endfor %}
     </div>
 </div>
 
-<button type="button" onclick="nextStep(6)" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
-    下一题
+<button type="button" onclick="submitSurvey()" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
+    提交问卷
 </button>

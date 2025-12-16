@@ -23,6 +23,7 @@
         <!-- Main Form Card -->
         <form method="POST" action="{% url 'web_patient:record_weight' %}?patient_id={{ patient_id }}" id="weight-form" class="bg-white rounded-xl shadow-sm p-5">
             {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.GET.next }}">
             
             <!-- 1. Measurement Time -->
             <div class="mb-5">
