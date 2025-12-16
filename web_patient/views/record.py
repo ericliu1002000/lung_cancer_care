@@ -598,7 +598,6 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     # 分页参数
     page = int(request.GET.get('page', 1))
     limit = int(request.GET.get('limit', 30))
-    offset = (page - 1) * limit
 
     # 调用 Service 获取数据
     records = []
@@ -622,54 +621,54 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
             db_metric_type = metric_type_map.get(record_type)
             
             if db_metric_type:
-                data = HealthMetricService.query_metrics_by_type(
+                page_obj = HealthMetricService.query_metrics_by_type(
                     patient_id=int(patient_id),
                     metric_type=db_metric_type,
-                    limit=limit,
+                    page=page,
+                    page_size=limit,
                     start_date=start_date,
                     end_date=end_date
                 )
-                print(f"列表数据==={data}")
 
-                total_count = data.get('total', 0)
-                raw_list = data.get('list', [])
-                has_more = (offset + len(raw_list)) < total_count
+                total_count = page_obj.paginator.count
+                raw_list = page_obj.object_list
+                has_more = page < page_obj.paginator.num_pages
                 
                 weekday_map = {0: "星期一", 1: "星期二", 2: "星期三", 3: "星期四", 4: "星期五", 5: "星期六", 6: "星期日"}
                 
-                for item in raw_list:
+                for metric in raw_list:
                     # measured_at 是带时区的 datetime
-                    dt = item['measured_at'].astimezone(timezone.get_current_timezone())
+                    dt = metric.measured_at.astimezone(timezone.get_current_timezone())
                     date_str = dt.strftime("%Y-%m-%d")
                     time_str = dt.strftime("%H:%M")
                     
                     # 构造 data_fields
                     data_fields = []
                     if record_type == 'temperature':
-                        data_fields.append({"label": "体温", "value": item['value_display'], "is_large": True, "key": "temperature"})
+                        data_fields.append({"label": "体温", "value": metric.display_value, "is_large": True, "key": "temperature"})
                     elif record_type == 'weight':
-                        data_fields.append({"label": "体重", "value": item['value_display'], "is_large": True, "key": "weight"})
+                        data_fields.append({"label": "体重", "value": metric.display_value, "is_large": True, "key": "weight"})
                     elif record_type == 'spo2':
-                        data_fields.append({"label": "血氧", "value": item['value_display'], "is_large": True, "key": "spo2"})
+                        data_fields.append({"label": "血氧", "value": metric.display_value, "is_large": True, "key": "spo2"})
                     elif record_type == 'bp':
                         data_fields = [
-                            {"label": "收缩压", "value": str(int(item['value_main'])), "is_large": True, "key": "ssy"},
-                            {"label": "舒张压", "value": str(int(item['value_sub'] or 0)), "is_large": True, "key": "szy"},
+                            {"label": "收缩压", "value": str(int(metric.value_main)), "is_large": True, "key": "ssy"},
+                            {"label": "舒张压", "value": str(int(metric.value_sub or 0)), "is_large": True, "key": "szy"},
                             # {"label": "心率", "value": "80", "is_large": True, "key": "heart"} # 暂无心率关联
                         ]
                     # ... 其他类型处理
                     else:
-                         data_fields.append({"label": title, "value": item['value_display'], "is_large": True, "key": "common"})
+                         data_fields.append({"label": title, "value": metric.display_value, "is_large": True, "key": "common"})
 
                     records.append({
-                        "id": item['id'],
+                        "id": metric.id,
                         "date": date_str,
                         "weekday": weekday_map[dt.weekday()],
                         "time": time_str,
-                        "source": item['source'],
-                        "source_display": "手动填写" if item['source'] == 'manual' else "设备上传",
-                        "is_manual": item['source'] == 'manual',
-                        "can_edit": item['source'] == 'manual' and dt.date() == datetime.now().date(),
+                        "source": metric.source,
+                        "source_display": "手动填写" if metric.source == 'manual' else "设备上传",
+                        "is_manual": metric.source == 'manual',
+                        "can_edit": metric.source == 'manual' and dt.date() == datetime.now().date(),
                         "data": data_fields
                     })
                     

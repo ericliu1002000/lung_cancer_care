@@ -100,6 +100,7 @@ class HealthMetricServiceTest(TestCase):
                 mock_metric.value_sub = Decimal("78")
                 mock_metric.measured_at = timezone.now()
                 mock_metric.source = MetricSource.DEVICE
+                mock_metric.display_value = "118/78"
                 mock_qs.order_by.return_value.first.return_value = mock_metric
             elif m_type == MetricType.SPUTUM_COLOR:
                 # B. 痰色 (枚举型) - 3: 黄绿色/脓性
@@ -108,6 +109,7 @@ class HealthMetricServiceTest(TestCase):
                 mock_metric.value_sub = None
                 mock_metric.measured_at = timezone.now()
                 mock_metric.source = MetricSource.MANUAL
+                mock_metric.display_value = "黄绿色/脓性（提示细菌感染，需警惕）"
                 mock_qs.order_by.return_value.first.return_value = mock_metric
             elif m_type == MetricType.WEIGHT:
                 # C. 体重 (数值型，带单位)
@@ -116,6 +118,7 @@ class HealthMetricServiceTest(TestCase):
                 mock_metric.value_sub = None
                 mock_metric.measured_at = timezone.now()
                 mock_metric.source = MetricSource.DEVICE
+                mock_metric.display_value = "65.5 kg"
                 mock_qs.order_by.return_value.first.return_value = mock_metric
             else:
                 # 其他类型无数据
@@ -165,22 +168,20 @@ class HealthMetricServiceTest(TestCase):
         """
         测试查询历史数据列表 (query_metrics_by_type)。
         验证：
-        1. 返回结构是否包含 total, count, list。
-        2. limit 限制逻辑 (最大 100)。
-        3. 数据排序和切片。
+        1. 返回的对象具备分页所需属性。
+        2. page_size 限制逻辑 (最大 100)。
+        3. 数据排序和分页。
         """
-        # 模拟 QuerySet
+        # 模拟 QuerySet 及其 order_by 返回值
         mock_qs = MagicMock()
         mock_filter.return_value = mock_qs
 
-        # 1. 模拟 count() 返回总数 150
-        mock_qs.count.return_value = 150
-
-        # 2. 模拟 order_by().[:limit]
         mock_ordered_qs = MagicMock()
         mock_qs.order_by.return_value = mock_ordered_qs
 
-        # 模拟切片返回 30 条数据
+        # 模拟 Paginator.page 返回的“分页对象”
+        mock_page = MagicMock()
+
         mock_metrics_list = []
         for i in range(30):
             m = MagicMock()
@@ -192,25 +193,39 @@ class HealthMetricServiceTest(TestCase):
             m.source = MetricSource.DEVICE
             mock_metrics_list.append(m)
 
-        # 模拟切片操作 __getitem__
-        mock_ordered_qs.__getitem__.return_value = mock_metrics_list
+        mock_page.object_list = mock_metrics_list
+        mock_page.number = 1
+        mock_page_paginator = MagicMock()
+        mock_page_paginator.count = 150
+        mock_page_paginator.num_pages = 2
+        mock_page.paginator = mock_page_paginator
 
-        # --- 调用测试 ---
-        # 请求 200 条，预期被限制为 100
-        result = HealthMetricService.query_metrics_by_type(
-            self.patient_id, MetricType.WEIGHT, limit=200
-        )
+        # 为了不依赖真实 Paginator，这里直接打补丁 Paginator，使其返回我们的 mock_page
+        with patch("health_data.services.health_metric.Paginator") as mock_paginator_cls:
+            mock_paginator = MagicMock()
+            mock_paginator.page.return_value = mock_page
+            mock_paginator_cls.return_value = mock_paginator
+
+            # --- 调用测试 ---
+            # 请求 page_size=200，预期被限制为 100
+            result_page = HealthMetricService.query_metrics_by_type(
+                self.patient_id,
+                MetricType.WEIGHT,
+                page=1,
+                page_size=200,
+            )
 
         # --- 验证 ---
-        # 1. 验证返回结构
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result["total"], 150)
-        self.assertEqual(result["count"], 30)
-        self.assertEqual(len(result["list"]), 30)
+        # 1. 返回的对象就是我们构造的 mock_page，且具备分页属性
+        self.assertIs(result_page, mock_page)
+        self.assertEqual(result_page.object_list, mock_metrics_list)
+        self.assertEqual(result_page.paginator.count, 150)
 
-        # 2. 验证 limit 限制
-        # 检查切片参数是否为 slice(None, 100, None) 即 [:100]
-        mock_ordered_qs.__getitem__.assert_called_with(slice(None, 100, None))
+        # 2. 验证 page_size 限制：Paginator 应当用 100 作为 per_page
+        mock_paginator_cls.assert_called_once()
+        args, kwargs = mock_paginator_cls.call_args
+        # args[0] 是 queryset，args[1] 是 per_page
+        self.assertEqual(args[1], 100)
 
         # 3. 验证 filter 参数
         mock_filter.assert_called_with(

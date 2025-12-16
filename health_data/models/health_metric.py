@@ -53,6 +53,79 @@ class HealthMetric(models.Model):
         verbose_name = "客观指标"
         verbose_name_plural = "客观指标"
 
+    @property
+    def display_value(self) -> str:
+        """
+        友好展示用的指标值字符串。
+
+        【设计目的】
+        - 将「某条体征记录如何展示给用户」的逻辑收敛在模型自身，
+          避免在 Service / View 中到处拼文案。
+        - 对同一个 HealthMetric 实例，在模板、Serializer、管理后台等
+          所有地方都可以统一使用 `metric.display_value` 获取展示文案。
+
+        【返回规则（示例）】
+        - 评分/枚举型指标（如痰色、疼痛等级、ECOG 体能状态）：
+          使用 `METRIC_SCALES` 中配置的说明文本，例如：
+            - 体能评分 2 -> "生活自理，但不能工作（日间卧床时间 < 50%）"
+            - 痰色 3     -> "黄绿色/脓性（提示细菌感染，需警惕）"
+        - 数值型指标：
+          - 血压 (blood_pressure)： "收缩压/舒张压"，如 "120/80"
+          - 体重 (weight)：         "XX kg"，如 "68.3 kg"
+          - 体温 (body_temperature)："XX °C"，如 "36.5 °C"
+          - 血氧 (blood_oxygen)：   "XX%"，如 "98%"
+          - 心率 (heart_rate)：     "XX bpm"，如 "80 bpm"
+          - 步数 (steps)：          "XXXX 步"，如 "12345 步"
+        - 其他未特殊处理的指标：直接返回主值的字符串形式 `str(value_main)`。
+
+        【使用示例】
+        >>> metric = HealthMetric.objects.get(id=1)
+        >>> metric.metric_type
+        'blood_pressure'
+        >>> metric.value_main, metric.value_sub
+        (Decimal('120.00'), Decimal('80.00'))
+        >>> metric.display_value
+        '120/80'
+        """
+        val_main = self.value_main
+        val_sub = self.value_sub
+        m_type = self.metric_type
+
+        if val_main is None:
+            return ""
+
+        # 1. 优先处理枚举/评分映射 (如痰色、疼痛、ECOG)
+        if m_type in METRIC_SCALES:
+            try:
+                int_val = int(val_main)
+                return METRIC_SCALES[m_type].get(int_val, str(int_val))
+            except (ValueError, TypeError):
+                return str(val_main)
+
+        # 2. 处理特定格式的数值指标
+        if m_type == MetricType.BLOOD_PRESSURE:
+            sbp = int(val_main)
+            dbp = int(val_sub) if val_sub is not None else "?"
+            return f"{sbp}/{dbp}"
+
+        if m_type == MetricType.WEIGHT:
+            return f"{float(val_main):g} kg"
+
+        if m_type == MetricType.BODY_TEMPERATURE:
+            return f"{float(val_main):g} °C"
+
+        if m_type == MetricType.BLOOD_OXYGEN:
+            return f"{int(val_main)}%"
+
+        if m_type == MetricType.HEART_RATE:
+            return f"{int(val_main)} bpm"
+
+        if m_type == MetricType.STEPS:
+            return f"{int(val_main)} 步"
+
+        # 3. 默认情况
+        return str(val_main)
+
 
 # 指标分值描述映射配置
 METRIC_SCALES = {

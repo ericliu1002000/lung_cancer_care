@@ -20,6 +20,7 @@ from typing import Optional
 
 from django.apps import apps
 from django.utils import timezone
+from django.core.paginator import Paginator, Page
 
 from business_support.models import Device
 from health_data.models import METRIC_SCALES, HealthMetric, MetricSource, MetricType
@@ -307,61 +308,78 @@ class HealthMetricService:
         cls,
         patient_id: int,
         metric_type: str,
-        limit: int = 30,
         *,
+        page: int = 1,
+        page_size: int = 10,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         sort_order: str = "desc",
-    ) -> dict:
+    ) -> Page:
         """
-        查询指定患者、指定类型的历史健康指标数据。
+        分页查询指定患者、指定类型的健康指标记录（返回 Page[HealthMetric]）。
 
         【功能说明】
-        获取指定患者、指定指标类型的历史数据列表。
-        数据按时间倒序排列（最新的在前面）。
-        常用于前端绘制趋势图（如血压变化曲线）或展示历史记录列表。
+        - 按条件查询 HealthMetric 记录，并按时间排序后进行分页。
+        - 返回 Django 的 Page 对象，page.object_list 中是当前页的 HealthMetric 实例列表。
+        - 展示层可以使用 `metric.display_value` 获取前端友好的展示文案。
 
-        【参数】
-        :param patient_id: int
-            患者 ID。
-        :param metric_type: str
-            指标类型枚举值 (如 'blood_pressure', 'weight')。
-        :param limit: int (默认 30)
-            返回记录的最大条数。
-            注意：为了性能考虑，后端强制限制最大返回 100 条。即使传入 > 100，也只返回 100 条。
-        :param start_date: datetime | None
-            开始时间（包含），前闭。
-        :param end_date: datetime | None
-            结束时间（不包含），后开。
-        :param sort_order: str (默认 "desc")
-            排序方式。只接受 "asc" 或 "desc"。按 measured_at 字段排序。
+        【参数说明】
+        :param patient_id: 患者 ID。
+        :param metric_type: 指标类型枚举值（如 MetricType.BLOOD_PRESSURE）。
+        :param page: 页码，从 1 开始，默认 1。
+        :param page_size: 每页数量，默认 10；为防止单页过大，最大限制为 100。
+        :param start_date: 起始时间（包含），用于按测量时间过滤。
+        :param end_date: 结束时间（不包含），用于按测量时间过滤。
+        :param sort_order: 排序方式，"asc" 或 "desc"，按 measured_at 字段排序。
 
         【返回值】
-        返回一个字典，包含总数、当前返回数量和数据列表。
-        示例：
-        {
-            "total": 150,      # 该类型指标的总记录数
-            "count": 30,       # 本次返回的记录数
-            "list": [
-                {
-                    "id": 101,
-                    "value_main": 120.00,
-                    "value_sub": 80.00,
-                    "value_display": "120/80",
-                    "measured_at": datetime(...),
-                    "source": "device"
-                },
-                ...
-            ]
-        }
-        """
-        # 1. 强制限制最大返回条数，防止数据量过大
-        real_limit = min(limit, 100)
+        :return: Django Page 对象：
+            - page.object_list: 当前页的 HealthMetric 实例列表。
+            - page.paginator.count: 总记录数。
+            - page.paginator.num_pages: 总页数。
+            - page.number: 当前页码。
 
+        【使用示例】
+        在 View / Serializer 中：
+
+        >>> page = HealthMetricService.query_metrics_by_type(
+        ...     patient_id=1,
+        ...     metric_type=MetricType.BLOOD_PRESSURE,
+        ...     page=1,
+        ...     page_size=10,
+        ... )
+        >>> total = page.paginator.count       # 总记录数
+        >>> current_page = page.number         # 当前页码
+        >>> items = []
+        >>> for metric in page.object_list:
+        ...     items.append({
+        ...         "id": metric.id,
+        ...         "type": metric.metric_type,
+        ...         "value_main": metric.value_main,
+        ...         "value_sub": metric.value_sub,
+        ...         "value_display": metric.display_value,  # 使用 model 的展示属性
+        ...         "measured_at": metric.measured_at,
+        ...         "source": metric.source,
+        ...     })
+        >>>
+        >>> response_data = {
+        ...     "total": total,
+        ...     "page": current_page,
+        ...     "page_size": page.paginator.per_page,
+        ...     "results": items,
+        ... }
+
+        通过这种方式，Service 层只负责提供分页后的对象列表，
+        JSON 结构和字段选择由 View/Serializer 决定。
+        """
+        # 1. 校验排序参数
         if sort_order not in ("asc", "desc"):
             raise ValueError('sort_order must be "asc" or "desc"')
 
-        # 2. 查询数据库
+        # 2. 每页数量上限，防止单页数据量过大
+        page_size = min(page_size, 100)
+
+        # 3. 查询数据库
         qs = HealthMetric.objects.filter(
             patient_id=patient_id, metric_type=metric_type
         )
@@ -371,34 +389,14 @@ class HealthMetricService:
         if end_date:
             qs = qs.filter(measured_at__lt=end_date)
 
-        # 获取总数
-        total_count = qs.count()
-
-        # 获取分页数据
-        # 使用 select_related/values 优化查询，或者直接取对象
-        # 这里为了复用 _format_display_value，直接取对象
+        # 排序
         order_field = "measured_at" if sort_order == "asc" else "-measured_at"
-        metrics = qs.order_by(order_field)[:real_limit]
+        qs = qs.order_by(order_field)
 
-        # 3. 组装返回数据
-        data_list = []
-        for metric in metrics:
-            data_list.append(
-                {
-                    "id": metric.id,
-                    "value_main": metric.value_main,
-                    "value_sub": metric.value_sub,
-                    "value_display": cls._format_display_value(metric),
-                    "measured_at": metric.measured_at,
-                    "source": metric.source,
-                }
-            )
-
-        return {
-            "total": total_count,
-            "count": len(data_list),
-            "list": data_list,
-        }
+        # 4. 使用 Django Paginator 分页
+        paginator = Paginator(qs, page_size)
+        page_obj = paginator.page(page)
+        return page_obj
 
     # ============
     # 查询用户上一条数据记录
@@ -649,35 +647,5 @@ class HealthMetricService:
             return ""
 
         # 1. 优先处理枚举/评分映射 (如痰色、疼痛、ECOG)
-        if m_type in METRIC_SCALES:
-            try:
-                int_val = int(val_main)
-                # 获取描述文案，如果未定义则回退到数值
-                return METRIC_SCALES[m_type].get(int_val, str(int_val))
-            except (ValueError, TypeError):
-                return str(val_main)
-
-        # 2. 处理特定格式的数值指标
-        if m_type == MetricType.BLOOD_PRESSURE:
-            # 格式: 120/80
-            sbp = int(val_main)
-            dbp = int(val_sub) if val_sub is not None else "?"
-            return f"{sbp}/{dbp}"
-
-        if m_type == MetricType.WEIGHT:
-            return f"{float(val_main):g} kg"  # :g 去除多余的0
-
-        if m_type == MetricType.BODY_TEMPERATURE:
-            return f"{float(val_main):g} °C"
-
-        if m_type == MetricType.BLOOD_OXYGEN:
-            return f"{int(val_main)}%"
-
-        if m_type == MetricType.HEART_RATE:
-            return f"{int(val_main)} bpm"
-
-        if m_type == MetricType.STEPS:
-            return f"{int(val_main)} 步"
-
-        # 3. 默认情况
-        return str(val_main)
+        # 交由 HealthMetric 实例自身的 display_value 属性处理
+        return metric.display_value

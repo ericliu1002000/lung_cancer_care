@@ -6,11 +6,49 @@ from datetime import date, timedelta
 from typing import Optional
 
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
 
 from core.models import TreatmentCycle
 from core.models import choices
 from users.models import PatientProfile
+
+# 根据 patient 来查询当前所有疗程。 按照开始时间倒序排列，并在此处直接做分页。
+
+
+def get_treatment_cycles(
+    patient: PatientProfile,
+    page: int = 1,
+    page_size: int = 10,
+):
+    """
+    【功能说明】
+    - 根据指定患者查询其所有治疗疗程；
+    - 按疗程开始日期倒序排列（最新的在前）；
+    - 在 service 层直接做分页，默认第一页，每页 10 条。
+
+    【参数说明】
+    - patient: 患者档案对象 PatientProfile。
+    - page: 页码，从 1 开始，默认 1。
+    - page_size: 每页条数，默认 10。
+
+    【返回参数说明】
+    - 返回一个 Paginator Page 对象（Page[TreatmentCycle]），包含本页数据及分页信息。
+    
+    【使用示例】
+    >>> from core.service.treatment_cycle import get_treatment_cycles
+    >>> page = get_treatment_cycles(patient)  # 默认第一页，每页 10 条
+    >>> for cycle in page.object_list:
+    ...     print(cycle.name, cycle.start_date)
+    """
+
+    qs = TreatmentCycle.objects.filter(patient=patient).order_by("-start_date")
+    paginator = Paginator(qs, page_size)
+    try:
+        page_number = int(page)
+    except (TypeError, ValueError):
+        page_number = 1
+    return paginator.get_page(page_number)
 
 
 @transaction.atomic
@@ -115,4 +153,3 @@ def get_active_treatment_cycle(patient: PatientProfile) -> Optional[TreatmentCyc
     ).order_by("-start_date")
 
     return qs.first()
-
