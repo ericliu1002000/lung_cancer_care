@@ -8,6 +8,11 @@ def daily_survey(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】今日随访问卷 `/p/followup/daily/`
     """
+    
+    patient = request.patient
+    
+    patient_id = patient.id or None
+    
     if request.method == "POST":
         # Handle form submission here
         pass
@@ -393,6 +398,7 @@ def daily_survey(request: HttpRequest) -> HttpResponse:
         "appetite_survey": appetite_survey_data,
         "emotion_survey": emotion_survey_data,
         "physical_survey": physical_survey_data,
+        "patient_id": patient_id,
     }
 
     return render(request, "web_patient/followup/daily_survey.html", context)

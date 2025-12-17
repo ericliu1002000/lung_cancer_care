@@ -1,7 +1,10 @@
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
 from users.models import CustomUser
+from users.decorators import auto_wechat_login, check_patient
 
+@auto_wechat_login
+@check_patient
 def management_plan(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】管理计划页面 `/p/plan/`
@@ -12,11 +15,9 @@ def management_plan(request: HttpRequest) -> HttpResponse:
     4. 支持接收 openid 参数，用于标识当前用户（虽然实际业务中应从 request.user 获取，此处按需求兼容 URL 传参）。
     """
     
-    # 获取 openid 参数
-    openid = request.GET.get('openid')
-    user = None
-    if openid:
-        user = CustomUser.objects.filter(wx_openid=openid).first()
+    patient = request.patient
+    
+    patient_id = patient.id or None
     
     # 1. 医嘱用药计划
     medication_plan = [
@@ -62,15 +63,16 @@ def management_plan(request: HttpRequest) -> HttpResponse:
     ]
 
     context = {
-        "user": user,
         "medication_plan": medication_plan,
         "monitoring_plan": monitoring_plan,
         "treatment_courses": treatment_courses,
-        "openid": openid
+        "patient_id": patient_id
     }
     
     return render(request, "web_patient/management_plan.html", context)
 
+@auto_wechat_login
+@check_patient
 def my_medication(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】我的用药页面 `/p/medication/`
@@ -79,11 +81,10 @@ def my_medication(request: HttpRequest) -> HttpResponse:
     2. 展示历史用药列表。
     3. 支持空状态展示。
     """
+    patient = request.patient
     
-    openid = request.GET.get('openid')
-    user = None
-    if openid:
-        user = CustomUser.objects.filter(wx_openid=openid).first()
+    patient_id = patient.id or None
+
 
     # 模拟数据：当前用药（第三疗程）
     current_medications = [
@@ -124,8 +125,7 @@ def my_medication(request: HttpRequest) -> HttpResponse:
     ]
 
     context = {
-        "user": user,
-        "openid": openid,
+        "patient_id": patient_id,
         "current_medications": current_medications,
         "history_medications": history_medications
     }

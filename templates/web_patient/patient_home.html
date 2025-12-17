@@ -5,9 +5,7 @@
     class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-20 px-5 relative rounded-b-[2rem] shadow-md"
   >
     <!-- Header Content -->
-    <!-- 如果用户已登录，显示用户信息和服务天数；如果未登录，显示注册/家属入口按钮 -->
     <div class="relative z-10 pt-4 flex items-center justify-between mb-2">
-      <!-- Logged In State: User Info & Service Days -->
       <div class="flex items-center gap-3 w-full justify-between">
         <div class="flex items-center gap-3">
           <div class="relative">
@@ -28,6 +26,7 @@
               {{patient.name}}
             </h1>
             <div class="flex items-center mt-1.5">
+            <div class="flex items-center mt-1.5">
               <span
                 class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
               >
@@ -42,6 +41,15 @@
                 </svg>
                 已守护 {{ service_days }} 天
               </span>
+            </div>
+              <div class="flex items-center mt-1.5">
+              <span
+                class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
+                >
+               <svg t="1765982215869" class="icon w-3 h-3" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4514" width="32" height="32"><path d="M896.287817 458.825143s-144.713143 30.829714-184.758857 41.581714c-39.68 10.788571-88.868571-67.218286-102.034286-70.034286-8.448 24.466286-35.730286 96.219429-52.004571 144.932572 25.234286-0.768 156.050286 38.875429 160.804571 61.988571 5.449143 23.369143 66.56 276.516571 66.56 276.516572s25.892571 54.418286-47.652571 74.313143c-73.618286 19.858286-76.909714-40.667429-76.909714-40.667429s-51.382857-194.194286-55.954286-205.897143c-4.278857-11.739429-100.096-31.451429-122.038857-25.526857-22.089143 6.034286-69.449143 171.776-116.187429 183.04-60.050286 14.555429-235.885714-92.233143-235.885714-92.233143s-69.485714-17.188571-55.296-82.358857c14.445714-64.731429 81.883429-47.030857 81.883428-47.030857s124.525714 68.461714 138.898286 60.416c14.518857-8.155429 22.784-55.369143 44.032-101.156572 0.877714-17.261714 49.737143-154.514286 49.737143-154.514285s27.062857-91.392 16.310857-97.097143c-14.848-7.862857-30.354286 8.923429-38.509714 22.893714-8.155429 13.860571-40.448 70.985143-94.464 145.371429-48.018286 66.267429-133.668571 4.754286-98.084572-57.124572 29.622857-51.492571 108.361143-198.729143 165.010286-226.486857 57.051429-27.904 155.355429-43.446857 239.067429-23.844571 84.114286 19.2 143.067429 114.468571 159.561143 127.049143 16.091429 12.141714 129.389714-24.502857 129.389714-24.502858s64.512-22.418286 80.530286 36.461715c16.091429 59.245714-52.004571 73.874286-52.004572 73.874285zM631.291246 216.137143a110.006857 110.006857 0 0 1-135.68-77.129143A110.299429 110.299429 0 0 1 573.764389 3.913143c59.245714-16.018286 119.917714 18.724571 135.68 77.165714 16.018286 58.806857-18.980571 118.930286-78.153143 135.058286z" fill="#35E2B0" p-id="4515"></path></svg>
+                 今日步数：{{step_count}}
+              </span>
+            </div>
             </div>
           </div>
         </div>
@@ -100,8 +108,13 @@
         <div>
           <div class="flex items-center gap-2">
             <h2 class="text-lg font-bold text-slate-900">问题咨询</h2>
-            {% if is_member %}
+             {% if patient.is_member and patient.membership_expire_date %}
             <span
+              class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-bold border border-red-100"
+              >VIP</span
+            >
+             {% else %}
+             <span
               class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-bold border border-red-100"
               >会员开通此功能</span
             >
@@ -171,7 +184,7 @@
             />
           </svg>
         </div>
-        <span class="text-sm font-bold text-white tracking-wide">当前用药</span>
+        <span class="text-sm font-bold text-white tracking-wide">我的用药</span>
       </a>
 
       <!-- Plan -->
@@ -570,16 +583,8 @@
               <p class="text-sm text-slate-500 mt-0.5">{{ plan.subtitle }}</p>
             </div>
           </div>
-          {% if plan.status != 'completed' %}
-          <!-- 核心修改：直接使用后端生成的auth_url跳转 window.location.href='{{ plan.auth_url }}'-->
-          {% comment %}
-          <button
-            onclick="handleTaskClick(plan.title,plan.type)"
-            class="bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap"
-          >
-            {{ plan.action_text }}
-          </button>
-          {% endcomment %}
+          {% if plan.status != 'completed' and plan.action_text %}
+          
 
           <button
             onclick="handleTaskClick('{{ plan.title }}', '{{ plan.type }}')"
@@ -713,7 +718,7 @@ function handleTaskClick(title, type) {
        if (urlA) {
             // 判断URL是否已经包含参数
             const separator = urlA.includes('?') ? '&' : '?';
-            window.location.href = urlA + separator + "patient_id=" + "12";
+            window.location.href = urlA + separator + "patient_id=" + patientId;
        } else {
             console.error("未找到对应类型的跳转链接:", type);
             // 可以在这里添加默认跳转或提示
