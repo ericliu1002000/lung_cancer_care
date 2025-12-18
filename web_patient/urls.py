@@ -50,4 +50,7 @@ urlpatterns = [
     path("studio/", views.my_studio, name="my_studio"),
     path("feedback/", views.feedback_view, name="feedback"),
     path("docs/<str:key>/", views.document_detail, name="document_detail"),
+    # API endpoints
+    path("api/health/metric/delete/", views.delete_health_metric, name="delete_health_metric"),
+    path("api/health/metric/update/", views.update_health_metric, name="update_health_metric"),
 ]

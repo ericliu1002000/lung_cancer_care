@@ -497,10 +497,10 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                 "bp": MetricType.BLOOD_PRESSURE,
                 "spo2": MetricType.BLOOD_OXYGEN,
                 "weight": MetricType.WEIGHT,
-                "breath": MetricType.DYSPNEA, # 假设呼吸对应 dyspnea
-                "sputum": MetricType.SPUTUM_COLOR, # 假设痰色对应 sputum_color
+                # "breath": MetricType.DYSPNEA, # 假设呼吸对应 dyspnea
+                # "sputum": MetricType.SPUTUM_COLOR, # 假设痰色对应 sputum_color
                 "step": MetricType.STEPS,
-                "pain": MetricType.PAIN_INCISION, # 暂定
+                # "pain": MetricType.PAIN_INCISION, # 暂定
                 "heart": MetricType.HEART_RATE,
             }
             
@@ -520,7 +520,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                 raw_list = page_obj.object_list
                 has_more = page < page_obj.paginator.num_pages
                 weekday_map = {0: "星期一", 1: "星期二", 2: "星期三", 3: "星期四", 4: "星期五", 5: "星期六", 6: "星期日"}
-                
+                print(f"==提交后拉取健康指标数据=={raw_list}")
                 for metric in raw_list:
                     # measured_at 是带时区的 datetime
                     dt = metric.measured_at.astimezone(timezone.get_current_timezone())

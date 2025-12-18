@@ -17,6 +17,7 @@ from .home import patient_home
 from .plan import management_plan, my_medication
 from .record import record_temperature, record_bp, record_spo2, record_weight, record_breath, record_sputum, record_pain, health_records,record_checkup, health_record_detail
 from .followup import daily_survey
+from .api import delete_health_metric, update_health_metric
 
 __all__ = [
     "bind_landing",
@@ -51,5 +52,7 @@ __all__ = [
     "health_records",
     "record_checkup",
     "health_record_detail",
-    "daily_survey"
+    "daily_survey",
+    "delete_health_metric",
+    "update_health_metric"
 ]
