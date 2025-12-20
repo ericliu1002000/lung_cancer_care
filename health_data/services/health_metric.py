@@ -234,11 +234,20 @@ class HealthMetricService:
             return
 
         date = context.measured_at.date()
+        
+        # BUG FIX: 使用精确的 timezone-aware 日期范围替代 __date 查询
+        # 避免因北京时间与 UTC 时间的日期差异导致查询失败
+        start_of_day = context.measured_at.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        end_of_day = start_of_day + datetime.timedelta(days=1)
+
         metric = (
             HealthMetric.objects.filter(
                 patient_id=context.patient_id,
                 metric_type=MetricType.STEPS,
-                measured_at__date=date,
+                measured_at__gte=start_of_day,
+                measured_at__lt=end_of_day,
             )
             .order_by("-measured_at")
             .first()

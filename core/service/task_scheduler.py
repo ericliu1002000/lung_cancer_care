@@ -21,7 +21,7 @@ from core.models import choices, DailyTask, PlanItem, TreatmentCycle
 
 
 @transaction.atomic
-def generate_daily_tasks_for_date(task_date: date) -> int:
+def generate_daily_tasks_for_date(task_date: date = date.today()) -> int:
     """为指定日期生成每日任务。
 
     【业务说明】
