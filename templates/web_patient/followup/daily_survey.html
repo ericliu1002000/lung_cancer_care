@@ -7,161 +7,278 @@
         完成问卷后将会同步给您的医生
     </div>
 
-    <!-- Survey Form -->
-    <form id="survey-form" class="p-4" onsubmit="return false;">
+    <!-- Loading Modal -->
+    <div id="submit-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 w-80 text-center">
+            <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2">正在提交问卷</h3>
+            <p id="submit-status-text" class="text-slate-600 text-sm">正在处理...</p>
+        </div>
+    </div>
+
+    <!-- Finish Modal/View (Hidden by default) -->
+    <div id="finish-view" class="hidden">
+        <div class="bg-white rounded-xl p-8 shadow-sm  flex flex-col justify-center items-center">
+
+            <svg t="1766207830792" class="icon w-25 h-25" viewBox="0 0 1656 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="7278" width="200" height="200"><path d="M936.585366 862.765789H46.179902a45.796943 45.796943 0 0 0-45.855219 45.855219 45.796943 45.796943 0 0 0 45.855219 45.846894H936.585366a45.796943 45.796943 0 0 0 45.855219-45.846894 45.905171 45.905171 0 0 0-45.855219-45.855219z" fill="#FFF3F4" p-id="7279"></path><path d="M803.573593 816.910569c0 8.458407 2.281106 16.425626 6.185627 23.085789 5.852618 10.081821-0.333008 22.769431-11.87174 22.769431H532.679805c-11.380553 0-17.557854-12.68761-11.863415-22.769431 3.896195-6.826667 6.177301-14.627382 6.177301-23.085789a45.771967 45.771967 0 0 0-6.177301-23.085789c-5.860943-10.081821 0.324683-22.769431 11.863415-22.76943H797.88748c11.380553 0 17.566179 12.68761 11.87174 22.76943a46.221528 46.221528 0 0 0-6.185627 23.085789z m786.024066-603.410732H1220.641301v-104.398048h368.939707a44.689691 44.689691 0 0 1 44.722992 44.722991v15.11857c0 24.55935-20.005463 44.556488-44.714667 44.556487z m19.997138 244.711025H1220.641301V353.821138h388.945171a44.689691 44.689691 0 0 1 44.706341 44.714667v15.118569c0 24.55935-19.988813 44.556488-44.706341 44.556488z" fill="#FFF3F4" p-id="7280"></path><path d="M1252.027317 283.581398c0-38.70387 30.903154-70.081561 68.782829-70.081561h-100.152195V353.821138h100.152195c-38.046179 0-68.774504-31.386016-68.774504-70.248065z" fill="#FFF3F4" p-id="7281"></path><path d="M1483.742699 283.581398c0 19.66413 15.651382 35.606894 34.957529 35.606895s34.965854-15.942764 34.965853-35.61522c0-19.66413-15.659707-35.606894-34.965853-35.606894-19.314472 0-34.965854 15.942764-34.965854 35.606894zM1537.889821 753.497496h-93.009171c-5.694439 0-10.24-4.72039-10.24-10.406504 0-5.694439 4.545561-10.406504 10.24-10.406504h93.009171c5.686114 0 10.24 4.712065 10.24 10.406504 0 5.686114-4.553886 10.406504-10.24 10.406504z" fill="#FFDFE2" p-id="7282"></path><path d="M1491.376911 800.809626c-5.686114 0-10.24-4.712065-10.24-10.406504V695.612358c0-5.694439 4.553886-10.406504 10.24-10.406504 5.694439 0 10.248325 4.712065 10.248325 10.406504V790.394797c0 5.694439-4.553886 10.406504-10.24 10.406504zM172.523187 834.634927H79.505691c-5.694439 0-10.24-4.72039-10.24-10.406504 0-5.694439 4.545561-10.406504 10.24-10.406504h93.009171c5.686114 0 10.24 4.712065 10.24 10.406504a10.24 10.24 0 0 1-10.24 10.406504z" fill="#FFDFE2" p-id="7283"></path><path d="M126.018602 882.113561c-5.694439 0-10.24-4.712065-10.24-10.406504V776.907967c0-5.686114 4.545561-10.406504 10.24-10.406504 5.686114 0 10.24 4.72039 10.24 10.406504v94.79909c0 5.694439-4.553886 10.406504-10.24 10.406504zM357.234472 211.060553h-77.557594a8.533333 8.533333 0 0 1-8.458406-8.624911c0-4.712065 3.746341-8.616585 8.458406-8.616585h77.557594c4.72039 0 8.458407 3.90452 8.458406 8.616585 0 4.72039-3.746341 8.624911-8.458406 8.624911z" fill="#FFDFE2" p-id="7284"></path><path d="M318.372423 250.571967a8.533333 8.533333 0 0 1-8.450082-8.616585V162.924228c0-4.878569 3.738016-8.616585 8.450082-8.616586 4.72039 0 8.458407 3.90452 8.458406 8.616586v79.022829c0.166504 4.72039-3.746341 8.624911-8.458406 8.62491z" fill="#FFDFE2" p-id="7285"></path><path d="M116.744325 476.584585h353.987642a4.195902 4.195902 0 0 0 4.229204-4.229203V376.582244a4.195902 4.195902 0 0 0-4.229204-4.220878h-353.987642a35.531967 35.531967 0 0 0-35.44039 35.44039v33.500618a35.290537 35.290537 0 0 0 35.44039 35.282211z m80.005203 246.509269h273.815935a4.195902 4.195902 0 0 0 4.229204-4.229204V623.091512a4.195902 4.195902 0 0 0-4.229204-4.229203h-273.815935a35.531967 35.531967 0 0 0-35.448715 35.448715v33.492293a35.390439 35.390439 0 0 0 35.448715 35.282211zM443.566829 548.44774c0-38.70387-30.886504-70.081561-68.774504-70.081561h100.152195v140.321301H374.80065c37.879675-0.166504 68.774504-31.544195 68.774504-70.23974z" fill="#FFF3F4" p-id="7286"></path><path d="M126.018602 547.640195c0 12.720911 6.660163 24.476098 17.482926 30.844878 10.814439 6.360455 24.143089 6.360455 34.957529 0a35.740098 35.740098 0 0 0 17.482927-30.844878c0-19.66413-15.651382-35.606894-34.965854-35.606894-19.314472 0-34.965854 15.942764-34.965854 35.606894z" fill="#FFDFE2" p-id="7287"></path><path d="M1166.502504 954.634407H544.068683c-38.212683 0-69.265691-31.053008-69.265691-69.265692V143.418276c0-38.212683 31.053008-69.265691 69.265691-69.265691h622.275642c38.212683 0 69.265691 31.053008 69.265691 69.265691v741.942114c0.166504 38.212683-30.894829 69.274016-69.099187 69.274017z" fill="#525BF3" p-id="7288"></path><path d="M949.597659 172.032H764.545041c-45.205854 0-81.953301-36.747447-81.953301-81.953301v-6.993171c0-45.205854 36.747447-81.944976 81.953301-81.944975h185.044292c45.205854 0 81.944976 36.747447 81.944976 81.944975v6.993171c0 45.372358-36.747447 81.953301-81.953301 81.953301z" fill="#8093F6" p-id="7289"></path><path d="M1054.470244 535.119089H657.557854a20.746407 20.746407 0 0 1-20.813008-20.813008c0-11.538732 9.274276-20.813008 20.813008-20.813008h397.078894c11.538732 0 20.813008 9.274276 20.813008 20.813008 0 11.547057-9.432455 20.813008-20.979512 20.813008zM1054.470244 399.351675H657.557854a20.746407 20.746407 0 0 1-20.813008-20.813008c0-11.547057 9.274276-20.813008 20.813008-20.813008h397.078894c11.538732 0 20.813008 9.265951 20.813008 20.813008 0 11.538732-9.432455 20.813008-20.979512 20.813008zM909.270374 670.894829H657.557854a20.746407 20.746407 0 0 1-20.813008-20.813008c0-11.547057 9.274276-20.813008 20.813008-20.813008h251.71252c11.538732 0 20.813008 9.265951 20.813008 20.813008s-9.432455 20.813008-20.813008 20.813008z" fill="#FFFFFF" opacity=".7" p-id="7290"></path><path d="M1149.427512 1008.456846c-112.515122 0-204.059057-93.175675-204.059057-207.64722S1036.904065 593.170732 1149.427512 593.170732c112.523447 0 204.067382 93.16735 204.067382 207.638894-0.166504 114.471545-91.543935 207.64722-204.067382 207.64722z" fill="#FF6A56" p-id="7291"></path><path d="M1149.427512 606.990569c105.047415 0 190.247545 86.83187 190.247545 193.819057 0 106.995512-85.20013 193.827382-190.247545 193.827382-105.039089 0-190.23922-86.83187-190.239219-193.827382 0-106.987187 85.041951-193.810732 190.239219-193.810732z m0-27.639675c-58.368 0-113.006309 23.085789-154.307642 65.036488-40.97665 41.79252-63.571252 97.404878-63.571252 156.430569s22.594602 114.629724 63.571252 156.413919c41.143154 41.959024 95.939642 65.044813 154.307642 65.044813 58.376325 0 113.014634-23.085789 154.315968-65.044813 40.968325-41.79252 63.571252-97.396553 63.571252-156.422244 0-59.025691-22.602927-114.638049-63.737756-156.422244-41.134829-41.950699-95.931317-65.036488-154.149464-65.036488z" fill="#FFADA3" p-id="7292"></path><path d="M1137.88878 899.671415a45.147577 45.147577 0 0 1-32.360065-13.653334l-61.623154-62.772032a32.101984 32.101984 0 0 1 0-44.872846 30.819902 30.819902 0 0 1 44.065301 0l49.917918 50.891968 83.576716-85.033626a30.819902 30.819902 0 0 1 44.065301 0 32.101984 32.101984 0 0 1 0 44.872845l-95.290277 97.07187a45.66374 45.66374 0 0 1-32.35174 13.495155z" fill="#FFCECA" p-id="7293"></path></svg>
+
+            <h2 class="text-xl font-bold text-slate-800 mb-6">您的问卷已完成，将同步给医生</h2>
+            <p class="text-slate-600 mb-8 leading-relaxed text-center">建议：继续按医嘱服药，密切关注相关指标，如有不适，请联系医生</p>
+        </div>
+        <div class="mt-8 px-4">
+            <a href="{% url 'web_patient:patient_home' %}?followup=true" class="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-bold shadow-md hover:bg-blue-700 transition">返回首页</a>
+        </div>
+    </div>
+
+    <!-- Survey Container -->
+     <form id="survey-form" class="p-4" onsubmit="return false;">
         {% csrf_token %}
         
-        <!-- Step 1: Sleep -->
-        <div id="step-1" class="survey-step">
-            {% include "web_patient/followup/partials/step1_sleep.html" %}
-        </div>
-        
-        <!-- Step 2: Pain -->
-        <div id="step-2" class="survey-step hidden">
-            {% include "web_patient/followup/partials/step2_pain.html" %}
+        <div id="survey-content">
+            <!-- Dynamic Content will be rendered here -->
+            <div class="animate-pulse space-y-4">
+                <div class="h-4 bg-slate-200 rounded w-3/4 mx-auto"></div>
+                <div class="h-32 bg-white rounded-xl"></div>
+            </div>
         </div>
 
-        <!-- Step 3: Cough -->
-        <div id="step-3" class="survey-step hidden">
-             {% include "web_patient/followup/partials/step3_cough.html" %}
+        <div class="mt-6" id="action-area">
+             <button id="next-btn" type="button" class="w-full py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md active:bg-blue-700 transition">
+                下一题
+            </button>
         </div>
-
-        <!-- Step 4: Appetite -->
-        <div id="step-4" class="survey-step hidden">
-             {% include "web_patient/followup/partials/step4_appetite.html" %}
-        </div>
-
-        <!-- Step 5: Emotion -->
-        <div id="step-5" class="survey-step hidden">
-             {% include "web_patient/followup/partials/step5_emotion.html" %}
-        </div>
-
-        <!-- Step 6: Physical -->
-        <div id="step-6" class="survey-step hidden">
-             {% include "web_patient/followup/partials/step6_physical.html" %}
-        </div>
-
-        <!-- Step Finish -->
-        <div id="step-finish" class="survey-step hidden">
-             <div class="bg-white rounded-xl p-8 shadow-sm mt-10 text-left">
-                <h2 class="text-xl font-bold text-slate-800 mb-6">您的问卷已完成，将同步给医生</h2>
-                <p class="text-slate-600 mb-8 leading-relaxed">建议：继续按医嘱服药，密切关注相关指标，如有不适，请联系医生</p>
-                
-                <!-- Watermark placeholder -->
-                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
-                    <span class="text-6xl font-bold text-slate-400">W盟门</span>
-                </div>
-             </div>
-             
-             <div class="mt-8 px-4">
-                <a href="{% url 'web_patient:patient_home' %}" class="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-bold shadow-md hover:bg-blue-700 transition">返回</a>
-             </div>
-        </div>
-    </form>
+    </form> 
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Data passed from Django view
+        const surveyIds = {{ survey_ids|safe }};
+        const allSurveysData = {{ all_surveys_data|safe }}; // Preloaded data
+        const totalCount = {{ total_count }};
         
-        // Helper: Validate current step
-        function validateCurrentStep(stepIndex) {
-            const stepDiv = document.getElementById('step-' + stepIndex);
-            
-            // Find all questions in this step
-            // We assume questions are wrapped in <div> inside .space-y-8 container
-            // A simple way is to look for named inputs.
-            const inputs = stepDiv.querySelectorAll('input, select');
-            const names = new Set();
-            inputs.forEach(input => {
-                if(input.name) names.add(input.name);
-            });
-            
-            for (let name of names) {
-                const fieldInputs = stepDiv.querySelectorAll(`[name="${name}"]`);
-                let isFilled = false;
-                
-                if (fieldInputs[0].tagName === 'SELECT') {
-                    if (fieldInputs[0].value && fieldInputs[0].value !== "") {
-                        isFilled = true;
-                    }
-                } else if (fieldInputs[0].type === 'radio' || fieldInputs[0].type === 'checkbox') {
-                    for (let input of fieldInputs) {
-                        if (input.checked) {
-                            isFilled = true;
-                            break;
-                        }
-                    }
+        let currentIndex = 0;
+        // Store all answers: { survey_id: [ { option_id: 123 }, ... ] }
+        const allAnswers = {};
+
+        const container = document.getElementById('survey-content');
+        const nextBtn = document.getElementById('next-btn');
+
+        // Initial Render
+        if (allSurveysData && allSurveysData.length > 0) {
+            renderSurvey(allSurveysData[currentIndex]);
+        } else {
+            container.innerHTML = '<div class="text-center text-slate-500 mt-10">暂无问卷数据</div>';
+            nextBtn.style.display = 'none';
+        }
+
+        // Render Function
+        function renderSurvey(data) {
+            // Scroll to top
+            window.scrollTo(0, 0);
+
+            let html = `
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+                    <div class="p-5 border-b border-slate-100 text-center">
+                        <h3 class="text-lg font-bold text-slate-800">${data.name}</h3>
+                    </div>
+                    <div class="p-5 space-y-8">
+            `;
+
+            let lastSection = "";
+
+            data.questions.forEach((q, idx) => {
+                // Section Header
+                if (q.section && q.section !== lastSection) {
+                    html += `
+                        <div class="mt-6 mb-4 px-1">
+                            <h4 class="text-sm font-bold text-slate-500 border-l-4 border-blue-500 pl-3">${q.section}</h4>
+                        </div>
+                    `;
+                    lastSection = q.section;
                 }
-                
-                if (!isFilled) {
-                    // Try to find the label text for better error message
-                    alert("请完成本页所有题目后再继续");
+
+                const requiredMark = q.is_required ? '<span class="text-red-500 ml-1">*</span>' : '';
+                html += `
+                    <div class="question-item" data-id="${q.id}" data-type="${q.q_type}" data-required="${q.is_required}">
+                        <p class="font-bold text-slate-800 mb-3 text-base">
+                            ${idx + 1}. ${q.text}${requiredMark}
+                        </p>
+                        <div class="space-y-3">
+                `;
+
+                q.options.forEach(opt => {
+                    const inputType = (q.q_type == 'SINGLE') ? 'radio' : 'checkbox';
+                    // We use q.id to group radios
+                    const inputName = `question_${q.id}`;
+                    
+                    html += `
+                        <label class="flex items-start gap-3 p-3 rounded-lg border border-transparent hover:bg-slate-50 active:bg-blue-50 transition-colors cursor-pointer">
+                            <div class="flex items-center h-5">
+                                <input type="${inputType}" name="${inputName}" value="${opt.id}" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mt-0.5">
+                            </div>
+                            <span class="text-slate-700 text-sm leading-5">${opt.text}</span>
+                        </label>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            // Update Button Text
+            if (currentIndex === totalCount - 1) {
+                nextBtn.textContent = '已完成答卷，提交';
+            } else {
+                nextBtn.textContent = '下一题';
+            }
+        }
+
+        // Next / Submit Handler
+        nextBtn.addEventListener('click', function() {
+            if (!validateCurrentForm()) {
+                return;
+            }
+
+            saveCurrentAnswers();
+
+            if (currentIndex < totalCount - 1) {
+                // Load Next
+                loadNextSurvey();
+            } else {
+                // Submit All
+                submitAll();
+            }
+        });
+
+        function validateCurrentForm() {
+            const questions = container.querySelectorAll('.question-item');
+            for (let qDiv of questions) {
+                const isRequired = qDiv.dataset.required === 'true' || qDiv.dataset.required === 'True';
+                if (!isRequired) continue;
+
+                const qId = qDiv.dataset.id;
+                const inputs = qDiv.querySelectorAll(`input[name="question_${qId}"]:checked`);
+                if (inputs.length === 0) {
+                    // Alert user
+                    // Ideally scroll to the question
+                    alert('请完成所有必填项');
+                    qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return false;
                 }
             }
             return true;
         }
 
-        window.nextStep = function(currentStepIndex) {
-            if (!validateCurrentStep(currentStepIndex)) {
-                return;
-            }
-
-            // Hide current
-            document.getElementById('step-' + currentStepIndex).classList.add('hidden');
+        function saveCurrentAnswers() {
+            const currentSurveyId = surveyIds[currentIndex];
+            const answers = [];
             
-            // Show next
-            const nextIndex = currentStepIndex + 1;
-            const nextStepDiv = document.getElementById('step-' + nextIndex);
-            
-            if (nextStepDiv) {
-                nextStepDiv.classList.remove('hidden');
-                window.scrollTo(0, 0);
-            } else {
-                // Should not happen via nextStep button for last step, 
-                // but if so, treat as submit
-                submitSurvey();
-            }
-        };
-
-        window.submitSurvey = function() {
-            // Validate step 6
-            if (!validateCurrentStep(6)) {
-                return;
-            }
-
-            // Collect Data
-            const formData = new FormData(document.getElementById('survey-form'));
-            const data = {};
-            formData.forEach((value, key) => {
-                if (data[key]) {
-                    if (!Array.isArray(data[key])) {
-                        data[key] = [data[key]];
-                    }
-                    data[key].push(value);
-                } else {
-                    data[key] = value;
-                }
+            const questions = container.querySelectorAll('.question-item');
+            questions.forEach(qDiv => {
+                const qId = qDiv.dataset.id;
+                const checkedInputs = qDiv.querySelectorAll(`input[name="question_${qId}"]:checked`);
+                
+                checkedInputs.forEach(input => {
+                    answers.push({
+                        option_id: parseInt(input.value)
+                    });
+                });
             });
-            
-            console.log("== 提交问卷数据 ==", data);
-            
-            // Simulate API Call & Show Finish
-            document.getElementById('step-6').classList.add('hidden');
-            document.getElementById('step-finish').classList.remove('hidden');
-            window.scrollTo(0, 0);
 
-            // Redirect logic is handled by the "返回" button in step-finish, 
-            // but user asked to "back to home" automatically? 
-            // "并且模拟接口提交，然后把提交得数据打印出来，并回到首页"
-            // The UI design shows a finish screen with a "Back" button.
-            // I will simulate the "API submission" here, print data, show the finish screen.
-            // The "Back" button in finish screen already links to home.
-            // If automatic redirect is needed after printing, I would do:
-             setTimeout(() => {
-                 window.location.href = "{% url 'web_patient:patient_home' %}?followup=true";
-             }, 1500);
-        };
+            allAnswers[currentSurveyId] = answers;
+        }
+
+        function loadNextSurvey() {
+            currentIndex++;
+            
+            // Check if we have preloaded data
+            if (allSurveysData && allSurveysData.length > currentIndex) {
+                 const nextData = allSurveysData[currentIndex];
+                 renderSurvey(nextData);
+            } else {
+                 alert('问卷数据加载异常，请刷新重试');
+                 currentIndex--;
+            }
+        }
+
+        const patientId = {{ patient_id|default:"null" }};
+        const submitModal = document.getElementById('submit-modal');
+        const submitStatusText = document.getElementById('submit-status-text');
+        const finishView = document.getElementById('finish-view');
+        const surveyForm = document.getElementById('survey-form');
+        
+        // ... (existing code) ...
+
+        async function submitAll() {
+            // Show Modal
+            submitModal.classList.remove('hidden');
+            nextBtn.disabled = true;
+            
+            const totalSubmissions = surveyIds.length;
+            let successCount = 0;
+
+            for (let i = 0; i < totalSubmissions; i++) {
+                const sId = surveyIds[i];
+                const answers = allAnswers[sId];
+                
+                // Update status text
+                submitStatusText.textContent = `正在提交第 ${i + 1} / ${totalSubmissions} 个问卷...`;
+                
+                // Construct Payload for Single Submission
+                const payload = {
+                    patient_id: patientId,
+                    questionnaire_id: parseInt(sId),
+                    answers: answers || [] // Ensure answers is not undefined
+                };
+                
+                try {
+                    const response = await fetch("{% url 'web_patient:submit_surveys' %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (!data.success && !data.submission_id) { // Accept success:true or submission_id presence
+                        throw new Error(data.error || '提交失败');
+                    }
+                    successCount++;
+                    
+                } catch (error) {
+                    console.error(`Survey ${sId} failed:`, error);
+                    alert(`第 ${i + 1} 个问卷提交失败: ${error.message}`);
+                    // Stop on error? Or continue? 
+                    // Usually better to stop and let user retry.
+                    submitModal.classList.add('hidden');
+                    nextBtn.disabled = false;
+                    nextBtn.textContent = '已完成答卷，提交';
+                    return; 
+                }
+            }
+            
+            // All success
+            submitStatusText.textContent = '提交完成！';
+            setTimeout(() => {
+                submitModal.classList.add('hidden');
+                surveyForm.classList.add('hidden');
+                finishView.classList.remove('hidden');
+                window.scrollTo(0, 0);
+            }, 500);
+        }
     });
 </script>
 {% endblock %}

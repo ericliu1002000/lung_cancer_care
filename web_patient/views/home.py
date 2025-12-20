@@ -6,6 +6,7 @@ from users import choices
 from wx.services.oauth import generate_menu_auth_url
 from users.decorators import auto_wechat_login, check_patient
 from health_data.services.health_metric import HealthMetricService
+from health_data.models import MetricType
 import os
 from decimal import Decimal
 from users.services.patient import PatientService
@@ -15,45 +16,29 @@ from django.utils import timezone  # 处理时区转换
 # 定义计划类型与健康指标的映射关系
 PLAN_METRIC_MAPPING = {
     "step": {
-        "key": "steps",
+        "key": MetricType.STEPS,
         "name": "步数",
         "format_func": lambda x: f"{x['value_display']}"
     },
     "temperature": {
-        "key": "body_temperature",  # 假设接口中体温字段为temperature，可根据实际调整
+        "key": MetricType.BODY_TEMPERATURE,
         "name": "体温",
         "format_func": lambda x: f"{x['value_display']}"
     },
     "bp_hr": {
-        "key": ["blood_pressure", "heart_rate"],
+        "key": [MetricType.BLOOD_PRESSURE, MetricType.HEART_RATE],
         "name": "血压心率",
-        "format_func": lambda x: f"血压{x['blood_pressure']['value_display']}mmHg，心率{x['heart_rate']['value_display']}"
+        "format_func": lambda x: f"血压{x[MetricType.BLOOD_PRESSURE]['value_display'] if x.get(MetricType.BLOOD_PRESSURE) else '--'}mmHg，心率{x[MetricType.HEART_RATE]['value_display'] if x.get(MetricType.HEART_RATE) else '--'}"
     },
     "spo2": {
-        "key": "blood_oxygen",
+        "key": MetricType.BLOOD_OXYGEN,
         "name": "血氧饱和度",
         "format_func": lambda x: f"{x['value_display']}"
     },
     "weight": {
-        "key": "weight",
+        "key": MetricType.WEIGHT,
         "name": "体重",
         "format_func": lambda x: f"{x['value_display']}"
-    },
-    "breath": {
-        "key": "dyspnea",
-        "name": "呼吸情况",
-        "format_func": lambda x: "正常" if x else "异常"  # 根据实际数据格式调整
-    },
-    "sputum": {
-        "key": ["sputum_color", "cough"],
-        "name": "咳嗽与痰色",
-        "format_func": lambda x: f"咳嗽：{x['cough'] or '无'}，痰色：{x['sputum_color'] or '无'}"
-    },
-    "pain": {
-        "key": ["pain_incision", "pain_shoulder", "pain_bone", "pain_head"],
-        "name": "疼痛情况",
-        "format_func": lambda x: 
-            f"切口：{x['pain_incision'] or '无'}，肩部：{x['pain_shoulder'] or '无'}，骨骼：{x['pain_bone'] or '无'}，头部：{x['pain_head'] or '无'}"
     },
     "medication": {
         "key": "medication",  # 假设接口中有用药字段，可根据实际调整
@@ -98,7 +83,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         service_days = PatientService().get_guard_days(patient_id)
     else:
         service_days = "0"
-    # 模拟每日计划数据（默认全部未完成）
+    # 模拟每日计划数据（默认全部未完成） TODO 待调试今日计划-获取任务数据
     daily_plans = [
         {
             "type": "medication",
@@ -138,30 +123,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             "subtitle": "请记录今日体重",
             "status": "pending",
             "action_text": "去填写",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "breath",
-            "title": "呼吸情况",
-            "subtitle": "请自测呼吸情况",
-            "status": "pending",
-            "action_text": "去自测",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "sputum",
-            "title": "咳嗽与痰色情况自测",
-            "subtitle": "请自测咳嗽与痰色",
-            "status": "pending",
-            "action_text": "去自测",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "pain",
-            "title": "疼痛情况记录",
-            "subtitle": "请记录今日疼痛情况",
-            "status": "pending",
-            "action_text": "去记录",
             "icon_class": "bg-blue-100 text-blue-600",
         },
         {
@@ -240,8 +201,8 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
-            if 'steps' in listData and listData['steps'] is not None:
-                steps_info = listData['steps']
+            if MetricType.STEPS in listData and listData[MetricType.STEPS] is not None:
+                steps_info = listData[MetricType.STEPS]
                 # 仅当步数是今日数据时才更新，否则保持0
                 if is_today_data(steps_info):
                     step_count = steps_info.get('value_display', '0')
@@ -257,8 +218,8 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             continue
         
         # 默认仅处理步数，提交后处理所有类型
-        if not should_fetch_data and plan_type != "step":
-            continue 
+        # if not should_fetch_data and plan_type != "step":
+        #     continue 
         
         # 获取该计划对应的指标数据
         metric_data = get_metric_value(metric_config["key"], listData)
