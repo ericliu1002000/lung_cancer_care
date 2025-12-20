@@ -20,7 +20,8 @@ urlpatterns = [
     path("record/pain/", views.record_pain, name="record_pain"),
     path("record/checkup/", views.record_checkup, name="record_checkup"),
     path("followup/daily/", views.daily_survey, name="daily_survey"),
-    path("record/steps/", views.record_steps, name="record_steps"),
+    path("api/survey/<int:survey_id>/", views.get_survey_detail, name="get_survey_detail"),
+    path("api/survey/submit/", views.submit_surveys, name="submit_surveys"),
     path("family/", views.family_management, name="family_management"),
     path("family/unbind/", views.unbind_family, name="unbind_family"),
     path("profile/", views.profile_page, name="profile_page"),
@@ -51,4 +52,8 @@ urlpatterns = [
     path("studio/", views.my_studio, name="my_studio"),
     path("feedback/", views.feedback_view, name="feedback"),
     path("docs/<str:key>/", views.document_detail, name="document_detail"),
+    path("consultation/chat/", views.consultation_chat, name="consultation_chat"),
+    # API endpoints
+    path("api/health/metric/delete/", views.delete_health_metric, name="delete_health_metric"),
+    path("api/health/metric/update/", views.update_health_metric, name="update_health_metric"),
 ]

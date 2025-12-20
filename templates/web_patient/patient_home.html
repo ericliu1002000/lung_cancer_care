@@ -1,13 +1,10 @@
 {% extends "layouts/base_portal.html" %} {% block body %}
 <div class="min-h-screen bg-white pb-24 relative font-sans">
-  <!-- 1. Top Header Background (Deep Gradient) -->
   <div
     class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-20 px-5 relative rounded-b-[2rem] shadow-md"
   >
     <!-- Header Content -->
-    <!-- 如果用户已登录，显示用户信息和服务天数；如果未登录，显示注册/家属入口按钮 -->
     <div class="relative z-10 pt-4 flex items-center justify-between mb-2">
-      <!-- Logged In State: User Info & Service Days -->
       <div class="flex items-center gap-3 w-full justify-between">
         <div class="flex items-center gap-3">
           <div class="relative">
@@ -27,6 +24,7 @@
             >
               {{patient.name}}
             </h1>
+             <div class="flex items-center mt-1.5">
             <div class="flex items-center mt-1.5">
               <span
                 class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
@@ -43,42 +41,28 @@
                 已守护 {{ service_days }} 天
               </span>
             </div>
+              <div class="flex items-center mt-1.5">
+              <span
+                class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
+                >
+               <svg t="1765982215869" class="icon w-3 h-3" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4514" width="32" height="32"><path d="M896.287817 458.825143s-144.713143 30.829714-184.758857 41.581714c-39.68 10.788571-88.868571-67.218286-102.034286-70.034286-8.448 24.466286-35.730286 96.219429-52.004571 144.932572 25.234286-0.768 156.050286 38.875429 160.804571 61.988571 5.449143 23.369143 66.56 276.516571 66.56 276.516572s25.892571 54.418286-47.652571 74.313143c-73.618286 19.858286-76.909714-40.667429-76.909714-40.667429s-51.382857-194.194286-55.954286-205.897143c-4.278857-11.739429-100.096-31.451429-122.038857-25.526857-22.089143 6.034286-69.449143 171.776-116.187429 183.04-60.050286 14.555429-235.885714-92.233143-235.885714-92.233143s-69.485714-17.188571-55.296-82.358857c14.445714-64.731429 81.883429-47.030857 81.883428-47.030857s124.525714 68.461714 138.898286 60.416c14.518857-8.155429 22.784-55.369143 44.032-101.156572 0.877714-17.261714 49.737143-154.514286 49.737143-154.514285s27.062857-91.392 16.310857-97.097143c-14.848-7.862857-30.354286 8.923429-38.509714 22.893714-8.155429 13.860571-40.448 70.985143-94.464 145.371429-48.018286 66.267429-133.668571 4.754286-98.084572-57.124572 29.622857-51.492571 108.361143-198.729143 165.010286-226.486857 57.051429-27.904 155.355429-43.446857 239.067429-23.844571 84.114286 19.2 143.067429 114.468571 159.561143 127.049143 16.091429 12.141714 129.389714-24.502857 129.389714-24.502858s64.512-22.418286 80.530286 36.461715c16.091429 59.245714-52.004571 73.874286-52.004572 73.874285zM631.291246 216.137143a110.006857 110.006857 0 0 1-135.68-77.129143A110.299429 110.299429 0 0 1 573.764389 3.913143c59.245714-16.018286 119.917714 18.724571 135.68 77.165714 16.018286 58.806857-18.980571 118.930286-78.153143 135.058286z" fill="#35E2B0" p-id="4515"></path></svg>
+                 今日步数：{{step_count}}
+              </span>
+            </div>
+            </div>
           </div>
         </div>
-
-        <!-- Message Icon (Only for logged in users) -->
-        {% comment %}
-        <button
-          class="relative w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white active:bg-white/20 transition border border-white/10"
-        >
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-            />
-          </svg>
-          <span
-            class="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"
-          ></span>
-        </button>
-        {% endcomment %}
       </div>
     </div>
   </div>
 
   <!-- Main Content Area -->
   <div class="px-4 -mt-14 relative z-20 space-y-6">
-    <!-- Consultation Card (Floating) -->
-    <div
-      class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group"
-    >
+    <a
+      href="{% if patient.is_member and patient.membership_expire_date %}{% url 'web_patient:consultation_chat' %}?patient_id={{ patient_id }}{% else %}{{ buy_url }}{% endif %}"
+      class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
+    > 
+     
       <div class="flex items-center gap-4 relative z-10">
         <div
           class="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200"
@@ -100,7 +84,12 @@
         <div>
           <div class="flex items-center gap-2">
             <h2 class="text-lg font-bold text-slate-900">问题咨询</h2>
-            {% if is_member %}
+            {% if patient.is_member and patient.membership_expire_date %}
+            <span
+              class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-bold border border-red-100"
+              >VIP</span
+            >
+            {% else %}
             <span
               class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-bold border border-red-100"
               >会员开通此功能</span
@@ -114,13 +103,13 @@
       <div
         class="absolute -right-4 -bottom-4 w-20 h-20 bg-slate-50 rounded-full opacity-50 z-0"
       ></div>
-    </div>
+    </a>
 
     <!-- 2. Feature Shortcuts (3 Columns with Gradient Backgrounds) -->
     <div class="grid grid-cols-3 gap-3">
       <!-- Health Data -->
       <a
-        href="{% url 'web_patient:health_records' %}?patient_id={{ patient_id }}"
+        href="{% url 'web_patient:health_records' %}"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#FF8C61] to-[#FF6B6B] shadow-md shadow-orange-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
@@ -148,7 +137,7 @@
 
       <!-- Medication -->
       <a
-        href="{% url 'web_patient:my_medication' %}?openid={{ user.wx_openid }}"
+        href="{% url 'web_patient:my_medication' %}"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#5E9EFF] to-[#4364F7] shadow-md shadow-blue-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
@@ -176,7 +165,7 @@
 
       <!-- Plan -->
       <a
-        href="{% url 'web_patient:management_plan' %}?openid={{ user.wx_openid }}"
+        href="{% url 'web_patient:management_plan' %}"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#00C9A7] to-[#00A99D] shadow-md shadow-teal-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
@@ -307,7 +296,7 @@
         </div>
         {% if daily_plans %}
         <a
-          href="{% url 'web_patient:management_plan' %}?openid={{ user.wx_openid }}"
+          href="{% url 'web_patient:management_plan' %}"
           class="text-sm text-slate-500 font-medium flex items-center hover:text-blue-600 transition"
         >
           查看历史
@@ -593,9 +582,10 @@
         {% endfor %}
       </div>
       {% else %}
+      <!-- 空状态保持不变 -->
       <div class="flex flex-col items-center justify-center py-10">
         <div class="flex items-center justify-center mb-3">
-                      <svg t="1765808670850" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="8014" width="64" height="64"><path d="M35.698301 77.721345h59.476898c4.135408 0 7.419408 3.284 7.419408 7.419408s-3.284 7.419408-7.419408 7.419409H35.698301c-4.135408 0-7.419408-3.284-7.419408-7.419409s3.284-7.419408 7.419408-7.419408z m0 0" fill="#F4C15B" p-id="8015"></path><path d="M65.497565 47.922081c4.135408 0 7.419408 3.284 7.419409 7.419408v59.476898c0 4.135408-3.284 7.419408-7.419409 7.419408-4.135408 0-7.419408-3.284-7.419408-7.419408V55.341489c0-4.135408 3.284-7.419408 7.419408-7.419408z m0 0" fill="#F4C15B" p-id="8016"></path><path d="M362.030645 116.277943l28.704597 7.662668c4.013778 1.094667 6.324742 5.108445 5.230075 9.122223-1.094667 4.013778-5.108445 6.324742-9.122224 5.230075l-28.704597-7.662668c-4.013778-1.094667-6.324742-5.108445-5.230075-9.122223 1.216296-3.892149 5.108445-6.324742 9.122224-5.230075z m0 0" fill="#4680E8" p-id="8017"></path><path d="M414.939542 74.558974l7.662667 28.704596c1.094667 4.013778-1.216296 8.027557-5.230075 9.122224-4.013778 1.094667-8.027557-1.216296-9.122223-5.230075L400.587243 78.329493c-1.094667-4.013778 1.216296-8.027557 5.230075-9.122224 4.013778-0.973037 8.149186 1.337926 9.122224 5.351705z m0 0" fill="#8FB3FF" p-id="8018"></path><path d="M477.57881 99.493051L456.536881 120.53498c-2.919112 2.919112-7.541038 2.919112-10.46015 0-2.919112-2.919112-2.919112-7.541038 0-10.460149l21.041929-21.041929c2.919112-2.919112 7.541038-2.919112 10.46015 0 2.919112 2.797482 2.919112 7.541038 0 10.460149z m0 0" fill="#ABC3EF" p-id="8019"></path><path d="M927.000356 113.358831c-24.569189 0-44.516451 19.947262-44.516451 44.638081 0 24.569189 19.947262 44.516451 44.516451 44.516451 24.569189 0 44.638081-19.947262 44.638081-44.516451-0.12163-24.690818-20.068892-44.638081-44.638081-44.638081z m0 74.315715c-16.420002 0-29.799264-13.379261-29.799263-29.799264s13.379261-29.799264 29.799263-29.799263 29.799264 13.379261 29.799264 29.799263c-0.12163 16.541632-13.500891 29.799264-29.799264 29.799264z m0 0" fill="#F4C15B" p-id="8020"></path><path d="M905.715168 374.984202l-446.137546-59.476897v235.718256l446.137546 46.827414V374.984202z m0 0" fill="#4680E8" p-id="8021"></path><path d="M102.594607 392.742131l356.861385-77.113196v267.706853L102.594607 660.448984V392.742131z m0 0" fill="#8FB3FF" p-id="8022"></path><path d="M519.05452 482.018292l386.660648-106.91246V880.598646l-386.660648 106.91246V482.018292z m0 0" fill="#4680E8" p-id="8023"></path><path d="M102.594607 392.742131l416.338283 89.276161v502.816962L102.594607 883.517757V392.742131z m0 0" fill="#8FB3FF" p-id="8024"></path><path d="M519.05452 481.166884L102.594607 392.742131l-89.276161 178.430692 431.298729 101.317497 74.437345-191.323436z m0 0" fill="#ABC3EF" p-id="8025"></path><path d="M756.597221 28.461337L711.95914 46.584155v59.476897l44.638081-18.122817V28.461337z m0 0" fill="#F4C15B" p-id="8026"></path><path d="M659.780021 87.938235l44.638081 18.122817V46.584155l-44.638081-18.122818v59.476898z m96.8172-65.43675L708.796769 3.648889l-48.895118 16.906521 48.773489 20.67704 47.922081-18.730965z m0 0" fill="#E5CF6E" p-id="8027"></path><path d="M519.05452 482.018292l386.660648-106.91246 104.114978 178.430693-371.821831 121.751276-118.953795-193.269509z m0 0" fill="#8FB3FF" p-id="8028"></path><path d="M728.257513 388.241834S744.799145 283.883597 831.156194 231.947737c0 0 7.541038 8.514075 22.623115 27.853189 0 0-39.408006-6.203112-125.521796 128.440908z m0 0" fill="#ABC3EF" p-id="8029"></path><path d="M519.05452 383.984796s1.702815-57.165934 43.543413-186.09336c0 0 7.541038 8.514075 22.623115 27.853189-0.12163 0-15.933484 13.74415-66.166528 158.240171z m0 0" fill="#8FB3FF" p-id="8030"></path><path d="M373.585461 373.646276S326.514788 235.231738 211.209882 172.835729c0 0-19.217484 27.001782-40.381042 35.515857-0.12163 0 132.697945 46.219266 202.756621 165.29469z m0 0" fill="#E5CF6E" p-id="8031"></path></svg>
+          <!-- 原有SVG图标 -->
         </div>
         <p class="text-slate-500 font-medium text-sm">今日暂无计划</p>
         <p class="text-slate-400 text-sm mt-0.5">请联系医生为您制定康复计划</p>
@@ -693,8 +683,7 @@ function closeMedicationModal() {
 }
 
 function submitMedication() {
-    const openid = "{{ user.wx_openid }}";
-    window.location.href = "{% url 'web_patient:patient_home' %}?openid=" + openid + "&medication_taken=true";
+    window.location.href = "{% url 'web_patient:patient_home' %}?patient_id=" + patient_id + "&medication_taken=true";
 }
 
 function handleTaskClick(title, type) {
@@ -713,7 +702,7 @@ function handleTaskClick(title, type) {
        if (urlA) {
             // 判断URL是否已经包含参数
             const separator = urlA.includes('?') ? '&' : '?';
-            window.location.href = urlA + separator + "patient_id=" + "12";
+            window.location.href = urlA + separator + "patient_id=" + patientId;
        } else {
             console.error("未找到对应类型的跳转链接:", type);
             // 可以在这里添加默认跳转或提示

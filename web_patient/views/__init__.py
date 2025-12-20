@@ -15,8 +15,10 @@ from .feedback import feedback_view
 from .document import document_detail
 from .home import patient_home
 from .plan import management_plan, my_medication
-from .record import record_temperature, record_bp, record_spo2, record_weight, record_breath, record_sputum, record_pain, health_records,record_steps,record_checkup, health_record_detail
-from .followup import daily_survey
+from .record import record_temperature, record_bp, record_spo2, record_weight, record_breath, record_sputum, record_pain, health_records,record_checkup, health_record_detail
+from .followup import daily_survey, get_survey_detail, submit_surveys
+from .api import delete_health_metric, update_health_metric
+from .chat import consultation_chat
 
 __all__ = [
     "bind_landing",
@@ -49,8 +51,11 @@ __all__ = [
     "record_sputum",
     "record_pain",
     "health_records",
-    "record_steps",
     "record_checkup",
     "health_record_detail",
-    "daily_survey"
+    "daily_survey",
+    "get_survey_detail",
+    "submit_surveys",
+    "delete_health_metric",
+    "update_health_metric"
 ]

@@ -123,7 +123,7 @@
         
         <!-- No More Data State -->
         <div id="no-more-data" class="hidden py-4 text-center text-slate-400 text-sm">
-            没有更多数据了
+            已全部加载
         </div>
     </div>
       {% else %}
@@ -340,26 +340,43 @@
             title: '删除此记录?',
             content: '记录删除后将无法找回，确认要删除吗？',
             onConfirm: () => {
-                // 1. 模拟调用 API 删除
-                console.log(`Deleting record ${id}...`);
-                
-                // 2. 从 DOM 中移除
-                const card = document.querySelector(`div[data-id="${id}"]`);
-                if(card) {
-                    card.style.transition = 'all 0.3s';
-                    card.style.opacity = '0';
-                    card.style.transform = 'scale(0.9)';
-                    setTimeout(() => {
-                        card.remove();
-                        // 如果列表为空，显示空状态（可选）
-                        if(document.querySelectorAll('div[data-id]').length === 0) {
-                            location.reload(); 
+                const formData = new FormData();
+                formData.append('id', id);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+                fetch("{% url 'web_patient:delete_health_metric' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 2. 从 DOM 中移除
+                        const card = document.querySelector(`div[data-id="${id}"]`);
+                        if(card) {
+                            card.style.transition = 'all 0.3s';
+                            card.style.opacity = '0';
+                            card.style.transform = 'scale(0.9)';
+                            setTimeout(() => {
+                                card.remove();
+                                // 如果列表为空，显示空状态（可选）
+                                if(document.querySelectorAll('div[data-id]').length === 0) {
+                                    location.reload(); 
+                                }
+                            }, 300);
                         }
-                    }, 300);
-                }
-                
-                // 3. 提示成功
-                showToast('删除成功', 'success');
+                        showToast('删除成功', 'success');
+                    } else {
+                        showToast(data.message || '删除失败', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error('Delete error:', err);
+                    showToast('操作失败，请重试', 'error');
+                });
             }
         });
     }
@@ -423,7 +440,10 @@
         {% endfor %}
     ];
 
+    let currentEditId = null;
+
     function openEditModal(id) {
+        currentEditId = id;
         const record = recordsData.find(r => r.id == id);
         if(!record) return;
 
@@ -439,9 +459,9 @@
             
             let inputHtml = '';
             if(field.key === 'temperature' || field.key === 'ssy' || field.key === 'szy' || field.key === 'heart' || field.key === 'weight' || field.key === 'spo2') {
-                 inputHtml = `<input type="number" step="0.1" value="${val}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+                 inputHtml = `<input type="number" step="0.1" name="${field.key}" value="${val}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
             } else {
-                 inputHtml = `<input type="text" value="${field.value}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+                 inputHtml = `<input type="text" name="${field.key}" value="${field.value}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
             }
 
             div.innerHTML = `
@@ -456,13 +476,72 @@
 
     function closeEditModal() {
         document.getElementById('edit-modal').classList.add('hidden');
+        currentEditId = null;
     }
 
     function submitEdit() {
-        // Here you would submit the data to backend
-        alert('修改已提交（演示）');
-        closeEditModal();
-        location.reload(); // Mock reload
+        const id = currentEditId;
+        const container = document.getElementById('edit-fields');
+        const inputs = container.querySelectorAll('input');
+        
+        const formData = new FormData();
+        formData.append('id', id);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        
+        inputs.forEach(input => {
+            if (input.name) {
+                // 处理不同类型的输入
+                if (input.name === 'ssy') {
+                    formData.append('value_main', input.value);
+                } else if (input.name === 'szy') {
+                    formData.append('value_sub', input.value);
+                } else if (input.name === 'temperature' || input.name === 'weight' || input.name === 'spo2' || input.name === 'steps') {
+                    formData.append('value_main', input.value);
+                } else if (input.name === 'heart') {
+                    // 心率是单独的记录，暂时不支持在此处与血压同时编辑，或者后端需要特殊处理
+                    // 这里假设是编辑单条心率记录
+                    formData.append('value_main', input.value);
+                }
+            }
+        });
+
+        fetch("{% url 'web_patient:update_health_metric' %}", {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 更新成功，刷新列表项显示
+                const card = document.querySelector(`div[data-id="${id}"]`);
+                if (card) {
+                    // 更新显示值，这里简单处理，重新加载页面或者直接更新DOM文本
+                    // 为了简单起见，这里选择刷新页面，或者你可以根据 data.data 更新 DOM
+                    // 如果要更新DOM:
+                    if (data.data && data.data.value_display) {
+                         // 找到显示值的元素并更新
+                         // 这部分需要根据你的DOM结构来精细化操作，
+                         // 或者直接 location.reload() 最简单
+                         location.reload(); 
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    location.reload();
+                }
+                closeEditModal();
+                showToast('修改成功', 'success');
+            } else {
+                showToast(data.message || '修改失败', 'error');
+            }
+        })
+        .catch(err => {
+            console.error('Update error:', err);
+            showToast('操作失败，请重试', 'error');
+        });
     }
 </script>
 {% endblock %}

@@ -1,0 +1,386 @@
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+
+{% block title %}医患咨询{% endblock %}
+
+{% block body %}
+<div class="flex flex-col h-screen bg-slate-50 relative overflow-hidden">
+    <!-- 1. Top Header -->
+    <div class="fixed top-0 left-0 right-0 h-12 bg-white/90 backdrop-blur-md shadow-sm z-50 flex items-center justify-between px-4 border-b border-slate-100">
+        <a href="javascript:history.back()" class="w-8 h-8 flex items-center justify-center text-slate-600 active:bg-slate-100 rounded-full transition">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </a>
+        <h1 class="text-base font-bold text-slate-800">医患咨询 - 张医生</h1>
+        <div class="w-8"></div> <!-- Placeholder for balance -->
+    </div>
+
+    <!-- 2. Chat Content Area -->
+    <div id="chat-container" class="flex-1 overflow-y-auto pt-16 pb-20 px-4 space-y-5 scroll-smooth -webkit-overflow-scrolling-touch">
+        <!-- Messages will be rendered here by JS -->
+    </div>
+
+    <!-- 3. Bottom Input Area -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 transition-all duration-300" id="input-area">
+        <div class="flex items-end gap-2 p-3">
+            <!-- Plus Button -->
+            <button onclick="toggleMediaMenu()" class="w-9 h-9 shrink-0 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center active:bg-slate-200 transition mb-0.5">
+                <svg id="plus-icon" class="w-6 h-6 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+            </button>
+
+            <!-- Text Input -->
+            <div class="flex-1 bg-slate-100 rounded-2xl px-3 py-2 min-h-[40px] max-h-[120px] overflow-y-auto flex items-center">
+                <textarea id="message-input" rows="1" class="w-full bg-transparent border-0 focus:ring-0 p-0 text-sm text-slate-800 resize-none leading-5 max-h-[100px]" placeholder="请输入咨询内容..."></textarea>
+            </div>
+
+            <!-- Send Button -->
+            <button onclick="sendTextMessage()" class="w-14 h-9 shrink-0 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md shadow-blue-200 active:scale-95 transition flex items-center justify-center mb-0.5">
+                发送
+            </button>
+        </div>
+
+        <!-- Media Menu (Hidden by default) -->
+        <div id="media-menu" class="hidden h-0 overflow-hidden transition-all duration-300 bg-slate-50 border-t border-slate-100">
+            <div class="grid grid-cols-4 gap-4 p-4">
+                <!-- Image/File Upload -->
+                <div class="flex flex-col items-center gap-2" onclick="document.getElementById('file-upload').click()">
+                    <div class="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 active:bg-slate-50">
+                        <svg class="w-7 h-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs text-slate-500">图片/文件</span>
+                    <input type="file" id="file-upload" class="hidden" multiple onchange="handleFileUpload(this)">
+                </div>
+
+                <!-- Video Upload -->
+                <div class="flex flex-col items-center gap-2" onclick="document.getElementById('video-upload').click()">
+                    <div class="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-200 active:bg-slate-50">
+                        <svg class="w-7 h-7 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs text-slate-500">拍摄/视频</span>
+                    <input type="file" id="video-upload" class="hidden" accept="video/*" onchange="handleVideoUpload(this)">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="fixed inset-0 z-[100] bg-black hidden flex items-center justify-center" onclick="closePreview()">
+        <div class="absolute top-4 right-4 z-10">
+            <button class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="preview-content" class="w-full max-h-screen p-2 flex items-center justify-center" onclick="event.stopPropagation()">
+            <!-- Content injected by JS -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // Mock Data
+    const currentUser = {
+        id: 'patient',
+        avatar: 'https://ui-avatars.com/api/?name=P&background=3b82f6&color=fff',
+        name: '我'
+    };
+    
+    const doctorUser = {
+        id: 'doctor',
+        avatar: 'https://ui-avatars.com/api/?name=D&background=94a3b8&color=fff',
+        name: '张医生'
+    };
+
+    let messages = [
+        {
+            id: 1,
+            sender: 'doctor',
+            type: 'text',
+            content: '您好，我是张医生。收到您的咨询请求，请问最近身体有什么不适吗？',
+            time: '14:30',
+            status: 'read'
+        },
+        {
+            id: 2,
+            sender: 'patient',
+            type: 'text',
+            content: '医生您好，这两天感觉呼吸稍微有点费力，特别是晚上。',
+            time: '14:32',
+            status: 'read'
+        }
+    ];
+
+    // DOM Elements
+    const chatContainer = document.getElementById('chat-container');
+    const messageInput = document.getElementById('message-input');
+    const mediaMenu = document.getElementById('media-menu');
+    const inputArea = document.getElementById('input-area');
+    const plusIcon = document.getElementById('plus-icon');
+
+    // Initialize
+    window.onload = () => {
+        renderMessages();
+        scrollToBottom();
+        setupAutoResize();
+        
+        // Hide keyboard on click outside
+        chatContainer.addEventListener('click', () => {
+            messageInput.blur();
+            closeMediaMenu();
+        });
+    };
+
+    function setupAutoResize() {
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            if (this.value === '') {
+                this.style.height = 'auto';
+            }
+        });
+        
+        messageInput.addEventListener('focus', () => {
+            closeMediaMenu();
+            setTimeout(scrollToBottom, 300); // Wait for keyboard
+        });
+    }
+
+    function toggleMediaMenu() {
+        if (mediaMenu.classList.contains('hidden')) {
+            openMediaMenu();
+        } else {
+            closeMediaMenu();
+        }
+    }
+
+    function openMediaMenu() {
+        mediaMenu.classList.remove('hidden');
+        mediaMenu.style.height = 'auto'; // Let it calculate height
+        const height = mediaMenu.scrollHeight + 'px';
+        mediaMenu.style.height = '0px';
+        
+        // Force reflow
+        mediaMenu.offsetHeight; 
+        
+        mediaMenu.classList.remove('h-0');
+        mediaMenu.style.height = height;
+        plusIcon.style.transform = 'rotate(45deg)';
+        scrollToBottom();
+    }
+
+    function closeMediaMenu() {
+        mediaMenu.style.height = '0px';
+        mediaMenu.classList.add('h-0');
+        setTimeout(() => {
+            mediaMenu.classList.add('hidden');
+        }, 300);
+        plusIcon.style.transform = 'rotate(0deg)';
+    }
+
+    function renderMessages() {
+        chatContainer.innerHTML = '';
+        let lastTime = '';
+
+        messages.forEach(msg => {
+            // Add time divider if needed (simple logic: if time diff > 5 mins, usually)
+            // For now, just showing time next to bubble as requested, but maybe date divider for different days
+            
+            const isSelf = msg.sender === 'patient';
+            const avatar = isSelf ? currentUser.avatar : doctorUser.avatar;
+            
+            const div = document.createElement('div');
+            div.className = `flex gap-3 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`;
+            
+            let contentHtml = '';
+            if (msg.type === 'text') {
+                contentHtml = `<p class="whitespace-pre-wrap break-words text-[15px] leading-6">${msg.content}</p>`;
+            } else if (msg.type === 'image') {
+                contentHtml = `<img src="${msg.content}" class="max-w-full rounded-lg cursor-pointer" onclick="previewMedia('${msg.content}', 'image')">`;
+            } else if (msg.type === 'file') {
+                contentHtml = `
+                    <div class="flex items-center gap-3 bg-white/10 p-1 rounded-lg min-w-[200px]">
+                        <div class="w-10 h-10 bg-white/20 rounded flex items-center justify-center shrink-0">
+                            <svg class="w-6 h-6 text-current" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm font-medium truncate">${msg.fileName}</p>
+                            <p class="text-xs opacity-70">${msg.fileSize}</p>
+                        </div>
+                    </div>`;
+            } else if (msg.type === 'video') {
+                contentHtml = `
+                    <div class="relative cursor-pointer" onclick="previewMedia('${msg.content}', 'video')">
+                        <img src="${msg.thumbnail || 'https://via.placeholder.com/300x200?text=Video'}" class="max-w-full rounded-lg opacity-90">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center backdrop-blur-sm">
+                                <svg class="w-5 h-5 text-white ml-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                            </div>
+                        </div>
+                        <span class="absolute bottom-1 right-1 text-[10px] text-white bg-black/50 px-1 rounded">00:15</span>
+                    </div>`;
+            }
+
+            // Status indicator for self messages
+            let statusHtml = '';
+            if (isSelf) {
+                if (msg.status === 'sending') {
+                    statusHtml = `<span class="text-xs text-slate-400 animate-pulse">发送中...</span>`;
+                } else if (msg.status === 'failed') {
+                    statusHtml = `<span class="text-xs text-red-500 cursor-pointer" onclick="resendMessage(${msg.id})">重发</span>`;
+                } else {
+                    statusHtml = `<span class="text-xs text-slate-400">${msg.status === 'read' ? '已读' : '未读'}</span>`;
+                }
+            }
+
+            div.innerHTML = `
+                <div class="w-10 h-10 shrink-0 rounded-full bg-slate-200 overflow-hidden shadow-sm">
+                    <img src="${avatar}" class="w-full h-full object-cover">
+                </div>
+                <div class="flex flex-col ${isSelf ? 'items-end' : 'items-start'} max-w-[75%]">
+                    <div class="flex items-end gap-2 ${isSelf ? 'flex-row-reverse' : 'flex-row'}">
+                        <div class="px-4 py-2.5 rounded-2xl shadow-sm border border-black/5 
+                            ${isSelf ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none'}">
+                            ${contentHtml}
+                        </div>
+                        <span class="text-[10px] text-slate-400 shrink-0 mb-1">${msg.time}</span>
+                    </div>
+                    <div class="mt-1 mr-1">${statusHtml}</div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+        });
+    }
+
+    function scrollToBottom() {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function sendTextMessage() {
+        const content = messageInput.value.trim();
+        if (!content) return;
+
+        const newMsg = {
+            id: Date.now(),
+            sender: 'patient',
+            type: 'text',
+            content: content,
+            time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+            status: 'sending'
+        };
+
+        messages.push(newMsg);
+        renderMessages();
+        scrollToBottom();
+        messageInput.value = '';
+        messageInput.style.height = 'auto'; // Reset height
+
+        // Simulate sending success
+        setTimeout(() => {
+            newMsg.status = 'unread';
+            renderMessages();
+        }, 1000);
+    }
+
+    function handleFileUpload(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const isImage = file.type.startsWith('image/');
+            
+            // Mock upload process
+            const newMsg = {
+                id: Date.now(),
+                sender: 'patient',
+                type: isImage ? 'image' : 'file',
+                content: isImage ? URL.createObjectURL(file) : '#', // For demo
+                fileName: file.name,
+                fileSize: (file.size / 1024 / 1024).toFixed(2) + 'MB',
+                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                status: 'sending'
+            };
+
+            messages.push(newMsg);
+            renderMessages();
+            scrollToBottom();
+            closeMediaMenu();
+            input.value = ''; // Reset
+
+            // Simulate sending success
+            setTimeout(() => {
+                newMsg.status = 'unread';
+                renderMessages();
+            }, 1500);
+        }
+    }
+
+    function handleVideoUpload(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const url = URL.createObjectURL(file);
+            
+            const newMsg = {
+                id: Date.now(),
+                sender: 'patient',
+                type: 'video',
+                content: url,
+                thumbnail: 'https://via.placeholder.com/300x200?text=Video+Preview', // In real app, generate thumbnail
+                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                status: 'sending'
+            };
+
+            messages.push(newMsg);
+            renderMessages();
+            scrollToBottom();
+            closeMediaMenu();
+            input.value = '';
+
+             // Simulate sending success
+             setTimeout(() => {
+                newMsg.status = 'unread';
+                renderMessages();
+            }, 2000);
+        }
+    }
+
+    function previewMedia(url, type) {
+        const modal = document.getElementById('preview-modal');
+        const content = document.getElementById('preview-content');
+        modal.classList.remove('hidden');
+
+        if (type === 'image') {
+            content.innerHTML = `<img src="${url}" class="max-w-full max-h-[90vh] object-contain rounded-lg">`;
+        } else if (type === 'video') {
+            content.innerHTML = `
+                <video controls autoplay class="max-w-full max-h-[90vh] rounded-lg w-full">
+                    <source src="${url}" type="video/mp4">
+                    您的浏览器不支持视频播放。
+                </video>`;
+        }
+    }
+
+    function closePreview() {
+        document.getElementById('preview-modal').classList.add('hidden');
+        document.getElementById('preview-content').innerHTML = ''; // Stop video
+    }
+
+    function resendMessage(id) {
+        // Logic to find message and resend
+        const msg = messages.find(m => m.id === id);
+        if (msg) {
+            msg.status = 'sending';
+            renderMessages();
+            setTimeout(() => {
+                msg.status = 'unread';
+                renderMessages();
+            }, 1000);
+        }
+    }
+</script>
+{% endblock %}

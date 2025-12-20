@@ -6,54 +6,39 @@ from users import choices
 from wx.services.oauth import generate_menu_auth_url
 from users.decorators import auto_wechat_login, check_patient
 from health_data.services.health_metric import HealthMetricService
+from health_data.models import MetricType
 import os
 from decimal import Decimal
 from users.services.patient import PatientService
-
-TEST_PATIENT_ID = os.getenv("TEST_PATIENT_ID") or None
+from datetime import datetime
+from django.utils import timezone  # 处理时区转换
 
 # 定义计划类型与健康指标的映射关系
 PLAN_METRIC_MAPPING = {
     "step": {
-        "key": "steps",
+        "key": MetricType.STEPS,
         "name": "步数",
         "format_func": lambda x: f"{x['value_display']}"
     },
     "temperature": {
-        "key": "body_temperature",  # 假设接口中体温字段为temperature，可根据实际调整
+        "key": MetricType.BODY_TEMPERATURE,
         "name": "体温",
         "format_func": lambda x: f"{x['value_display']}"
     },
     "bp_hr": {
-        "key": ["blood_pressure", "heart_rate"],
+        "key": [MetricType.BLOOD_PRESSURE, MetricType.HEART_RATE],
         "name": "血压心率",
-        "format_func": lambda x: f"血压{x['blood_pressure']['value_display']}mmHg，心率{x['heart_rate']['value_display']}"
+        "format_func": lambda x: f"血压{x[MetricType.BLOOD_PRESSURE]['value_display'] if x.get(MetricType.BLOOD_PRESSURE) else '--'}mmHg，心率{x[MetricType.HEART_RATE]['value_display'] if x.get(MetricType.HEART_RATE) else '--'}"
     },
     "spo2": {
-        "key": "blood_oxygen",
+        "key": MetricType.BLOOD_OXYGEN,
         "name": "血氧饱和度",
         "format_func": lambda x: f"{x['value_display']}"
     },
     "weight": {
-        "key": "weight",
+        "key": MetricType.WEIGHT,
         "name": "体重",
         "format_func": lambda x: f"{x['value_display']}"
-    },
-    "breath": {
-        "key": "dyspnea",
-        "name": "呼吸情况",
-        "format_func": lambda x: "正常" if x else "异常"  # 根据实际数据格式调整
-    },
-    "sputum": {
-        "key": ["sputum_color", "cough"],
-        "name": "咳嗽与痰色",
-        "format_func": lambda x: f"咳嗽：{x['cough'] or '无'}，痰色：{x['sputum_color'] or '无'}"
-    },
-    "pain": {
-        "key": ["pain_incision", "pain_shoulder", "pain_bone", "pain_head"],
-        "name": "疼痛情况",
-        "format_func": lambda x: 
-            f"切口：{x['pain_incision'] or '无'}，肩部：{x['pain_shoulder'] or '无'}，骨骼：{x['pain_bone'] or '无'}，头部：{x['pain_head'] or '无'}"
     },
     "medication": {
         "key": "medication",  # 假设接口中有用药字段，可根据实际调整
@@ -91,15 +76,14 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         is_family = False
     
     # 确定患者ID（测试ID或实际患者ID）
-    patient_id = TEST_PATIENT_ID if TEST_PATIENT_ID else (patient.id if patient else None)
-    
+    patient_id =  patient.id or None
     #获取守护天数
     service_days = "0"
     if patient_id:  # 获取守护天数
         service_days = PatientService().get_guard_days(patient_id)
     else:
         service_days = "0"
-    # 模拟每日计划数据（默认全部未完成）
+    # 模拟每日计划数据（默认全部未完成） TODO 待调试今日计划-获取任务数据
     daily_plans = [
         {
             "type": "medication",
@@ -107,14 +91,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             "subtitle": "您今天还未服药",
             "status": "pending",
             "action_text": "去服药",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "step",
-            "title": "今日步数",
-            "subtitle": "您今天还未记录",
-            "status": "pending",
-            "action_text": "去填写",
             "icon_class": "bg-blue-100 text-blue-600",
         },
         {
@@ -147,30 +123,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             "subtitle": "请记录今日体重",
             "status": "pending",
             "action_text": "去填写",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "breath",
-            "title": "呼吸情况",
-            "subtitle": "请自测呼吸情况",
-            "status": "pending",
-            "action_text": "去自测",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "sputum",
-            "title": "咳嗽与痰色情况自测",
-            "subtitle": "请自测咳嗽与痰色",
-            "status": "pending",
-            "action_text": "去自测",
-            "icon_class": "bg-blue-100 text-blue-600",
-        },
-        {
-            "type": "pain",
-            "title": "疼痛情况记录",
-            "subtitle": "请记录今日疼痛情况",
-            "status": "pending",
-            "action_text": "去记录",
             "icon_class": "bg-blue-100 text-blue-600",
         },
         {
@@ -224,16 +176,38 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             should_fetch_data = True
             completed_task_types.add(task_type)
     
+    
+     # ========== 新增：日期校验辅助函数 ==========
+    def is_today_data(metric_info: dict) -> bool:
+        """
+        判断指标数据的measured_at是否为今日（年月日匹配）
+        :param metric_info: 指标字典（如steps、blood_pressure），需包含measured_at字段
+        :return: True=今日数据，False=非今日数据
+        """
+        if not metric_info or 'measured_at' not in metric_info:
+            return False
+        # 1. 提取UTC时间并转换为本地时区（Django配置的TIME_ZONE，如Asia/Shanghai）
+        utc_time = metric_info['measured_at']
+        local_time = timezone.localtime(utc_time)
+        # 2. 获取当前本地时间的年月日
+        today = timezone.now().date()
+        # 3. 对比年月日是否一致
+        return local_time.date() == today
+
     # 如果需要，从接口拉取一次数据
     listData = {}
-    if should_fetch_data and patient_id:
+    # 今日步数
+    step_count = "0"
+    if patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
-            print(f"==提交后拉取健康指标数据=={listData}")
+            if MetricType.STEPS in listData and listData[MetricType.STEPS] is not None:
+                steps_info = listData[MetricType.STEPS]
+                # 仅当步数是今日数据时才更新，否则保持0
+                if is_today_data(steps_info):
+                    step_count = steps_info.get('value_display', '0')
         except Exception as e:
-            print(f"获取健康指标数据失败：{e}")
             listData = {}
-
     # 遍历计划列表，仅更新刚刚完成的任务
     for plan in daily_plans:
         plan_type = plan["type"]
@@ -243,27 +217,44 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         if not metric_config:
             continue
         
+        # 默认仅处理步数，提交后处理所有类型
+        # if not should_fetch_data and plan_type != "step":
+        #     continue 
+        
         # 获取该计划对应的指标数据
         metric_data = get_metric_value(metric_config["key"], listData)
         
-        # 有有效数据 → 更新为已完成状态并展示数据
+        # 有有效数据 → 先判断是否是今日数据，再更新状态
         if metric_data:
+            # 找到原始指标信息（用于获取measured_at）
+            # 兼容metric_key是单个值/列表的情况
+            metric_key = metric_config["key"]
+            raw_metric_info = None
+            if isinstance(metric_key, list):
+                # 取第一个非空的指标信息（如bp_hr可能包含血压/心率）
+                for k in metric_key:
+                    if listData.get(k):
+                        raw_metric_info = listData[k]
+                        break
+            else:
+                raw_metric_info = listData.get(metric_key)
+            
+            # 非今日数据 → 跳过更新，保留默认状态
+            if not is_today_data(raw_metric_info):
+                continue
+            
+            # 今日数据 → 更新为已完成状态并展示数据
             plan["status"] = "completed"
             try:
                 display_value = metric_config["format_func"](metric_data)
                 plan["subtitle"] = f"今日已记录：{display_value}"
             except Exception as e:
-                print(f"格式化{plan_type}显示值失败: {e}")
-                plan["subtitle"] = "今日已记录：数据已更新"
+                plan["subtitle"] = "今日已记录"
         # 无有效数据 → 检查是否是刚提交的任务（兜底标记为完成）
         elif plan_type in completed_task_types:
             plan["status"] = "completed"
             plan["subtitle"] = "今日已记录：提交成功"
-        # 无数据且非刚提交 → 保留默认值，不做处理
-
             
-
-
     # ========== 任务URL映射（如果需要保留） ==========
      # "temperature": generate_menu_auth_url("web_patient:record_temperature"),
         # "bp_hr": generate_menu_auth_url("web_patient:record_bp"),
@@ -275,7 +266,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         # "followup": generate_menu_auth_url("web_patient:record_temperature"),
         # "checkup": generate_menu_auth_url("web_patient:record_checkup"),
     task_url_mapping = {
-        "step": reverse("web_patient:record_steps"),
         "temperature": reverse("web_patient:record_temperature"),
         "bp_hr": reverse("web_patient:record_bp"),
         "spo2": reverse("web_patient:record_spo2"),
@@ -292,11 +282,11 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "patient": patient,
         "is_family": is_family,
         "service_days": service_days,
-        "is_member": True,
         "daily_plans": daily_plans,
         "buy_url": generate_menu_auth_url("market:product_buy"),
         "patient_id": patient_id,
-        "menuUrl": task_url_mapping
+        "menuUrl": task_url_mapping,
+        "step_count": step_count,
     }
     return render(request, "web_patient/patient_home.html", context)
 
