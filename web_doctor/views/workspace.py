@@ -301,6 +301,36 @@ def _build_settings_context(
         "questionnaire_schedule": active_questionnaire["schedule"] if active_questionnaire else [],
     }
 
+    # 模拟“个人资料”数据
+    patient_info = {
+        "name": patient.name,
+        "gender": patient.get_gender_display(),
+        "phone": patient.phone,
+        "birth_date": str(patient.birth_date) if getattr(patient, "birth_date", None) else "请填写出生日期",
+        "address": getattr(patient, "address", "") or "请填写患者地址",
+        "emergency_contact": "请填写紧急联系人",
+        "emergency_relation": "请填写联系人关系",
+        "emergency_phone": "请填写联系人电话",
+        "relations": [
+            {"name": "张四", "relation": "父子", "phone": "13999999999"},
+            {"name": "王五", "relation": "母子", "phone": "13888888888"},
+            {"name": "李六", "relation": "配偶", "phone": "13777777777"},
+            {"name": "赵七", "relation": "兄弟", "phone": "13666666666"},
+            {"name": "钱八", "relation": "姐妹", "phone": "13555555555"},
+        ]
+    }
+
+    # 模拟“病情信息”数据
+    medical_info = {
+        "diagnosis": "IV期肺腺癌（骨、脑转移）",
+        "risk_factors": "癌症家族史，吸烟",
+        "clinical_diagnosis": "右肺上叶后段恶性肿瘤性病变并远端阻塞性肺炎",
+        "gene_test": "EGFR 19外显子缺失",
+        "history": "高血压5年，肺结节10年，II型糖尿病",
+        "surgery": "CT引导下肺穿刺活检术",
+        "last_updated": "2025-11-01"
+    }
+
     return {
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,
@@ -308,6 +338,8 @@ def _build_settings_context(
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
         "current_day_index": current_day_index,
+        "patient_info": patient_info,
+        "medical_info": medical_info,
     }
 
 
