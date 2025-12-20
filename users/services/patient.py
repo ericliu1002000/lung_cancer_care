@@ -185,6 +185,7 @@ class PatientService:
 
         relation_name = kwargs.get("relation_name", "")
         receive_alert_msg = kwargs.get("receive_alert_msg", False)
+        phone = kwargs.get("phone", None)
 
         PatientRelation.objects.update_or_create(
             patient=profile,
@@ -192,6 +193,7 @@ class PatientService:
             defaults={
                 "relation_type": relation_type,
                 "relation_name": relation_name,
+                "phone": phone,
                 "receive_alert_msg": receive_alert_msg,
                 "is_active": True,
             },
