@@ -808,6 +808,11 @@ video {
   margin-bottom: 1.25rem;
 }
 
+.mx-1 {
+  margin-left: 0.25rem;
+  margin-right: 0.25rem;
+}
+
 .-ml-2 {
   margin-left: -0.5rem;
 }
@@ -918,6 +923,10 @@ video {
 
 .mt-8 {
   margin-top: 2rem;
+}
+
+.mr-6 {
+  margin-right: 1.5rem;
 }
 
 .block {
@@ -1092,6 +1101,10 @@ video {
   max-height: 100vh;
 }
 
+.max-h-\[200px\] {
+  max-height: 200px;
+}
+
 .min-h-\[240px\] {
   min-height: 240px;
 }
@@ -1248,6 +1261,14 @@ video {
   width: 100%;
 }
 
+.w-\[40\%\] {
+  width: 40%;
+}
+
+.w-\[60\%\] {
+  width: 60%;
+}
+
 .min-w-0 {
   min-width: 0px;
 }
@@ -1306,6 +1327,10 @@ video {
 
 .max-w-xl {
   max-width: 36rem;
+}
+
+.max-w-6xl {
+  max-width: 72rem;
 }
 
 .flex-1 {
@@ -1502,6 +1527,10 @@ video {
   gap: 1.5rem;
 }
 
+.gap-5 {
+  gap: 1.25rem;
+}
+
 .gap-x-2 {
   -moz-column-gap: 0.5rem;
        column-gap: 0.5rem;
@@ -1517,6 +1546,20 @@ video {
 
 .gap-y-8 {
   row-gap: 2rem;
+}
+
+.gap-x-4 {
+  -moz-column-gap: 1rem;
+       column-gap: 1rem;
+}
+
+.gap-x-8 {
+  -moz-column-gap: 2rem;
+       column-gap: 2rem;
+}
+
+.gap-y-4 {
+  row-gap: 1rem;
 }
 
 .space-x-2 > :not([hidden]) ~ :not([hidden]) {
@@ -1888,6 +1931,11 @@ video {
 
 .border-white\/5 {
   border-color: rgb(255 255 255 / 0.05);
+}
+
+.border-indigo-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(199 210 254 / var(--tw-border-opacity, 1));
 }
 
 .border-t-blue-600 {

@@ -6,6 +6,7 @@
 - 各 Tab（section）局部内容渲染
 """
 
+import logging
 from datetime import date
 
 from django.contrib.auth.decorators import login_required
@@ -24,9 +25,13 @@ from core.models import TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
 from core.service.questionnaire import QuestionnaireService
+from health_data.services.medical_history_service import MedicalHistoryService
 
 from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
+from users.services.patient import PatientService
+
+logger = logging.getLogger(__name__)
 
 
 def _get_workspace_identities(user):
@@ -165,6 +170,18 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
                 selected_cycle_id=selected_cycle_id,
             )
         )
+    elif section == "medical_history":
+        template_name = "web_doctor/partials/medical_history/list.html"
+        try:
+            page = int(request.GET.get("page", 1))
+        except (TypeError, ValueError):
+            page = 1
+        
+        history_page = MedicalHistoryService.get_medical_history_list(patient, page=page, page_size=10)
+        context.update({
+            "history_page": history_page,
+            "patient": patient
+        })
 
     return render(request, template_name, context)
 
@@ -301,35 +318,55 @@ def _build_settings_context(
         "questionnaire_schedule": active_questionnaire["schedule"] if active_questionnaire else [],
     }
 
-    # 模拟“个人资料”数据
+    # 获取亲情账号列表
+    relations_qs = PatientService().get_patient_family_members(patient)
+    relations_data = []
+    for rel in relations_qs:
+        # 获取关联用户的显示名称（优先取微信昵称，兜底用 username）
+        
+        relations_data.append({
+            "name": rel.relation_name,
+            "relation": rel.get_relation_type_display(),
+            "phone": rel.phone,
+        })
+
+    # 构造个人资料数据
     patient_info = {
         "name": patient.name,
         "gender": patient.get_gender_display(),
         "phone": patient.phone,
         "birth_date": str(patient.birth_date) if getattr(patient, "birth_date", None) else "请填写出生日期",
         "address": getattr(patient, "address", "") or "请填写患者地址",
-        "emergency_contact": "请填写紧急联系人",
-        "emergency_relation": "请填写联系人关系",
-        "emergency_phone": "请填写联系人电话",
-        "relations": [
-            {"name": "张四", "relation": "父子", "phone": "13999999999"},
-            {"name": "王五", "relation": "母子", "phone": "13888888888"},
-            {"name": "李六", "relation": "配偶", "phone": "13777777777"},
-            {"name": "赵七", "relation": "兄弟", "phone": "13666666666"},
-            {"name": "钱八", "relation": "姐妹", "phone": "13555555555"},
-        ]
+        "emergency_contact": getattr(patient, "ec_name", "") or "",
+        "emergency_relation": getattr(patient, "ec_relation", "") or  "",
+        "emergency_phone": getattr(patient, "ec_phone", "") or  "",
+        "relations": relations_data,
     }
 
-    # 模拟“病情信息”数据
-    medical_info = {
-        "diagnosis": "IV期肺腺癌（骨、脑转移）",
-        "risk_factors": "癌症家族史，吸烟",
-        "clinical_diagnosis": "右肺上叶后段恶性肿瘤性病变并远端阻塞性肺炎",
-        "gene_test": "EGFR 19外显子缺失",
-        "history": "高血压5年，肺结节10年，II型糖尿病",
-        "surgery": "CT引导下肺穿刺活检术",
-        "last_updated": "2025-11-01"
-    }
+    # 获取最新病情信息
+    last_history = MedicalHistoryService.get_last_medical_history(patient)
+    if last_history:
+        medical_info = {
+            "diagnosis": last_history.tumor_diagnosis,
+            "risk_factors": last_history.risk_factors,
+            "clinical_diagnosis": last_history.clinical_diagnosis,
+            "gene_test": last_history.genetic_test,
+            "history": last_history.past_medical_history,
+            "surgery": last_history.surgical_information,
+            "last_updated": last_history.created_at.strftime("%Y-%m-%d"),
+        }
+    else:
+        # 无记录时的默认空状态
+        medical_info = {
+            "diagnosis": "暂无记录",
+            "risk_factors": "暂无记录",
+            "clinical_diagnosis": "暂无记录",
+            "gene_test": "暂无记录",
+            "history": "暂无记录",
+            "surgery": "暂无记录",
+            "clinical_events": "暂无记录",
+            "last_updated": "暂无记录",
+        }
 
     return {
         "active_cycle": active_cycle,
@@ -826,6 +863,105 @@ def patient_questionnaire_detail_toggle(
 
     # 不返回 HTML，HTMX 侧仅用于触发后端更新与 Toast
     return HttpResponse(status=204)
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_profile_update(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    更新患者个人档案（姓名、电话、性别、地址、紧急联系人等）。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    # 构造 Service 所需的数据字典
+    data = {
+        "name": request.POST.get("name"),
+        "phone": request.POST.get("phone"),
+        "gender": request.POST.get("gender"),
+        "birth_date": request.POST.get("birth_date"),
+        "address": request.POST.get("address"),
+        "ec_name": request.POST.get("emergency_contact"),
+        "ec_relation": request.POST.get("emergency_relation"),
+        "ec_phone": request.POST.get("emergency_phone"),
+    }
+
+    # 性别转换：前端传 "男"/"女"，Service 需要 1/2
+    gender_map = {"男": 1, "女": 2}
+    data["gender"] = gender_map.get(data.get("gender"), 0)
+
+    try:
+        PatientService().save_patient_profile(request.user, data, profile_id=patient.id)
+        logger.info(f"Successfully updated patient profile for {patient_id}.")
+        # 强制刷新 patient 对象，确保获取到最新数据
+        patient.refresh_from_db()
+    except ValidationError as exc:
+        print(f"{exc}")
+        message = str(exc)
+        response = HttpResponse(message, status=400)
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
+        return response
+
+    # 更新成功，重新渲染个人资料卡片
+    settings_ctx = _build_settings_context(patient)
+    patient_info = settings_ctx["patient_info"]
+    
+    return render(
+        request,
+        "web_doctor/partials/settings/patient_profile_card.html",
+        {"patient_info": patient_info, "patient": patient}
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_medical_history_update(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    更新（新增）患者病情记录。
+    每次保存都会创建一条新的历史记录。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    # 构造 Service 所需的数据字典
+    # 注意：前端字段名需与 Service 期望的字段名做映射
+    data = {
+        "tumor_diagnosis": request.POST.get("diagnosis"),
+        "risk_factors": request.POST.get("risk_factors"),
+        "clinical_diagnosis": request.POST.get("clinical_diagnosis"),
+        "genetic_test": request.POST.get("gene_test"),
+        "past_medical_history": request.POST.get("history"),
+        "surgical_information": request.POST.get("surgery"),
+        # clinical_events 暂时没有对应数据库字段，暂不处理
+    }
+
+    logger.info(f"Adding new medical history for patient {patient_id}. User: {request.user.id}, Data: {data}")
+
+    try:
+        MedicalHistoryService.add_medical_history(request.user, patient, data)
+        logger.info(f"Successfully added medical history for patient {patient_id}.")
+    except Exception as exc:
+        logger.exception(f"Unexpected error adding medical history: {exc}")
+        message = "系统错误，请联系管理员。"
+        response = HttpResponse(message, status=500)
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
+        return response
+
+    # 重新构建上下文以获取最新数据
+    settings_ctx = _build_settings_context(patient)
+    medical_info = settings_ctx["medical_info"]
+    
+    return render(
+        request,
+        "web_doctor/partials/settings/medical_info_card.html",
+        {"medical_info": medical_info, "patient": patient}
+    )
 
 
 @login_required

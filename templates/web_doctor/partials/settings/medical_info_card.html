@@ -1,42 +1,47 @@
-<div class="bg-white rounded-xl shadow-sm border  overflow-hidden min-h-[240px] flex flex-col relative">
+<div id="medical-info-card" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[240px] flex flex-col relative">
     <div class="px-5 py-4 flex items-center justify-between shrink-0">
         <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">病情信息</h3>
-        <a href="#" class="text-sm text-indigo-600 hover:underline">历史记录 ></a>
+        <a href="#" 
+           hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'medical_history' %}"
+           hx-target="#patient-content"
+           class="text-sm text-indigo-600 hover:underline">
+            历史记录 >
+        </a>
     </div>
 
     <div class="flex-1 px-5 pb-4 overflow-y-auto">
         <div class="grid grid-cols-1 gap-y-2 text-sm">
             <div class="flex items-start">
                 <span class="text-slate-500 w-20 shrink-0 text-right mr-3">肿瘤诊断：</span>
-                <span class="text-slate-800 font-medium">{{ medical_info.diagnosis }}</span>
+                <span class="text-slate-800 font-medium">{{ medical_info.diagnosis|default:"无" }}</span>
             </div>
             <div class="flex items-start">
                 <span class="text-slate-500 w-20 shrink-0 text-right mr-3">危险因素：</span>
-                <span class="text-slate-800">{{ medical_info.risk_factors }}</span>
+                <span class="text-slate-800">{{ medical_info.risk_factors|default:"无" }}</span>
             </div>
             <div class="flex items-start">
                 <span class="text-slate-500 w-20 shrink-0 text-right mr-3">临床诊断：</span>
-                <span class="text-slate-800">{{ medical_info.clinical_diagnosis }}</span>
+                <span class="text-slate-800">{{ medical_info.clinical_diagnosis|default:"无" }}</span>
             </div>
             <div class="flex items-start">
                 <span class="text-slate-500 w-20 shrink-0 text-right mr-3">基因检测：</span>
-                <span class="text-slate-800">{{ medical_info.gene_test }}</span>
+                <span class="text-slate-800">{{ medical_info.gene_test|default:"无" }}</span>
             </div>
             <div class="flex items-start">
                 <span class="text-slate-500 w-20 shrink-0 text-right mr-3">既往病史：</span>
-                <span class="text-slate-800">{{ medical_info.history }}</span>
+                <span class="text-slate-800">{{ medical_info.history|default:"无" }}</span>
             </div>
             <div class="flex items-start">
                 <span class="text-slate-500 w-20 shrink-0 text-right mr-3">手术信息：</span>
-                <span class="text-slate-800">{{ medical_info.surgery }}</span>
+                <span class="text-slate-800">{{ medical_info.surgery|default:"无" }}</span>
             </div>
         </div>
     </div>
 
-    <div class="absolute bottom-4 right-4 flex items-center gap-4">
+    <div class=" flex items-center justify-end gap-4 p-5">
         <span class="text-xs text-slate-400">最近更新：{{ medical_info.last_updated }}</span>
         <button onclick="document.getElementById('edit-medical-modal').showModal()" class="px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-full hover:bg-indigo-700 shadow-sm transition-colors">
-            编辑
+            更新
         </button>
     </div>
 </div>
@@ -51,7 +56,13 @@
             </button>
         </div>
         
-        <form method="dialog" class="p-6 overflow-y-auto space-y-4" onsubmit="return validateMedicalForm(this)">
+        <form method="post" 
+              hx-post="{% url 'web_doctor:patient_medical_history_update' patient.id %}" 
+              hx-target="#medical-info-card" 
+              hx-swap="outerHTML"
+              class="p-6 overflow-y-auto space-y-4" 
+              onsubmit="return validateMedicalForm(this)">
+            {% csrf_token %}
             <div class="space-y-4">
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">肿瘤诊断 <span class="text-rose-500">*</span></label>
@@ -67,7 +78,7 @@
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">基因检测 <span class="text-rose-500">*</span></label>
-                    <input type="text" name="gene_test" value="{{ medical_info.gene_test }}" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">
+                    <textarea  name="gene_test"  required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.gene_test }}</textarea>
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">既往病史 <span class="text-rose-500">*</span></label>
@@ -75,7 +86,7 @@
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">手术信息 <span class="text-rose-500">*</span></label>
-                    <input type="text" name="surgery" value="{{ medical_info.surgery }}" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">
+                    <textarea  name="surgery" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.surgery }}</textarea>
                 </div>
             </div>
             
