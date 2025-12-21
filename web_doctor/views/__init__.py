@@ -18,7 +18,8 @@ from .workspace import (
     patient_plan_item_toggle_day,
     patient_questionnaire_detail_toggle,
     patient_profile_update,
-    patient_medical_history_update
+    patient_medical_history_update,
+    patient_treatment_cycle_terminate
 )
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "patient_workspace",
     "patient_workspace_section",
     "patient_treatment_cycle_create",
+    "patient_treatment_cycle_terminate",
     "patient_cycle_medication_add",
     "patient_cycle_plan_toggle",
     "patient_plan_item_update_field",

@@ -20,7 +20,7 @@ from django.core.exceptions import ValidationError
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
-from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle
+from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle, terminate_treatment_cycle
 from core.models import TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
@@ -198,8 +198,9 @@ def _build_settings_context(
 
     active_cycle = get_active_treatment_cycle(patient)
 
-    # 患者全部疗程列表，按结束日期倒序排列（结束时间最新的在前）
-    cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
+    # 患者全部疗程列表，改为正序排列（最早的在前）
+    # 之前是 order_by("-end_date", "-start_date")
+    cycles_qs = patient.treatment_cycles.all().order_by("start_date")
     paginator = Paginator(cycles_qs, 5)
     try:
         page_number = int(tc_page) if tc_page else 1
@@ -209,15 +210,26 @@ def _build_settings_context(
 
     # 当前选中的疗程：
     # - 若显式传入 selected_cycle_id，则优先使用；
-    # - 否则默认选中当前有效疗程 active_cycle。
+    # - 否则默认选中疗程列表的第一条（最新的一个疗程）。
     selected_cycle: TreatmentCycle | None = None
     if selected_cycle_id:
         selected_cycle = patient.treatment_cycles.filter(pk=selected_cycle_id).first()
+    
     if selected_cycle is None:
-        selected_cycle = active_cycle
+        # 如果没有指定 ID，则默认选中分页列表中的第一个疗程（如果存在）
+        if cycle_page.object_list:
+            selected_cycle = cycle_page.object_list[0]
+        # 如果当前页没数据（例如空列表），尝试回退到 active_cycle 作为兜底
+        elif active_cycle:
+            selected_cycle = active_cycle
 
     # 默认展开选中的疗程；若不存在则不展开任何卡片
     expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
+
+    # 判断当前选中的疗程是否可以终止（必须是进行中状态）
+    can_terminate_selected_cycle = False
+    if selected_cycle and selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS:
+        can_terminate_selected_cycle = True
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
@@ -371,6 +383,7 @@ def _build_settings_context(
     return {
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,
+        "can_terminate_selected_cycle": can_terminate_selected_cycle,
         "cycle_page": cycle_page,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
@@ -454,6 +467,66 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
         "web_doctor/partials/settings/main.html",
         context,
     )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_treatment_cycle_terminate(request: HttpRequest, patient_id: int, cycle_id: int) -> HttpResponse:
+    """
+    终止指定的治疗疗程：
+    - 校验患者归属权
+    - 校验疗程归属权
+    - 调用 core.service.treatment_cycle.terminate_treatment_cycle
+    - 成功或失败后重新渲染设置页面
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    try:
+        cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+    except TreatmentCycle.DoesNotExist:
+        raise Http404("疗程不存在或不属于该患者")
+
+    errors: list[str] = []
+    try:
+        terminate_treatment_cycle(cycle.id)
+    except ValidationError as exc:
+        errors.append(str(exc))
+
+    # 重新构建上下文
+    context: dict = {
+        "patient": patient,
+        "active_tab": "settings",
+        "cycle_form_errors": errors,
+        "cycle_form_initial": {
+            "name": "",
+            "start_date": "",
+            "cycle_days": "",
+        },
+    }
+    # 终止后，通常不再有选中的 active cycle，或者 selected_cycle 变为已终止状态
+    # 这里我们让 _build_settings_context 自动决定 active_cycle（此时应该为 None 或下一个 active）
+    # 但我们仍保持当前 cycle 为 selected，以便用户看到状态变更
+    context.update(
+        _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=cycle.id,
+        )
+    )
+
+    response = render(
+        request,
+        "web_doctor/partials/settings/main.html",
+        context,
+    )
+    if errors:
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace('"', '\\"')
+    
+    return response
 
 
 @login_required

@@ -25,6 +25,11 @@ urlpatterns = [
         name="patient_treatment_cycle_create",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/terminate/",
+        views.patient_treatment_cycle_terminate,
+        name="patient_treatment_cycle_terminate",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/medication/add/",
         views.patient_cycle_medication_add,
         name="patient_cycle_medication_add",
