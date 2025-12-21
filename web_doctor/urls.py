@@ -50,6 +50,16 @@ urlpatterns = [
         name="patient_questionnaire_detail_toggle",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/profile/update/",
+        views.patient_profile_update,
+        name="patient_profile_update",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/medical_history/update/",
+        views.patient_medical_history_update,
+        name="patient_medical_history_update",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",
         views.patient_workspace_section,
         name="patient_workspace_section",
