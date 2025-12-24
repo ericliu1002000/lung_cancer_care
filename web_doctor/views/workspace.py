@@ -264,8 +264,10 @@ def _build_settings_context(
 
     # 判断当前选中的疗程是否可以终止（必须是进行中状态）
     can_terminate_selected_cycle = False
+    is_cycle_editable = False
     if selected_cycle and selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS:
         can_terminate_selected_cycle = True
+        is_cycle_editable = True
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
@@ -425,6 +427,7 @@ def _build_settings_context(
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,
         "can_terminate_selected_cycle": can_terminate_selected_cycle,
+        "is_cycle_editable": is_cycle_editable,
         "cycle_page": cycle_page,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
@@ -631,6 +634,7 @@ def patient_cycle_medication_add(request: HttpRequest, patient_id: int, cycle_id
         "patient": patient,
         "cycle": selected_cycle,
         "plan_view": settings_ctx.get("plan_view"),
+        "is_cycle_editable": selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS if selected_cycle else False,
     }
 
     return render(
@@ -725,6 +729,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             "cycle": cycle,
             "check": target_check,
             "current_day": current_day,
+            "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
         }
         return render(
             request,
@@ -803,6 +808,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             "cycle": cycle,
             "monitoring": target_m,
             "current_day": current_day,
+            "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
         }
         return render(
             request,
@@ -875,6 +881,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         "patient": patient,
         "cycle": cycle,
         "med": medications[0],
+        "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
     }
     return render(
         request,

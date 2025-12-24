@@ -2,6 +2,7 @@
 <tr
   class="hover:bg-slate-50 transition-colors {% if not check.is_active %}opacity-60{% endif %}"
   data-checkup-row
+  {% if not is_cycle_editable %}data-readonly-row="1"{% endif %}
 >
   <td class="px-4 py-3">
     <div class="flex items-center gap-3">
@@ -18,6 +19,7 @@
             data-checkup-toggle
             data-atomic-checkbox="1"
             {% if check.is_active %}checked{% endif %}
+            {% if not is_cycle_editable %}disabled{% endif %}
             hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
             hx-include="closest form"
             hx-target="closest tr"
@@ -44,7 +46,9 @@
         data-checkup-slot
         data-atomic-checkbox="1"
         {% if day in check.schedule %}checked{% endif %}
-        {% if current_day and day < current_day %}
+        {% if not is_cycle_editable %}
+        disabled
+        {% elif current_day and day < current_day %}
         data-readonly="1"
         disabled
         {% elif check.is_active and check.plan_item_id and day >= current_day %}
