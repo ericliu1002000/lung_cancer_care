@@ -10,15 +10,23 @@
         <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
             <div class="flex items-center gap-4">
                 <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">医院计划设置</h3>
-                {% if active_cycle %}
+                {% if selected_cycle %}
                     <span class="text-sm text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-md shadow-sm">
-                        当前疗程：<span class="font-bold text-slate-900">{{ active_cycle.name }}</span>
+                        当前选中：<span class="font-bold text-slate-900">{{ selected_cycle.name }}</span>
                     </span>
                     <span class="text-sm text-slate-400">
-                        {{ active_cycle.start_date }} 开始
+                        {{ selected_cycle.start_date }} 开始
                     </span>
+                    {% if can_terminate_selected_cycle %}
+                    <button 
+                        type="button" 
+                        onclick="document.getElementById('terminate-cycle-modal').showModal()"
+                        class="ml-2 text-xs text-rose-600 border border-rose-200 rounded px-2 py-0.5 hover:bg-rose-50 transition-colors">
+                        终止当前疗程
+                    </button>
+                    {% endif %}
                 {% else %}
-                    <span class="text-sm text-slate-400 italic">当前无进行中疗程</span>
+                    <span class="text-sm text-slate-400 italic">当前无选中疗程</span>
                 {% endif %}
             </div>
             <div class="text-sm text-indigo-600 flex items-center gap-3">
@@ -167,7 +175,40 @@
 
     </div>
 </div>
+
+{% if selected_cycle and can_terminate_selected_cycle %}
+<dialog id="terminate-cycle-modal" class="rounded-xl shadow-xl backdrop:bg-slate-900/30 w-full max-w-sm p-0 open:animate-fade-in">
+    <div class="flex flex-col">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <h3 class="text-lg font-bold text-slate-800">确认终止</h3>
+            <button type="button" onclick="this.closest('dialog').close()" class="text-slate-400 hover:text-slate-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="p-6">
+            <p class="text-slate-600 text-sm">是否确定终止当前选中疗程“<span class="font-bold text-slate-800">{{ selected_cycle.name }}</span>”？<br>终止后该疗程将变为历史状态。</p>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+            <button type="button" onclick="this.closest('dialog').close()" class="px-4 py-2 text-sm text-slate-600 hover:bg-white border border-transparent hover:border-slate-200 rounded-lg transition-colors">取消</button>
+            <form method="post" hx-post="{% url 'web_doctor:patient_treatment_cycle_terminate' patient.id selected_cycle.id %}" hx-target="#patient-content" class="inline-block">
+                {% csrf_token %}
+                <button 
+                    type="submit"
+                    class="px-4 py-2 text-sm text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors">
+                    确定终止
+                </button>
+            </form>
+        </div>
+    </div>
+</dialog>
+{% endif %}
+
 </div>
+
+{# OOB 更新 Tab 栏状态 #}
+{% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True %}
 
 <style>
   /* 用药计划：剂量/频次未保存与已保存的底色提示 */

@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from web_doctor.views import home
 
 app_name = "web_doctor"
 
@@ -23,6 +24,11 @@ urlpatterns = [
         "doctor/workspace/patient/<int:patient_id>/treatment-cycle/create/",
         views.patient_treatment_cycle_create,
         name="patient_treatment_cycle_create",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/terminate/",
+        views.patient_treatment_cycle_terminate,
+        name="patient_treatment_cycle_terminate",
     ),
     path(
         "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/medication/add/",
@@ -53,6 +59,16 @@ urlpatterns = [
         "doctor/workspace/patient/<int:patient_id>/medical_history/update/",
         views.patient_medical_history_update,
         name="patient_medical_history_update",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/home/remark/update/",
+        home.patient_home_remark_update,
+        name="patient_home_remark_update",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/medication/stop/",
+        home.patient_medication_stop,
+        name="patient_medication_stop",
     ),
     path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",

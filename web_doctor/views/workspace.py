@@ -19,7 +19,7 @@ from django.core.paginator import Paginator
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
-from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle
+from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle, terminate_treatment_cycle
 from core.models import TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
@@ -29,6 +29,7 @@ from health_data.services.medical_history_service import MedicalHistoryService
 from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
 from users.services.patient import PatientService
+from web_doctor.views.home import build_home_context
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,10 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
     if patient.id not in allowed_patients:
         raise Http404("未找到患者")
 
-    context = {"patient": patient}
+    context = {
+        "patient": patient,
+        "active_tab": section,  # 确保 Tab 高亮正确
+    }
     template_name = "web_doctor/partials/sections/placeholder.html"
 
     if section == "settings":
@@ -181,6 +185,32 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
             "history_page": history_page,
             "patient": patient
         })
+    elif section == "home":
+        template_name = "web_doctor/partials/home/home.html"
+        context.update(build_home_context(patient))
+    elif section == "checkup_history":
+        from web_doctor.views.home import handle_checkup_history_section
+        return render(
+            request,
+            handle_checkup_history_section(request, context),
+            context
+        )
+
+    elif section == "medication_history":
+        from web_doctor.views.home import handle_medication_history_section
+        return render(
+            request,
+            handle_medication_history_section(request, context),
+            context
+        )
+
+    elif section == "reports_history":
+        from web_doctor.views.home import handle_reports_history_section
+        return render(
+            request,
+            handle_reports_history_section(request, context),
+            context
+        )
 
     return render(request, template_name, context)
 
@@ -197,8 +227,9 @@ def _build_settings_context(
 
     active_cycle = get_active_treatment_cycle(patient)
 
-    # 患者全部疗程列表，按结束日期倒序排列（结束时间最新的在前）
-    cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
+    # 患者全部疗程列表，改为正序排列（最早的在前）
+    # 之前是 order_by("-end_date", "-start_date")
+    cycles_qs = patient.treatment_cycles.all().order_by("start_date")
     paginator = Paginator(cycles_qs, 5)
     try:
         page_number = int(tc_page) if tc_page else 1
@@ -208,15 +239,28 @@ def _build_settings_context(
 
     # 当前选中的疗程：
     # - 若显式传入 selected_cycle_id，则优先使用；
-    # - 否则默认选中当前有效疗程 active_cycle。
+    # - 否则默认选中疗程列表的第一条（最新的一个疗程）。
     selected_cycle: TreatmentCycle | None = None
     if selected_cycle_id:
         selected_cycle = patient.treatment_cycles.filter(pk=selected_cycle_id).first()
+    
     if selected_cycle is None:
-        selected_cycle = active_cycle
+        # 如果没有指定 ID，则默认选中分页列表中的第一个疗程（如果存在）
+        if cycle_page.object_list:
+            selected_cycle = cycle_page.object_list[0]
+        # 如果当前页没数据（例如空列表），尝试回退到 active_cycle 作为兜底
+        elif active_cycle:
+            selected_cycle = active_cycle
 
     # 默认展开选中的疗程；若不存在则不展开任何卡片
-    expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
+    # expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
+    expanded_cycle_id: int | None = selected_cycle.id if (selected_cycle and hasattr(selected_cycle, 'id')) else None
+
+
+    # 判断当前选中的疗程是否可以终止（必须是进行中状态）
+    can_terminate_selected_cycle = False
+    if selected_cycle and selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS:
+        can_terminate_selected_cycle = True
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
@@ -232,7 +276,15 @@ def _build_settings_context(
         delta_days = (date.today() - selected_cycle.start_date).days + 1
         current_day_index = 1 if delta_days < 1 else delta_days
 
-        cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+        # cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+        cycle_plan = {}
+        if hasattr(selected_cycle, 'id') and selected_cycle.id:
+            try:
+                cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+            except Exception as e:
+                # 捕获异常，避免单个疗程计划查询失败导致整个页面报错
+                logger.error(f"获取疗程 {selected_cycle.id} 计划视图失败：{e}")
+                cycle_plan = {}
 
         # 用药计划：仅展示当前疗程已选中的药品
         for med in cycle_plan.get("medications", []):
@@ -334,7 +386,7 @@ def _build_settings_context(
         "gender": patient.get_gender_display(),
         "phone": patient.phone,
         "birth_date": str(patient.birth_date) if getattr(patient, "birth_date", None) else "请填写出生日期",
-        "address": getattr(patient, "address", "") or "请填写患者地址",
+        "address": getattr(patient, "address", "") or "",
         "emergency_contact": getattr(patient, "ec_name", "") or "",
         "emergency_relation": getattr(patient, "ec_relation", "") or  "",
         "emergency_phone": getattr(patient, "ec_phone", "") or  "",
@@ -345,30 +397,29 @@ def _build_settings_context(
     last_history = MedicalHistoryService.get_last_medical_history(patient)
     if last_history:
         medical_info = {
-            "diagnosis": last_history.tumor_diagnosis,
-            "risk_factors": last_history.risk_factors,
-            "clinical_diagnosis": last_history.clinical_diagnosis,
-            "gene_test": last_history.genetic_test,
-            "history": last_history.past_medical_history,
-            "surgery": last_history.surgical_information,
-            "last_updated": last_history.created_at.strftime("%Y-%m-%d"),
-        }
+        "diagnosis": last_history.tumor_diagnosis if last_history.tumor_diagnosis is not None else "",
+        "risk_factors": last_history.risk_factors if last_history.risk_factors is not None else "",
+        "clinical_diagnosis": last_history.clinical_diagnosis if last_history.clinical_diagnosis is not None else "",
+        "gene_test": last_history.genetic_test if last_history.genetic_test is not None else "",
+        "history": last_history.past_medical_history if last_history.past_medical_history is not None else "",
+        "surgery": last_history.surgical_information if last_history.surgical_information is not None else "",
+        "last_updated": last_history.created_at.strftime("%Y-%m-%d") if last_history.created_at else "",  # 额外兼容created_at为None的情况
+    }
     else:
         # 无记录时的默认空状态
         medical_info = {
-            "diagnosis": "暂无记录",
-            "risk_factors": "暂无记录",
-            "clinical_diagnosis": "暂无记录",
-            "gene_test": "暂无记录",
-            "history": "暂无记录",
-            "surgery": "暂无记录",
-            "clinical_events": "暂无记录",
-            "last_updated": "暂无记录",
+            "diagnosis": "",
+            "risk_factors": "",
+            "clinical_diagnosis": "",
+            "gene_test": "",
+            "history": "",
+            "surgery": "",
+            "last_updated": "",
         }
-
     return {
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,
+        "can_terminate_selected_cycle": can_terminate_selected_cycle,
         "cycle_page": cycle_page,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
@@ -452,6 +503,66 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
         "web_doctor/partials/settings/main.html",
         context,
     )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_treatment_cycle_terminate(request: HttpRequest, patient_id: int, cycle_id: int) -> HttpResponse:
+    """
+    终止指定的治疗疗程：
+    - 校验患者归属权
+    - 校验疗程归属权
+    - 调用 core.service.treatment_cycle.terminate_treatment_cycle
+    - 成功或失败后重新渲染设置页面
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    try:
+        cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+    except TreatmentCycle.DoesNotExist:
+        raise Http404("疗程不存在或不属于该患者")
+
+    errors: list[str] = []
+    try:
+        terminate_treatment_cycle(cycle.id)
+    except ValidationError as exc:
+        errors.append(str(exc))
+
+    # 重新构建上下文
+    context: dict = {
+        "patient": patient,
+        "active_tab": "settings",
+        "cycle_form_errors": errors,
+        "cycle_form_initial": {
+            "name": "",
+            "start_date": "",
+            "cycle_days": "",
+        },
+    }
+    # 终止后，通常不再有选中的 active cycle，或者 selected_cycle 变为已终止状态
+    # 这里我们让 _build_settings_context 自动决定 active_cycle（此时应该为 None 或下一个 active）
+    # 但我们仍保持当前 cycle 为 selected，以便用户看到状态变更
+    context.update(
+        _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=cycle.id,
+        )
+    )
+
+    response = render(
+        request,
+        "web_doctor/partials/settings/main.html",
+        context,
+    )
+    if errors:
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace('"', '\\"')
+    
+    return response
 
 
 @login_required

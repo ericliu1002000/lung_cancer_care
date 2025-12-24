@@ -41,7 +41,7 @@ PLAN_METRIC_MAPPING = {
         "format_func": lambda x: f"{x['value_display']}"
     },
     "medication": {
-        "key": "medication",  # 假设接口中有用药字段，可根据实际调整
+        "key": MetricType.USE_MEDICATED,
         "name": "用药提醒",
         "format_func": lambda x: "已服药" if x else "未服药"
     },
@@ -80,7 +80,8 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     #获取守护天数
     service_days = "0"
     if patient_id:  # 获取守护天数
-        service_days = PatientService().get_guard_days(patient_id)
+        served_days, remaining_days = PatientService().get_guard_days(patient)
+        service_days = served_days
     else:
         service_days = "0"
     # 模拟每日计划数据（默认全部未完成） TODO 待调试今日计划-获取任务数据
