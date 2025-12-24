@@ -57,7 +57,7 @@ def build_home_context(patient: PatientProfile) -> dict:
     # 注入备注信息（来自 PatientProfile）
     medical_info["remark"] = patient.remark or ""
 
-    # 4. 模拟当前用药数据
+    # TODO 待联调当前用药数据接口 模拟当前用药数据
     current_medication = {
         "confirm_date": "2025-09-01",
         "confirmer": "医助 李*四",
@@ -204,6 +204,7 @@ def get_medication_history_data() -> list:
     """
     获取历史用药方案模拟数据
     """
+    # TODO 待联调历史用药方案列表接口 分页查询
     history_list = []
     for i in range(12):  # 生成12条数据测试分页
         history_list.append({

@@ -56,12 +56,12 @@
 
         {# 底部操作按钮 #}
         <div class="flex items-center justify-end gap-4 pt-2">
-            <button 
+            {% comment %} <button 
                 onclick="document.getElementById('stop-medication-modal').showModal()"
                 class="text-sm font-medium text-indigo-600 hover:text-indigo-700"
             >
                 停止当前用药方案
-            </button>
+            </button> {% endcomment %}
             <button 
                 class="text-sm font-medium text-indigo-600 hover:text-indigo-700"
                 hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'settings' %}"

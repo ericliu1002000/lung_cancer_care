@@ -1,0 +1,8 @@
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+<div class="space-y-6">
+    {% include "web_doctor/partials/indicators/routine_monitoring.html" %}
+    
+    {# OOB 更新 Tab 栏状态 #}
+    {% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True %}
+</div>

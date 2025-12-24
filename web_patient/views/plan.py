@@ -86,7 +86,7 @@ def my_medication(request: HttpRequest) -> HttpResponse:
     patient_id = patient.id or None
 
 
-    # 模拟数据：当前用药（第三疗程）
+    # TODO 待联调当前用药接口 模拟数据：当前用药（第三疗程）
     current_medications = [
         {
             "course_name": "第三疗程",
