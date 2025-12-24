@@ -84,7 +84,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         service_days = served_days
     else:
         service_days = "0"
-    # 模拟每日计划数据（默认全部未完成） TODO 待调试今日计划-获取任务数据
+    # TODO 待调试今日计划接口-获取任务数据 模拟每日计划数据（默认全部未完成） 
     daily_plans = [
         {
             "type": "medication",

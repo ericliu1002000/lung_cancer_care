@@ -390,7 +390,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
     patient_id = patient.id or None
     
 
-    # 模拟数据：健康指标记录
+    # TODO 待联调健康档案列表接口 模拟数据：健康指标记录
     # 实际开发中应从数据库统计
     health_stats = [
         {"type": "temperature", "title": "体温", "count": 0, "abnormal": 0, "icon": "temperature"},
@@ -427,7 +427,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     patient_id = patient.id or None
         
-    # 模拟数据
+    # TODO 待联调复查上报接口 模拟数据
     checkup_date = "2025-12-29"
     checkup_items = [
         {"id": 1, "name": "血常规"},

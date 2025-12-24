@@ -7,7 +7,8 @@
 """
 
 import logging
-from datetime import date
+from datetime import date, timedelta
+import random
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -211,6 +212,10 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
             handle_reports_history_section(request, context),
             context
         )
+    elif section == "indicators":
+        from web_doctor.views.indicators import build_indicators_context
+        template_name = "web_doctor/partials/indicators/indicators.html"
+        context.update(build_indicators_context(patient))
 
     return render(request, template_name, context)
 
