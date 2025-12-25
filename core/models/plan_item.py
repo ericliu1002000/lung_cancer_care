@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from . import choices
@@ -36,6 +37,24 @@ class PlanItem(models.Model):
         choices=choices.PriorityLevel.choices,
         blank=True,
     )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_plan_items",
+        verbose_name="创建人",
+        null=True,
+        blank=True,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="updated_plan_items",
+        verbose_name="更新人",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
     class Meta:
         db_table = "core_plan_items"
         verbose_name = "疗程计划条目"

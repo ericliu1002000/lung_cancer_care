@@ -618,6 +618,7 @@ def patient_cycle_medication_add(request: HttpRequest, patient_id: int, cycle_id
                 category=core_choices.PlanItemCategory.MEDICATION,
                 library_id=library_id,
                 enable=True,
+                user=request.user,
             )
         except ValidationError as exc:
             errors.append(str(exc))
@@ -693,6 +694,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
                 category=category,
                 library_id=library_id,
                 enable=enable_flag,
+                user=request.user,
             )
         except ValidationError as exc:
             errors.append(str(exc))
@@ -920,7 +922,7 @@ def patient_plan_item_update_field(request: HttpRequest, patient_id: int, plan_i
         errors.append("字段名称缺失。")
     else:
         try:
-            PlanItemService.update_item_field(plan_item_id, field_name, value)
+            PlanItemService.update_item_field(plan_item_id, field_name, value, request.user)
         except ValidationError as exc:
             errors.append(str(exc))
 
@@ -1075,7 +1077,7 @@ def patient_plan_item_toggle_day(
     currently_checked = day in schedule
 
     try:
-        PlanItemService.toggle_schedule_day(plan_item_id, day, not currently_checked)
+        PlanItemService.toggle_schedule_day(plan_item_id, day, not currently_checked, request.user)
     except ValidationError as exc:
         errors = [str(exc)]
     else:

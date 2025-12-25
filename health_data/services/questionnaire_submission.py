@@ -9,6 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import Questionnaire, QuestionnaireOption, QuestionnaireQuestion
+from core.service import tasks as task_service
 from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
 
@@ -36,6 +37,7 @@ class QuestionnaireSubmissionService:
         - 在当前仅支持选择题场景下，对所有选中选项的 score 做简单累加，得到 total_score；
         - 将答题明细保存到 QuestionnaireAnswer，将总分冗余到 QuestionnaireSubmission.total_score；
         - 若问卷配置了 metric_type，则同时写入一条 HealthMetric 记录。
+        - 提交成功后同步更新患者当天的问卷任务状态。
 
         【参数说明】
         :param patient_id: 患者ID（users.PatientProfile 的主键）
@@ -168,6 +170,10 @@ class QuestionnaireSubmissionService:
         
         submission.total_score = total_score
         submission.save(update_fields=["total_score"])
+        task_service.complete_daily_questionnaire_tasks(
+            patient_id=patient_id,
+            occurred_at=submission.created_at,
+        )
 
         # 5. 将问卷总分落库到 HealthMetric：
         #    - metric_type 使用问卷的 code，例如 Q_SLEEP、Q_PAIN 等；

@@ -19,8 +19,18 @@ from core.models import (
 )
 
 
+
+# TODO 患者主页：当前用药方案。  确认时间就是创建疗程的时间。   确认人就是最后点击的那个人。 
+# TODO 患者指标： 默认最近30天。最多选一年。
+
+# TODO 用药提醒功能， 更新每日任务表的status.
+# TODO 体温测量上传功能， 血压， 心率， 血氧， 体重， 随访， 复查
+
+
 class PlanItemService:
     """Service layer for CRUD-like interactions on plan items."""
+
+    _EDIT_FORBIDDEN_MESSAGE = "不能修过已终止的状态。"
 
     @classmethod
     def get_cycle_plan_view(cls, cycle_id: int) -> Dict[str, Any]:
@@ -97,6 +107,7 @@ class PlanItemService:
         category: int,
         library_id: int,
         enable: bool,
+        user: Any,
     ) -> PlanItem | None:
         """
         【功能说明】
@@ -107,12 +118,14 @@ class PlanItemService:
         - category: 计划类型（PlanItemCategory 枚举值）。
         - library_id: 标准库记录 ID（药物/检查/问卷/监测）。
         - enable: True 表示开启，False 表示关闭。
+        - user: 当前操作人（医生/医助），用于审计。
 
         【返回参数说明】
         - 更新后的 PlanItem 实例；若 enable=False 且原本不存在记录，则返回 None。
         """
 
         cycle = cls._get_cycle(cycle_id)
+        cls._ensure_cycle_editable(cycle)
 
         library_model = cls._get_library_model(category)
         plan = cls._get_plan_item(cycle_id, category, library_id)
@@ -131,16 +144,20 @@ class PlanItemService:
                     item_name=library_obj.name,
                     status=choices.PlanItemStatus.ACTIVE,
                     schedule_days=schedule_template,
+                    created_by=user,
+                    updated_by=user,
                     **cls._build_default_snapshot(category, library_obj),
                 )
             else:
-                updates = {"status": choices.PlanItemStatus.ACTIVE}
+                updates = {"status": choices.PlanItemStatus.ACTIVE, "updated_by": user}
                 if not plan.schedule_days:
                     # 重新开启且当前计划尚无执行日时，同样只使用“今天及之后”的模板
                     updates["schedule_days"] = schedule_template
                 for field, value in updates.items():
                     setattr(plan, field, value)
-                plan.save(update_fields=list(updates.keys()))
+                update_fields = list(updates.keys())
+                update_fields.append("updated_at")
+                plan.save(update_fields=update_fields)
         else:
             if plan:
                 # 关闭计划时，仅清除“今天及之后”的 schedule，历史保留
@@ -150,12 +167,13 @@ class PlanItemService:
                     schedule = [d for d in schedule if d < current_day]
                 plan.status = choices.PlanItemStatus.DISABLED
                 plan.schedule_days = schedule
-                plan.save(update_fields=["status", "schedule_days"])
+                plan.updated_by = user
+                plan.save(update_fields=["status", "schedule_days", "updated_by", "updated_at"])
         return plan
 
     @classmethod
     @transaction.atomic
-    def toggle_schedule_day(cls, plan_item_id: int, day: int, checked: bool) -> PlanItem:
+    def toggle_schedule_day(cls, plan_item_id: int, day: int, checked: bool, user: Any) -> PlanItem:
         """
         【功能说明】
         - 处理 D1/D2 等具体执行日的勾选/取消，并根据操作自动维护 PlanItem 的状态。
@@ -164,18 +182,20 @@ class PlanItemService:
         - plan_item_id: 计划条目 ID。
         - day: 要操作的天数（DayIndex）。
         - checked: True=勾选、False=取消。
+        - user: 当前操作人（医生/医助），用于审计。
 
         【返回参数说明】
         - 更新后的 PlanItem 实例。
         """
 
         plan = cls._get_plan_by_id(plan_item_id)
+        cls._ensure_cycle_editable(plan.cycle)
         cls._validate_day(plan, day)
 
         # 已经过了的执行日不可再修改（历史只读）
         current_day = cls._get_current_day_index_for_cycle(plan.cycle)
         if day < current_day:
-            return plan
+            raise ValidationError(cls._EDIT_FORBIDDEN_MESSAGE)
         schedule = list(plan.schedule_days or [])
         if checked:
             if day not in schedule:
@@ -188,11 +208,16 @@ class PlanItemService:
             if day in schedule:
                 schedule.remove(day)
                 plan.schedule_days = schedule
-        plan.save(update_fields=["schedule_days", "status"] if checked else ["schedule_days"])
+        plan.updated_by = user
+        if checked:
+            update_fields = ["schedule_days", "status", "updated_by", "updated_at"]
+        else:
+            update_fields = ["schedule_days", "updated_by", "updated_at"]
+        plan.save(update_fields=update_fields)
         return plan
 
     @classmethod
-    def update_item_field(cls, plan_item_id: int, field_name: str, value: Any) -> PlanItem:
+    def update_item_field(cls, plan_item_id: int, field_name: str, value: Any, user: Any) -> PlanItem:
         """
         【功能说明】
         - 更新指定 PlanItem 的剂量、用法或优先级等文本字段。
@@ -201,6 +226,7 @@ class PlanItemService:
         - plan_item_id: 计划条目 ID。
         - field_name: 允许修改的字段名（drug_dosage、drug_usage、priority_level）。
         - value: 新值，由前端保证格式正确。
+        - user: 当前操作人（医生/医助），用于审计。
 
         【返回参数说明】
         - 更新后的 PlanItem 实例。
@@ -210,8 +236,10 @@ class PlanItemService:
         if field_name not in allowed_fields:
             raise ValidationError("不支持修改该字段。")
         plan = cls._get_plan_by_id(plan_item_id)
+        cls._ensure_cycle_editable(plan.cycle)
         setattr(plan, field_name, value)
-        plan.save(update_fields=[field_name])
+        plan.updated_by = user
+        plan.save(update_fields=[field_name, "updated_by", "updated_at"])
         return plan
 
     # ------------------------------------------------------------------
@@ -365,3 +393,8 @@ class PlanItemService:
         if delta < 1:
             return 1
         return delta
+
+    @classmethod
+    def _ensure_cycle_editable(cls, cycle: TreatmentCycle) -> None:
+        if cycle.is_finished:
+            raise ValidationError(cls._EDIT_FORBIDDEN_MESSAGE)

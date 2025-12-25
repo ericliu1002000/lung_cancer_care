@@ -2,8 +2,9 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 
-from core.models import Questionnaire, QuestionnaireOption, QuestionnaireQuestion
+from core.models import DailyTask, Questionnaire, QuestionnaireOption, QuestionnaireQuestion, choices
 from health_data.models import (
     HealthMetric,
     MetricSource,
@@ -71,6 +72,13 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         """
         正常提交：答完所有题目，生成提交记录和明细，并正确计算总分。
         """
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=timezone.now().date(),
+            task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+            title="随访问卷",
+            status=choices.TaskStatus.PENDING,
+        )
         answers_data = [
             {"option_id": self.q1_opt2.id},  # 问题1 选分值为 2 的选项
             {"option_id": self.q2_opt1.id},  # 问题2 选分值为 3 的选项
@@ -101,6 +109,14 @@ class QuestionnaireSubmissionServiceTest(TestCase):
 
         self.assertEqual(answers[1].option_id, self.q2_opt1.id)
         self.assertEqual(answers[1].question_id, self.q2.id)
+        self.assertEqual(
+            DailyTask.objects.filter(
+                patient=self.patient,
+                task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+                status=choices.TaskStatus.COMPLETED,
+            ).count(),
+            1,
+        )
 
     def test_submit_questionnaire_missing_question_raises_validation_error(self):
         """
