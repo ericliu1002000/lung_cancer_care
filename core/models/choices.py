@@ -49,7 +49,6 @@ class CheckupCategory(models.IntegerChoices):
 class TaskStatus(models.IntegerChoices):
     PENDING = 0, "未做"
     COMPLETED = 1, "已完成"
-    IGNORED = 2, "已忽略"
 
 
 class QuestionType(models.TextChoices):

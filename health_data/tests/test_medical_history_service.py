@@ -1,21 +1,36 @@
-from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from health_data.models import MedicalHistory
+from health_data.services.medical_history_service import MedicalHistoryService
 from users.models import PatientProfile
-from ..models import MedicalHistory
-from ..services.medical_history_service import MedicalHistoryService
 
 User = get_user_model()
+
 
 class MedicalHistoryServiceTest(TestCase):
     def setUp(self):
         # 准备测试数据
         # 1. 创建一个医生用户（记录人）
-        self.doctor = User.objects.create_user(username='doctor_who', password='password', wx_openid="mock_doc_openid")
+        self.doctor = User.objects.create_user(
+            username="doctor_who",
+            password="password",
+            wx_openid="mock_doc_openid",
+        )
+        print("Created doctor user:", self.doctor.username)
         
         # 2. 创建一个患者用户和对应的 Profile
-        self.patient_user = User.objects.create_user(username='patient_01', password='password', wx_openid="mock_patient_openid")
+        self.patient_user = User.objects.create_user(
+            username="patient_01",
+            password="password",
+            wx_openid="mock_patient_openid",
+        )
         # 假设 PatientProfile 必须关联一个 user，根据你的实际模型调整
-        self.patient = PatientProfile.objects.create(user=self.patient_user, name="张三")
+        self.patient = PatientProfile.objects.create(
+            user=self.patient_user,
+            name="张三",
+            phone="13900000002",
+        )
 
     def test_add_medical_history(self):
         """测试新增病史记录功能"""
@@ -25,7 +40,7 @@ class MedicalHistoryServiceTest(TestCase):
             "clinical_diagnosis": "右肺上叶后段恶性肿瘤",
             "genetic_test": "EGFR 19外显子缺失",
             "past_medical_history": "高血压5年",
-            "surgical_information": "肺穿刺活检术"
+            "surgical_information": "肺穿刺活检术",
         }
         
         history = MedicalHistoryService.add_medical_history(self.doctor, self.patient, data)
