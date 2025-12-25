@@ -2,11 +2,16 @@
 
 from datetime import date, timedelta
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
 from core.models import PlanItem, TreatmentCycle, choices
-from core.service.treatment_cycle import get_cycle_confirmer, get_treatment_cycles
+from core.service.treatment_cycle import (
+    create_treatment_cycle,
+    get_cycle_confirmer,
+    get_treatment_cycles,
+)
 from users import choices as user_choices
 from users.models import CustomUser, PatientProfile
 
@@ -56,6 +61,45 @@ class TreatmentCycleServiceTest(TestCase):
         # 第二页第一条应是按倒序的第 11 条
         first_cycle_second_page = page.object_list[0]
         self.assertEqual(first_cycle_second_page.name, "疗程4")
+
+    def test_create_treatment_cycle_rejects_overlapping_active_cycles(self):
+        """同一患者进行中疗程的时间区间不可重叠。"""
+        start_date = date(2025, 2, 1)
+        create_treatment_cycle(
+            patient=self.patient,
+            name="疗程A",
+            start_date=start_date,
+            cycle_days=10,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_treatment_cycle(
+                patient=self.patient,
+                name="疗程B",
+                start_date=start_date + timedelta(days=5),
+                cycle_days=10,
+            )
+
+    def test_create_treatment_cycle_allows_overlap_when_terminated(self):
+        """已终止疗程允许时间重叠。"""
+        start_date = date(2025, 3, 1)
+        cycle = create_treatment_cycle(
+            patient=self.patient,
+            name="疗程A",
+            start_date=start_date,
+            cycle_days=10,
+        )
+        cycle.status = choices.TreatmentCycleStatus.TERMINATED
+        cycle.save(update_fields=["status"])
+
+        created = create_treatment_cycle(
+            patient=self.patient,
+            name="疗程B",
+            start_date=start_date + timedelta(days=5),
+            cycle_days=10,
+        )
+
+        self.assertIsNotNone(created.id)
 
 
 class TreatmentCycleConfirmerTest(TestCase):
