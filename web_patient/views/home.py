@@ -176,6 +176,23 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     else:
         service_days = "0"
         
+    # 对 daily_plans 进行排序
+    # 排序顺序：用药(medication) > 血氧(spo2) > 血压心率(bp_hr) > 体重(weight) > 体温(temperature) > 复查(checkup) > 随访(followup) > 其他
+    # 注意：步数(step) 已经在前面被过滤掉了，不参与排序
+    
+    sort_order = {
+        "medication": 1,
+        "spo2": 2,
+        "bp_hr": 3,
+        "weight": 4,
+        "temperature": 5,
+        "checkup": 6,
+        "followup": 7
+    }
+    
+    # 使用 sort 方法进行原地排序，默认值为 999 放在最后
+    daily_plans.sort(key=lambda x: sort_order.get(x.get("type"), 999))
+        
     # 移除手动添加步数任务的逻辑
     # 如果接口没有返回步数任务，手动添加步数任务（作为固定项）
     # has_step = any(p["type"] == "step" for p in daily_plans)
