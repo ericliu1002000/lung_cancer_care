@@ -24,7 +24,7 @@ from django.core.paginator import Paginator, Page
 
 from business_support.models import Device
 from health_data.models import HealthMetric, MetricSource, MetricType
-from core.models import choices
+from core.service import tasks as task_service
 from core.utils.sentinel import UNSET
 import datetime
 
@@ -33,6 +33,13 @@ logger = logging.getLogger(__name__)
 # 同一患者、同一指标类型、同一天最多允许写入的记录数
 # （仅对“血压 / 血氧 / 心率 / 体重”生效；步数采用“单条累加”的特殊策略）
 MAX_DAILY_RECORDS = 10
+_MONITORING_TASK_TYPES = {
+    MetricType.BODY_TEMPERATURE,
+    MetricType.BLOOD_PRESSURE,
+    MetricType.BLOOD_OXYGEN,
+    MetricType.HEART_RATE,
+    MetricType.WEIGHT,
+}
 
 
 @dataclass(frozen=True)
@@ -127,6 +134,11 @@ class HealthMetricService:
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
         )
+        task_service.complete_daily_monitoring_tasks(
+            patient_id=context.patient_id,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            occurred_at=context.measured_at,
+        )
 
     @classmethod
     def save_blood_oxygen(cls, payload: dict) -> None:
@@ -164,6 +176,11 @@ class HealthMetricService:
             value_main=Decimal(str(avg_oxy)),
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
+        )
+        task_service.complete_daily_monitoring_tasks(
+            patient_id=context.patient_id,
+            metric_type=MetricType.BLOOD_OXYGEN,
+            occurred_at=context.measured_at,
         )
 
     @classmethod
@@ -203,6 +220,11 @@ class HealthMetricService:
             value_main=Decimal(str(heart_rate)),
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
+        )
+        task_service.complete_daily_monitoring_tasks(
+            patient_id=context.patient_id,
+            metric_type=MetricType.HEART_RATE,
+            occurred_at=context.measured_at,
         )
 
     @classmethod
@@ -310,6 +332,11 @@ class HealthMetricService:
             value_main=weight,
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
+        )
+        task_service.complete_daily_monitoring_tasks(
+            patient_id=context.patient_id,
+            metric_type=MetricType.WEIGHT,
+            occurred_at=context.measured_at,
         )
 
     
@@ -499,6 +526,7 @@ class HealthMetricService:
         该方法供 View 层调用，用于保存用户手动填写的各类客观健康数据（如体温、血压、血氧、体重、步数等）。
         与设备自动上传不同，手动录入的数据默认不做“每日条数限制”，每次调用都会生成一条新记录。
         数据来源（source）会自动标记为 MANUAL。
+        同时会同步更新患者当天对应的 DailyTask 状态（用药/监测任务）。
 
         【参数解释】
         :param patient_id: int
@@ -542,8 +570,8 @@ class HealthMetricService:
                 measured_at = timezone.now()
             if value_main is None:
                 value_main = Decimal("1")
-            task_id = cls._complete_daily_medication_tasks(patient_id, measured_at)
-            return cls._persist_metric(
+            task_id = task_service.complete_daily_medication_tasks(patient_id, measured_at)
+            metric = cls._persist_metric(
                 patient_id=patient_id,
                 metric_type=metric_type,
                 value_main=value_main,
@@ -553,11 +581,12 @@ class HealthMetricService:
                 questionnaire_submission_id=questionnaire_submission_id,
                 task_id=task_id,
             )
+            return metric
 
         if measured_at is None:
             raise ValueError("measured_at 不能为空。")
 
-        return cls._persist_metric(
+        metric = cls._persist_metric(
             patient_id=patient_id,
             metric_type=metric_type,
             value_main=value_main,
@@ -566,6 +595,13 @@ class HealthMetricService:
             source=MetricSource.MANUAL,
             questionnaire_submission_id=questionnaire_submission_id,
         )
+        if metric_type in _MONITORING_TASK_TYPES:
+            task_service.complete_daily_monitoring_tasks(
+                patient_id=patient_id,
+                metric_type=metric_type,
+                occurred_at=measured_at,
+            )
+        return metric
 
     # ============
     # 客观指标数据更新 / 删除接口（主要面向手动录入数据）
@@ -685,22 +721,6 @@ class HealthMetricService:
         if task_id is not None:
             data["task_id"] = task_id
         return HealthMetric.objects.create(**data)
-
-    @staticmethod
-    def _complete_daily_medication_tasks(patient_id: int, measured_at: datetime) -> int | None:
-        DailyTask = apps.get_model("core", "DailyTask")
-        task_date = measured_at.date()
-        tasks = DailyTask.objects.filter(
-            patient_id=patient_id,
-            task_date=task_date,
-            task_type=1,
-        )
-        task_id = tasks.values_list("id", flat=True).first()
-        tasks.update(
-            status=choices.TaskStatus.COMPLETED,
-            completed_at=measured_at,
-        )
-        return task_id
 
     # ============
     # 工具方法

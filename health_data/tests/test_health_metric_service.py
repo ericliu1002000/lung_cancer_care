@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import choices
 from health_data.models import HealthMetric, MetricSource, MetricType
 from health_data.services.health_metric import HealthMetricService
 
@@ -73,14 +72,10 @@ class HealthMetricServiceTest(TestCase):
         )
 
     @patch("health_data.models.HealthMetric.objects.create")
-    @patch("django.apps.apps.get_model")
-    def test_save_manual_use_medicated_defaults_and_tasks(self, mock_get_model, mock_create):
+    @patch("health_data.services.health_metric.task_service.complete_daily_medication_tasks")
+    def test_save_manual_use_medicated_defaults_and_tasks(self, mock_complete_tasks, mock_create):
         fixed_time = timezone.now()
-        mock_qs = MagicMock()
-        mock_values = MagicMock()
-        mock_values.first.return_value = 123
-        mock_qs.values_list.return_value = mock_values
-        mock_get_model.return_value.objects.filter.return_value = mock_qs
+        mock_complete_tasks.return_value = 123
 
         with patch("health_data.services.health_metric.timezone.now", return_value=fixed_time):
             HealthMetricService.save_manual_metric(
@@ -90,15 +85,7 @@ class HealthMetricServiceTest(TestCase):
                 value_main=None,
             )
 
-        mock_get_model.return_value.objects.filter.assert_called_once_with(
-            patient_id=self.patient_id,
-            task_date=fixed_time.date(),
-            task_type=1,
-        )
-        mock_qs.update.assert_called_once_with(
-            status=choices.TaskStatus.COMPLETED,
-            completed_at=fixed_time,
-        )
+        mock_complete_tasks.assert_called_once_with(self.patient_id, fixed_time)
         mock_create.assert_called_once_with(
             patient_id=self.patient_id,
             metric_type=MetricType.USE_MEDICATED,
@@ -110,14 +97,10 @@ class HealthMetricServiceTest(TestCase):
         )
 
     @patch("health_data.models.HealthMetric.objects.create")
-    @patch("django.apps.apps.get_model")
-    def test_save_manual_use_medicated_keeps_values(self, mock_get_model, mock_create):
+    @patch("health_data.services.health_metric.task_service.complete_daily_medication_tasks")
+    def test_save_manual_use_medicated_keeps_values(self, mock_complete_tasks, mock_create):
         custom_time = timezone.now()
-        mock_qs = MagicMock()
-        mock_values = MagicMock()
-        mock_values.first.return_value = None
-        mock_qs.values_list.return_value = mock_values
-        mock_get_model.return_value.objects.filter.return_value = mock_qs
+        mock_complete_tasks.return_value = None
 
         HealthMetricService.save_manual_metric(
             patient_id=self.patient_id,
@@ -126,10 +109,7 @@ class HealthMetricServiceTest(TestCase):
             value_main=Decimal("2"),
         )
 
-        mock_qs.update.assert_called_once_with(
-            status=choices.TaskStatus.COMPLETED,
-            completed_at=custom_time,
-        )
+        mock_complete_tasks.assert_called_once_with(self.patient_id, custom_time)
         mock_create.assert_called_once()
         _, kwargs = mock_create.call_args
         self.assertEqual(kwargs["patient_id"], self.patient_id)
