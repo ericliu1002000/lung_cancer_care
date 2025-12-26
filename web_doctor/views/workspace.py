@@ -215,7 +215,12 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
     elif section == "indicators":
         from web_doctor.views.indicators import build_indicators_context
         template_name = "web_doctor/partials/indicators/indicators.html"
-        context.update(build_indicators_context(patient))
+        context.update(build_indicators_context(
+            patient,
+            cycle_id=request.GET.get("cycle_id"),
+            start_date_str=request.GET.get("start_date"),
+            end_date_str=request.GET.get("end_date")
+        ))
 
     return render(request, template_name, context)
 

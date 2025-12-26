@@ -321,6 +321,7 @@ class PlanItemService:
             "current_dosage": plan.drug_dosage if plan else med.default_dosage,
             "current_usage": plan.drug_usage if plan else med.default_frequency,
             "priority_level": plan.priority_level if plan else None,
+            "method_display": med.get_method_display(),
         }
 
     @staticmethod

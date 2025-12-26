@@ -9,6 +9,13 @@ from users.models import PatientProfile
 from users.decorators import check_doctor_or_assistant
 from users.services.patient import PatientService
 from health_data.services.medical_history_service import MedicalHistoryService
+from core.service.treatment_cycle import (
+    get_active_treatment_cycle,
+    get_cycle_confirmer,
+    get_treatment_cycles,
+)
+from core.models import TreatmentCycle, choices
+from core.service.plan_item import PlanItemService
 
 logger = logging.getLogger(__name__)
 
@@ -57,28 +64,56 @@ def build_home_context(patient: PatientProfile) -> dict:
     # 注入备注信息（来自 PatientProfile）
     medical_info["remark"] = patient.remark or ""
 
-    # TODO 待联调当前用药数据接口 模拟当前用药数据
-    current_medication = {
-        "confirm_date": "2025-09-01",
-        "confirmer": "医助 李*四",
-        "start_date": "2025-09-02",
-        "items": [
-            {
-                "line": "二线",
-                "name": "培美曲塞",
-                "frequency": "每21天一个周期，第1天",
-                "dosage": "1000mg",
-                "usage": "静脉注射"
-            },
-            {
-                "line": "二线",
-                "name": "卡铂",
-                "frequency": "每21天一个周期，第1天",
-                "dosage": "300mg",
-                "usage": "静脉注射"
-            }
-        ]
-    }
+    # 4. 获取当前用药数据（真实数据）
+    active_cycle = get_active_treatment_cycle(patient)
+    current_medication = {}
+    
+    if active_cycle:
+        confirmer, confirm_at = get_cycle_confirmer(active_cycle.id)
+        plan_view = PlanItemService.get_cycle_plan_view(active_cycle.id)
+        
+        # 筛选出当前生效的药物
+        active_meds = [m for m in plan_view["medications"] if m["is_active"]]
+        print(f"{active_meds}")
+        
+        items = []
+        for med in active_meds:
+        # # 1. 提取并校验服药天数列表，做空值/空列表兼容
+        #     schedule_days = med.get("schedule_days", [])
+        #     if not schedule_days:  # 无服药天数时的兜底
+        #         frequency = "暂无明确服药日期"
+        #     else:
+        # # 2. 排序（确保数字按升序排列，避免乱序）
+        #      sorted_days = sorted(schedule_days)
+        #     # 3. 判断是否为连续天数（医学提醒优先简化连续区间）
+        #     is_continuous = all(sorted_days[i+1] - sorted_days[i] == 1 for i in range(len(sorted_days)-1))
+            
+        #     if is_continuous:
+        #         # 连续天数：格式为“第X至X天 每日1次”（医学通用表述）
+        #         start_day = sorted_days[0]
+        #         end_day = sorted_days[-1]
+        #         if start_day == end_day:
+        #             # 仅单天服药
+        #             frequency = f"第{start_day}天服药，每日1次"
+        #         else:
+        #             frequency = f"第{start_day}至{end_day}天服药，每日1次"
+        #     else:
+        #         # 非连续天数：格式为“第X、X、X天服药，每日1次”
+        #         days_str = "、".join(str(day) for day in sorted_days)
+        #         frequency = f"第{days_str}天服药，每日1次"
+               
+            items.append({
+                        "name": med["name"],
+                        "frequency": med["current_usage"],  # 专业医学格式的频次提醒
+                        "dosage": med["current_dosage"],
+                        "usage": med.get("method_display", "")
+                    })   
+        current_medication = {
+            "confirm_date": confirm_at.strftime("%Y-%m-%d") if confirm_at else "--",
+            "confirmer": confirmer.display_name if confirmer else "--",
+            "start_date": active_cycle.start_date.strftime("%Y-%m-%d"),
+            "items": items
+        }
 
     # 5. 模拟复查诊疗时间轴数据（当前月+前11个月）
     from datetime import date, timedelta
@@ -200,33 +235,6 @@ def get_checkup_history_data(filters: dict) -> list:
     
     return history_list
 
-def get_medication_history_data() -> list:
-    """
-    获取历史用药方案模拟数据
-    """
-    # TODO 待联调历史用药方案列表接口 分页查询
-    history_list = []
-    for i in range(12):  # 生成12条数据测试分页
-        history_list.append({
-            "start_date": f"2024-0{i+1}-01" if i < 9 else f"2024-{i+1}-01",
-            "items": [
-                {
-                    "line": "一线",
-                    "name": f"药品A-{i}",
-                    "frequency": "每天一次",
-                    "dosage": "50mg",
-                    "usage": "口服"
-                },
-                 {
-                    "line": "一线",
-                    "name": f"药品B-{i}",
-                    "frequency": "每天一次",
-                    "dosage": "100mg",
-                    "usage": "口服"
-                }
-            ]
-        })
-    return history_list
 
 def get_reports_history_data() -> list:
     """
@@ -285,17 +293,49 @@ def handle_medication_history_section(request: HttpRequest, context: dict) -> st
     处理历史用药方案板块
     """
     from django.core.paginator import Paginator
-    
+
+    patient = context.get("patient")
+    if not patient:
+         # Should not happen if context is built correctly, but safety check
+         return "web_doctor/partials/medication_history/list.html"
+
     template_name = "web_doctor/partials/medication_history/list.html"
-    history_list = get_medication_history_data()
     
-    paginator = Paginator(history_list, 10)
     try:
         page = int(request.GET.get("page", 1))
     except (TypeError, ValueError):
         page = 1
+
+    # 获取分页的疗程列表
+    qs = TreatmentCycle.objects.filter(patient=patient)
+    # 过滤掉没有生效用药计划的疗程
+    qs = qs.filter(
+        plan_items__category=choices.PlanItemCategory.MEDICATION,
+        plan_items__status=choices.PlanItemStatus.ACTIVE
+    ).distinct()
+    qs = qs.order_by("-start_date")
     
+    paginator = Paginator(qs, 10)
     history_page = paginator.get_page(page)
+    
+    # 为每个疗程填充用药详情
+    # 注意：history_page 是一个 Paginator Page 对象，object_list 包含 TreatmentCycle 实例
+    # 我们直接修改实例属性以便在模板中访问
+    
+    for cycle in history_page:
+        plan_view = PlanItemService.get_cycle_plan_view(cycle.id)
+        active_meds = [m for m in plan_view["medications"] if m["is_active"]]
+        
+        items = []
+        for med in active_meds:
+            items.append({
+                "name": med["name"],
+                "frequency": med["current_usage"],
+                "dosage": med["current_dosage"],
+                "usage": med.get("method_display", "")
+            })
+        cycle.items = items
+    
     context.update({
         "history_page": history_page,
     })
