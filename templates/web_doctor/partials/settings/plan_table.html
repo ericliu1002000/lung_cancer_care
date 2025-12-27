@@ -46,9 +46,10 @@
                   type="text"
                   name="q"
                   placeholder="搜索药品/拼音，回车添加"
-                  class="h-7 w-52 rounded border border-slate-200 bg-white px-2 py-1 placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  class="h-7 w-52 rounded border border-slate-200 bg-white px-2 py-1 placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                   autocomplete="off"
                   data-med-search-input
+                  {% if not is_cycle_editable %}disabled{% endif %}
                 >
               </form>
               <div
@@ -81,7 +82,7 @@
       </tr>
       {% with current_day=plan_view.current_day_index|default:1 %}
         {% for med in plan_view.medications %}
-          {% include "web_doctor/partials/settings/plan_table_medication_row.html" with med=med patient=patient cycle=cycle current_day=current_day %}
+          {% include "web_doctor/partials/settings/plan_table_medication_row.html" with med=med patient=patient cycle=cycle current_day=current_day is_cycle_editable=is_cycle_editable %}
         {% endfor %}
       {% endwith %}
     </tbody>
@@ -107,7 +108,7 @@
       </tr>
       {% with current_day=plan_view.current_day_index|default:1 %}
       {% for questionnaire in plan_view.questionnaires %}
-        {% include "web_doctor/partials/settings/plan_table_questionnaire_row.html" with questionnaire=questionnaire patient=patient cycle=cycle current_day=current_day %}
+        {% include "web_doctor/partials/settings/plan_table_questionnaire_row.html" with questionnaire=questionnaire patient=patient cycle=cycle current_day=current_day is_cycle_editable=is_cycle_editable %}
       {% endfor %}
       {% endwith %}
     </tbody>
