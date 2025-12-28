@@ -1,100 +1,351 @@
-from datetime import date, timedelta
-import random
+from datetime import date, timedelta, datetime
+from django.utils import timezone
+from core.models import TreatmentCycle
+from core.service.treatment_cycle import get_treatment_cycles
+from health_data.services.health_metric import HealthMetricService
+from health_data.models.health_metric import MetricType
 from users.models import PatientProfile
 
-def build_indicators_context(patient: PatientProfile) -> dict:
+def build_indicators_context(
+    patient: PatientProfile,
+    cycle_id: str | None = None,
+    start_date_str: str | None = None,
+    end_date_str: str | None = None,
+    filter_type: str | None = None
+) -> dict:
     """
     构建“患者指标”Tab 所需的上下文数据：
-    - 模拟30天数据
+    - 查询近30天数据
+    - 获取疗程列表
     """
-    today = date.today()
-    dates = [(today - timedelta(days=i)).strftime("%m-%d") for i in range(29, -1, -1)]
+    today = timezone.localdate()
     
-    # Simulate Medication Records
-    # Just for simulation, let's create a row with date and status
+    # 默认值：近30天
+    start_date = today - timedelta(days=29)
+    end_date = today
     
-    # Simulate Chart Data
-    # 6 modules: SpO2, BP, Heart Rate, Weight, Temp, Steps
+    is_default_view = True
+    
+    # 根据 filter_type 决定优先级
+    if filter_type == 'cycle':
+        # 即使 cycle_id 为空（全部疗程），也视为 cycle 模式，但使用默认日期
+        if cycle_id:
+            try:
+                cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+                start_date = cycle.start_date
+                end_date = cycle.end_date if cycle.end_date else today
+                is_default_view = False
+            except (TreatmentCycle.DoesNotExist, ValueError):
+                pass
+        else:
+             # cycle_id 为空 -> "全部疗程" -> 默认30天，但需要保持 filter_type='cycle'
+             # is_default_view = True (UI上可能需要根据 filter_type 判断)
+             pass
+             
+    elif filter_type == 'date':
+        if start_date_str and end_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+                end_date = date.fromisoformat(end_date_str)
+                is_default_view = False
+            except ValueError:
+                pass
+    
+    # 兼容旧逻辑（如果 filter_type 未传，尝试推断）
+    elif not filter_type:
+        # 1. 优先使用自定义日期范围
+        if start_date_str and end_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+                end_date = date.fromisoformat(end_date_str)
+                is_default_view = False
+                filter_type = 'date'
+            except ValueError:
+                pass 
+        
+        # 2. 其次使用疗程范围
+        elif cycle_id:
+            try:
+                cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+                start_date = cycle.start_date
+                end_date = cycle.end_date if cycle.end_date else today
+                is_default_view = False
+                filter_type = 'cycle'
+            except (TreatmentCycle.DoesNotExist, ValueError):
+                pass
+
+    # 3. 校验跨度（最大1年 = 366天）
+    delta_days = (end_date - start_date).days
+    if delta_days > 366:
+        # 超过一年，强制截断为 start_date + 1年
+        end_date = start_date + timedelta(days=365)
+        delta_days = 365
+    elif delta_days < 0:
+        # 结束日期早于开始日期，重置为单日或默认
+        end_date = start_date
+        delta_days = 0
+
+    # 构造查询用的 datetime (start 00:00:00 ~ end+1 00:00:00)
+    # end_date 在界面上通常是包含的，所以查询时要加1天
+    query_end_date = end_date + timedelta(days=1)
+    
+    start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
+    end_dt = timezone.make_aware(datetime.combine(query_end_date, datetime.min.time()))
+
+    # 生成日期字符串列表 (MM-DD)
+    # 如果跨年，可能需要显示年份，这里暂时保持 MM-DD，或者根据跨度决定
+    date_fmt = "%m-%d"
+    if start_date.year != end_date.year:
+        date_fmt = "%Y-%m-%d"
+        
+    date_strs = [(start_date + timedelta(days=i)).strftime(date_fmt) for i in range(delta_days + 1)]
+
+    # 1. 获取疗程列表
+    cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
+    treatment_cycles = cycles_page.object_list
+
+    # 2. 获取各指标数据
     charts = {}
-    
-    # SpO2 (95-100)
+
+    def get_daily_values(metric_type, value_key='value_main'):
+        """获取指定指标范围内的每日数据（取每日最新一条）"""
+        page = HealthMetricService.query_metrics_by_type(
+            patient_id=patient.id,
+            metric_type=metric_type,
+            start_date=start_dt,
+            end_date=end_dt,
+            page_size=2000, # 足够大以覆盖数据
+            sort_order='asc' # 按时间正序
+        )
+        
+        data_map = {}
+        for m in page.object_list:
+            local_dt = timezone.localtime(m.measured_at)
+            d_str = local_dt.strftime(date_fmt)
+            val = getattr(m, value_key)
+            if val is not None:
+                data_map[d_str] = float(val)
+        
+        return [data_map.get(d, 0) for d in date_strs]
+
+    # SpO2
+    spo2_data = get_daily_values(MetricType.BLOOD_OXYGEN)
     charts['spo2'] = {
         "id": "chart-spo2",
         "title": "静息血氧 SpO2 (%)",
-        "subtitle": "(10次) 依从性: 30%",
-        "dates": dates,
-        "series": [{"name": "静息血氧", "data": [random.randint(95, 100) for _ in range(30)], "color": "#3b82f6"}],
+        "dates": date_strs,
+        "series": [{"name": "静息血氧", "data": spo2_data, "color": "#3b82f6"}],
         "y_min": 80,
         "y_max": 100
     }
-    
-    # BP (Systolic 110-140, Diastolic 70-90)
+
+    # BP (需要主值和副值)
+    bp_sbp = get_daily_values(MetricType.BLOOD_PRESSURE, 'value_main')
+    bp_dbp = get_daily_values(MetricType.BLOOD_PRESSURE, 'value_sub')
     charts['bp'] = {
         "id": "chart-bp",
         "title": "血压 收缩压/舒张压 (mmHg)",
-        "subtitle": "(10次) 依从性: 30%",
-        "dates": dates,
+        "dates": date_strs,
         "series": [
-            {"name": "收缩压", "data": [random.randint(110, 140) for _ in range(30)], "color": "#3b82f6"},
-            {"name": "舒张压", "data": [random.randint(70, 90) for _ in range(30)], "color": "#10b981"}
+            {"name": "收缩压", "data": bp_sbp, "color": "#3b82f6"},
+            {"name": "舒张压", "data": bp_dbp, "color": "#10b981"}
         ],
         "y_min": 60,
         "y_max": 180
     }
 
-    # Heart Rate (60-100)
+    # Heart Rate
+    hr_data = get_daily_values(MetricType.HEART_RATE)
     charts['hr'] = {
         "id": "chart-hr",
         "title": "静息心率 (次/min)",
-        "subtitle": "(10次) 依从性: 30%",
-        "dates": dates,
-        "series": [{"name": "静息心率", "data": [random.randint(60, 100) for _ in range(30)], "color": "#3b82f6"}],
+        "dates": date_strs,
+        "series": [{"name": "静息心率", "data": hr_data, "color": "#3b82f6"}],
         "y_min": 40,
         "y_max": 140
     }
-    
-    # Weight (50-80)
+
+    # Weight
+    weight_data = get_daily_values(MetricType.WEIGHT)
     charts['weight'] = {
         "id": "chart-weight",
         "title": "体重 (KG)",
-        "subtitle": "(10次) 依从性: 30%",
-        "dates": dates,
-        "series": [{"name": "体重", "data": [round(random.uniform(50, 80), 1) for _ in range(30)], "color": "#3b82f6"}],
+        "dates": date_strs,
+        "series": [{"name": "体重", "data": weight_data, "color": "#3b82f6"}],
         "y_min": 40,
         "y_max": 120
     }
-    
-    # Temperature (36.0-37.2)
+
+    # Temperature
+    temp_data = get_daily_values(MetricType.BODY_TEMPERATURE)
     charts['temp'] = {
         "id": "chart-temp",
         "title": "体温 (℃)",
-        "subtitle": "(25次) 依从性: 86%",
-        "dates": dates,
-        "series": [{"name": "体温", "data": [round(random.uniform(36.0, 37.2), 1) for _ in range(30)], "color": "#3b82f6"}],
+        "dates": date_strs,
+        "series": [{"name": "体温", "data": temp_data, "color": "#3b82f6"}],
         "y_min": 35,
         "y_max": 42
     }
-    
-    # Steps (1000-10000)
+
+    # Steps
+    steps_data = get_daily_values(MetricType.STEPS)
     charts['steps'] = {
         "id": "chart-steps",
         "title": "步数",
-        "subtitle": "(25次) 依从性: 86%",
-        "dates": dates,
-        "series": [{"name": "步数", "data": [random.randint(1000, 10000) for _ in range(30)], "color": "#3b82f6"}],
+        "dates": date_strs,
+        "series": [{"name": "步数", "data": steps_data, "color": "#3b82f6"}],
         "y_min": 0,
-        "y_max": 15000
+        "y_max": 15000 
     }
-    
+
+    # 3. 服药记录
+    med_page = HealthMetricService.query_metrics_by_type(
+        patient_id=patient.id,
+        metric_type=MetricType.USE_MEDICATED,
+        start_date=start_dt,
+        end_date=end_dt,
+        page_size=2000,
+        sort_order='asc'
+    )
+    med_map = {}
+    for m in med_page.object_list:
+        local_dt = timezone.localtime(m.measured_at)
+        d_str = local_dt.strftime(date_fmt)
+        med_map[d_str] = True 
+
     medication_data = []
-    for d in dates:
+    med_count = 0
+    for d in date_strs:
+        taken = med_map.get(d, False)
+        if taken:
+            med_count += 1
         medication_data.append({
             "date": d,
-            "taken": random.choice([True, True, True, False])
+            "taken": taken
         })
+    
+    total_days = len(date_strs)
+    compliance = int((med_count / total_days) * 100) if total_days > 0 else 0
+
+    # ==========================================
+    # 4. 随访问卷指标处理 (Questionnaire Indicators - Mock Data)
+    # ==========================================
+    # TODO 随访问卷-体能呼吸、咳嗽与痰色、食欲评估、疼痛量表、睡眠质量、心里痛苦分级评估，
+    # 根据疗程日期、自定义日期筛选数据，查询六大模块的图表数据
+    import random
+    
+    # 4.1 体能与呼吸 (Q_PHYSICAL)
+    # 模拟数据：0-4分
+    phys_score_data = [random.randint(0, 4) for _ in date_strs]
+    breath_score_data = [random.randint(0, 4) for _ in date_strs]
+        
+    charts['physical'] = {
+        "id": "chart-physical",
+        "title": "体能与呼吸",
+        "dates": date_strs,
+        "series": [
+            {"name": "体能评分", "data": phys_score_data, "color": "#3b82f6"}, # Blue
+            {"name": "呼吸困难评分", "data": breath_score_data, "color": "#10b981"} # Teal
+        ],
+        "y_min": 0,
+        "y_max": 5
+    }
+
+    # 4.2 咳嗽与痰色 (Q_COUGH)
+    # 模拟数据：0-10分
+    cough_score_data = [random.randint(0, 10) for _ in date_strs]
+    
+    # 模拟表格数据
+    sputum_colors = ["无痰", "黄色", "脓色", "红色", "白色"]
+    blood_status = ["是", "无"]
+    
+    sputum_table_row = [random.choice(sputum_colors) for _ in date_strs]
+    blood_table_row = [random.choice(blood_status) for _ in date_strs]
+        
+    charts['cough'] = {
+        "id": "chart-cough",
+        "title": "咳嗽与痰色量表",
+        "dates": date_strs,
+        "series": [{"name": "咳嗽量表", "data": cough_score_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 12
+    }
+    
+    cough_table = {
+        "dates": date_strs,
+        "rows": [
+            {"label": "痰色", "values": sputum_table_row},
+            {"label": "咯血", "values": blood_table_row}
+        ]
+    }
+
+    # 4.3 食欲评估 (Q_APPETITE)
+    # 模拟数据：0-10分
+    app_data = [random.randint(0, 10) for _ in date_strs]
+        
+    charts['appetite'] = {
+        "id": "chart-appetite",
+        "title": "食欲评估量表",
+        "dates": date_strs,
+        "series": [{"name": "食欲量表", "data": app_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 12
+    }
+
+    # 4.4 疼痛量表 (Q_PAIN)
+    # 模拟数据：0-10分
+    pain_data = [random.randint(0, 10) for _ in date_strs]
+        
+    charts['pain'] = {
+        "id": "chart-pain",
+        "title": "疼痛量表",
+        "dates": date_strs,
+        "series": [{"name": "疼痛量表", "data": pain_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 10
+    }
+    
+    # 4.5 睡眠质量 (Q_SLEEP)
+    # 模拟数据：0-5分
+    sleep_data = [random.randint(0, 5) for _ in date_strs]
+
+    charts['sleep'] = {
+        "id": "chart-sleep",
+        "title": "睡眠质量量表",
+        "dates": date_strs,
+        "series": [{"name": "睡眠质量", "data": sleep_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 6
+    }
+    
+    # 4.6 心理痛苦分级 (Q_PSYCH)
+    # 模拟数据：0-10分
+    psych_data = [random.randint(0, 10) for _ in date_strs]
+
+    charts['psych'] = {
+        "id": "chart-psych",
+        "title": "心理痛苦分级评估量表",
+        "dates": date_strs,
+        "series": [{"name": "心理痛苦", "data": psych_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 10
+    }
 
     return {
         "medication_data": medication_data,
+        "medication_stats": {
+            "count": med_count,
+            "compliance": compliance
+        },
         "charts": charts,
-        "dates": dates
+        "cough_table": cough_table, # 新增
+        "treatment_cycles": treatment_cycles,
+        "dates": date_strs,
+        # 回显当前的筛选条件
+        "current_cycle_id": int(cycle_id) if cycle_id else "",
+        # 如果是默认视图（未筛选），则不回填日期到 input，显示为空；否则回填
+        "current_start_date": start_date.isoformat() if not is_default_view else "",
+        "current_end_date": end_date.isoformat() if not is_default_view else "",
+        "is_default_view": is_default_view,
+        "current_filter_type": filter_type or "",
     }

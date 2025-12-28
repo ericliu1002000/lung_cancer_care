@@ -8,6 +8,7 @@
 
 import logging
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 import random
 
 from django.contrib.auth.decorators import login_required
@@ -16,6 +17,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
+from django.utils import timezone
 
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
@@ -26,6 +28,7 @@ from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
 from core.service.questionnaire import QuestionnaireService
 from health_data.services.medical_history_service import MedicalHistoryService
+from health_data.services.health_metric import HealthMetricService, MetricType
 
 from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
@@ -205,8 +208,10 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
             context
         )
 
-    elif section == "reports_history":
+    elif section == "reports_history" or section == "reports":
         from web_doctor.views.home import handle_reports_history_section
+        # 确保 active_tab 正确设置为 'reports'，以便 tab 高亮
+        context["active_tab"] = "reports"
         return render(
             request,
             handle_reports_history_section(request, context),
@@ -215,7 +220,21 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
     elif section == "indicators":
         from web_doctor.views.indicators import build_indicators_context
         template_name = "web_doctor/partials/indicators/indicators.html"
-        context.update(build_indicators_context(patient))
+        context.update(build_indicators_context(
+            patient,
+            cycle_id=request.GET.get("cycle_id"),
+            start_date_str=request.GET.get("start_date"),
+            end_date_str=request.GET.get("end_date"),
+            filter_type=request.GET.get("filter_type")
+        ))
+
+    elif section == "statistics":
+        from web_doctor.views.management_stats import ManagementStatsView
+        view = ManagementStatsView()
+        pkg_id = request.GET.get("package_id")
+        selected_package_id = int(pkg_id) if pkg_id and pkg_id.isdigit() else None
+        context.update(view.get_context_data(patient, selected_package_id=selected_package_id))
+        template_name = "web_doctor/partials/management_stats/management_stats.html"
 
     return render(request, template_name, context)
 
@@ -264,8 +283,10 @@ def _build_settings_context(
 
     # 判断当前选中的疗程是否可以终止（必须是进行中状态）
     can_terminate_selected_cycle = False
+    is_cycle_editable = False
     if selected_cycle and selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS:
         can_terminate_selected_cycle = True
+        is_cycle_editable = True
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
@@ -421,16 +442,32 @@ def _build_settings_context(
             "surgery": "",
             "last_updated": "",
         }
+    # 获取患者当前基线数据
+    last_metrics = HealthMetricService.query_last_metric(patient.id)
+    # 打印接口返回结果，用于调试验证
+    logger.info(f"Query last metrics for patient {patient.id}: {last_metrics}")
+
+    metrics_info = {
+        "blood_oxygen": last_metrics.get(MetricType.BLOOD_OXYGEN),
+        "blood_pressure": last_metrics.get(MetricType.BLOOD_PRESSURE),
+        "heart_rate": last_metrics.get(MetricType.HEART_RATE),
+        "weight": last_metrics.get(MetricType.WEIGHT),
+        "body_temperature": last_metrics.get(MetricType.BODY_TEMPERATURE),
+        "steps": last_metrics.get(MetricType.STEPS),
+    }
+
     return {
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,
         "can_terminate_selected_cycle": can_terminate_selected_cycle,
+        "is_cycle_editable": is_cycle_editable,
         "cycle_page": cycle_page,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
         "current_day_index": current_day_index,
         "patient_info": patient_info,
         "medical_info": medical_info,
+        "metrics_info": metrics_info,
     }
 
 
@@ -632,6 +669,7 @@ def patient_cycle_medication_add(request: HttpRequest, patient_id: int, cycle_id
         "patient": patient,
         "cycle": selected_cycle,
         "plan_view": settings_ctx.get("plan_view"),
+        "is_cycle_editable": selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS if selected_cycle else False,
     }
 
     return render(
@@ -727,6 +765,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             "cycle": cycle,
             "check": target_check,
             "current_day": current_day,
+            "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
         }
         return render(
             request,
@@ -805,6 +844,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             "cycle": cycle,
             "monitoring": target_m,
             "current_day": current_day,
+            "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
         }
         return render(
             request,
@@ -877,6 +917,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         "patient": patient,
         "cycle": cycle,
         "med": medications[0],
+        "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
     }
     return render(
         request,
@@ -978,7 +1019,6 @@ def patient_profile_update(request: HttpRequest, patient_id: int) -> HttpRespons
         # 强制刷新 patient 对象，确保获取到最新数据
         patient.refresh_from_db()
     except ValidationError as exc:
-        print(f"{exc}")
         message = str(exc)
         response = HttpResponse(message, status=400)
         response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
@@ -1040,6 +1080,106 @@ def patient_medical_history_update(request: HttpRequest, patient_id: int) -> Htt
         request,
         "web_doctor/partials/settings/medical_info_card.html",
         {"medical_info": medical_info, "patient": patient}
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    更新患者生命体征基线（手动录入）。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+    # TODO 添加生命体征基线字段区分进行保存数据
+    try:
+        # Blood Oxygen
+        if val := request.POST.get("blood_oxygen"):
+            HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.BLOOD_OXYGEN,
+                measured_at=timezone.now(),
+                value_main=Decimal(val)
+            )
+        
+        # Blood Pressure (sbp/dbp)
+        sbp = request.POST.get("sbp")
+        dbp = request.POST.get("dbp")
+        if sbp and dbp:
+             HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.BLOOD_PRESSURE,
+                measured_at=timezone.now(),
+                value_main=Decimal(sbp),
+                value_sub=Decimal(dbp)
+            )
+
+        # Heart Rate
+        if val := request.POST.get("heart_rate"):
+             HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.HEART_RATE,
+                measured_at=timezone.now(),
+                value_main=Decimal(val)
+            )
+
+        # Weight
+        if val := request.POST.get("weight"):
+             HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.WEIGHT,
+                measured_at=timezone.now(),
+                value_main=Decimal(val)
+            )
+
+        # Temperature
+        if val := request.POST.get("temperature"):
+             HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.BODY_TEMPERATURE,
+                measured_at=timezone.now(),
+                value_main=Decimal(val)
+            )
+            
+        # Steps
+        if val := request.POST.get("steps"):
+             HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.STEPS,
+                measured_at=timezone.now(),
+                value_main=Decimal(val)
+            )
+            
+        logger.info(f"Successfully updated health metrics for patient {patient_id}.")
+        
+    except (InvalidOperation, ValueError) as e:
+        logger.warning(f"Invalid metric data: {e}")
+        message = "输入数据格式错误，请检查数值。"
+        response = HttpResponse(message, status=400)
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
+        return response
+
+    except Exception as exc:
+        logger.exception(f"Unexpected error updating metrics: {exc}")
+        message = "系统错误，请联系管理员。"
+        response = HttpResponse(message, status=500)
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
+        return response
+
+    # 重新构建上下文以获取最新数据
+    settings_ctx = _build_settings_context(patient)
+    
+    return render(
+        request,
+        "web_doctor/partials/settings/medical_info_card.html",
+        {
+            "medical_info": settings_ctx["medical_info"],
+            "patient": patient,
+            "metrics_info": settings_ctx["metrics_info"]
+        }
     )
 
 

@@ -17,6 +17,7 @@
     </div>
 
     <div class="p-6">
+        {% if current_medication and current_medication.items %}
         {# 信息行 #}
         <div class="flex items-center justify-between text-sm text-slate-600 mb-6">
             <div>确认时间：{{ current_medication.confirm_date }}</div>
@@ -29,7 +30,6 @@
             <table class="w-full text-sm text-left">
                 <thead class="bg-slate-100 text-slate-700 font-medium">
                     <tr>
-                        <th class="px-4 py-3 whitespace-nowrap">线数</th>
                         <th class="px-4 py-3 whitespace-nowrap">药品名称</th>
                         <th class="px-4 py-3 whitespace-nowrap">频次</th>
                         <th class="px-4 py-3 whitespace-nowrap">每次用量</th>
@@ -39,15 +39,10 @@
                 <tbody class="divide-y divide-slate-100">
                     {% for med in current_medication.items %}
                     <tr class="hover:bg-slate-50/50">
-                        <td class="px-4 py-3 text-slate-600">{{ med.line }}</td>
                         <td class="px-4 py-3 font-medium text-slate-800">{{ med.name }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ med.frequency }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ med.dosage }}</td>
                         <td class="px-4 py-3 text-slate-600">{{ med.usage }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">暂无用药方案</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -56,12 +51,6 @@
 
         {# 底部操作按钮 #}
         <div class="flex items-center justify-end gap-4 pt-2">
-            {% comment %} <button 
-                onclick="document.getElementById('stop-medication-modal').showModal()"
-                class="text-sm font-medium text-indigo-600 hover:text-indigo-700"
-            >
-                停止当前用药方案
-            </button> {% endcomment %}
             <button 
                 class="text-sm font-medium text-indigo-600 hover:text-indigo-700"
                 hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'settings' %}"
@@ -71,6 +60,21 @@
                 调整用药方案
             </button>
         </div>
+        {% else %}
+        <div class="text-center py-12">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full  mb-4">
+<svg t="1766752532483" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2500" width="64" height="64"><path d="M512 0C229.376 0 0 229.376 0 512s229.376 512 512 512 512-229.376 512-512S794.624 0 512 0z" fill="#FF745E" p-id="2501"></path><path d="M320.75776 374.41536l-96.256 96.256c-24.576 24.576-38.912 59.392-38.912 94.208 0 34.816 14.336 69.632 38.912 94.208 53.248 51.2 137.216 51.2 190.464 0l96.256-96.256-190.464-188.416z m75.776 258.048c-20.48 20.48-47.104 32.768-75.776 36.864-16.384 2.048-28.672-8.192-32.768-24.576v-2.048c0-16.384 10.24-30.72 26.624-30.72 16.384-2.048 30.72-8.192 43.008-18.432 4.096-6.144 12.288-8.192 18.432-10.24 8.192 0 14.336 4.096 18.432 10.24 10.24 8.192 12.288 24.576 4.096 36.864l-2.048 2.048zM617.71776 458.38336c24.576-24.576 38.912-59.392 38.912-96.256 0-34.816-14.336-69.632-38.912-94.208-24.576-22.528-59.392-36.864-94.208-36.864-36.864 0-69.632 14.336-96.256 40.96l-81.92 81.92 190.464 192.512 81.92-88.064z" fill="#FFFFFF" p-id="2502"></path><path d="M653.312 430.08c-96.256 0-174.08 77.824-174.08 174.08s77.824 174.08 174.08 174.08 174.08-77.824 174.08-174.08-77.824-174.08-174.08-174.08z" fill="#FF745E" p-id="2503"></path><path d="M653.312 458.752c-79.872 0-145.408 65.536-145.408 145.408s65.536 145.408 145.408 145.408 145.408-65.536 145.408-145.408-65.536-145.408-145.408-145.408z" fill="#FFFFFF" p-id="2504"></path><path d="M595.968 591.872c6.144 4.096 12.288 8.192 16.384 10.24-16.384 30.72-30.72 57.344-40.96 77.824l-18.432-8.192c14.336-20.48 28.672-47.104 43.008-79.872z m-24.576-71.68c10.24 10.24 22.528 24.576 36.864 38.912l-12.288 12.288c-12.288-16.384-24.576-30.72-34.816-40.96l10.24-10.24z m110.592 45.056v20.48c8.192 45.056 32.768 79.872 71.68 100.352-6.144 6.144-10.24 10.24-12.288 16.384-32.768-22.528-55.296-53.248-63.488-86.016-8.192 36.864-32.768 67.584-71.68 90.112-2.048-4.096-6.144-8.192-10.24-14.336 40.96-22.528 65.536-51.2 71.68-92.16 2.048-10.24 2.048-20.48 2.048-32.768l12.288-2.048z m26.624 26.624c6.144-10.24 12.288-22.528 16.384-34.816h-77.824c-6.144 12.288-12.288 26.624-18.432 38.912-4.096-4.096-10.24-6.144-14.336-8.192 16.384-24.576 26.624-51.2 34.816-79.872l16.384 4.096c-4.096 10.24-6.144 20.48-10.24 30.72h90.112v14.336c-6.144 14.336-12.288 28.672-18.432 40.96l-18.432-6.144z" fill="#FF7F6B" p-id="2505"></path></svg>            </div>
+            <p class="text-slate-500 mb-6">当前暂无正在进行的用药方案</p>
+            <button 
+                class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors"
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'settings' %}"
+                hx-target="#patient-content"
+                hx-swap="innerHTML"
+            >
+                添加用药
+            </button>
+        </div>
+        {% endif %}
     </div>
 
 
