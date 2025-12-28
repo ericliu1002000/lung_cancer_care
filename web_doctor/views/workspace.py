@@ -1087,6 +1087,11 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
     data = {
         "name": patient.name,
         "phone": patient.phone,
+        "address": getattr(patient, "address", "") or "",
+        "ec_name": getattr(patient, "ec_name", "") or "",
+        "ec_relation": getattr(patient, "ec_relation", "") or "",
+        "ec_phone": getattr(patient, "ec_phone", "") or "",
+        "remark": getattr(patient, "remark", "") or "", 
         "baseline_blood_oxygen": request.POST.get("blood_oxygen"),
         "baseline_blood_pressure_sbp": request.POST.get("sbp"),
         "baseline_blood_pressure_dbp": request.POST.get("dbp"),

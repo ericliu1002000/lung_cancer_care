@@ -45,33 +45,8 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <label class="w-20 text-sm font-medium text-slate-700">推送患者：</label>
-                            <div class="flex items-center gap-4">
-                                <label class="inline-flex items-center">
-                                    <input 
-                                        type="radio" 
-                                        x-model="pushToPatient" 
-                                        :value="true" 
-                                        :disabled="!isEditing"
-                                        class="form-radio text-indigo-600 focus:ring-indigo-500 disabled:text-slate-400"
-                                    >
-                                    <span class="ml-2 text-sm text-slate-700" :class="{'text-slate-400': !isEditing}">是</span>
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input 
-                                        type="radio" 
-                                        x-model="pushToPatient" 
-                                        :value="false" 
-                                        :disabled="!isEditing"
-                                        class="form-radio text-indigo-600 focus:ring-indigo-500 disabled:text-slate-400"
-                                    >
-                                    <span class="ml-2 text-sm text-slate-700" :class="{'text-slate-400': !isEditing}">否</span>
-                                </label>
-                            </div>
-                        </div>
-
+                    <div class="flex items-center justify-end">
+                       
                         <button 
                             @click="isEditing = !isEditing"
                             class="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors min-w-[64px]"
