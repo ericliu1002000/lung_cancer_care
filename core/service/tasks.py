@@ -38,6 +38,7 @@ def get_daily_plan_summary(
     【返回值说明】
     - List[dict]，结构示例：
       [{"task_type": 1, "status": 0, "title": "用药提醒"}]
+      问卷类型会额外返回 questionnaire_ids（具体问卷 ID 列表）。
     """
 
     task_types = (
@@ -53,6 +54,7 @@ def get_daily_plan_summary(
             task_date=task_date,
             task_type__in=task_types,
         )
+        .select_related("plan_item")
         .order_by("id")
     )
 
@@ -71,11 +73,27 @@ def get_daily_plan_summary(
         task_list = tasks_by_type[task_type]
         if not task_list:
             continue
+        questionnaire_ids = []
+        if task_type == choices.PlanItemCategory.QUESTIONNAIRE:
+            seen = set()
+            for task in task_list:
+                if not task.plan_item_id:
+                    continue
+                questionnaire_id = task.plan_item.template_id
+                if questionnaire_id in seen:
+                    continue
+                seen.add(questionnaire_id)
+                questionnaire_ids.append(questionnaire_id)
         summary.append(
             {
                 "task_type": int(task_type),
                 "status": int(task_list[0].status),
                 "title": _SUMMARY_TITLE_BY_TYPE[task_type],
+                **(
+                    {"questionnaire_ids": questionnaire_ids}
+                    if task_type == choices.PlanItemCategory.QUESTIONNAIRE
+                    else {}
+                ),
             }
         )
 
