@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Any, Dict, List
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, Iterable, List
 
 from django.utils import timezone
 
 from core.models import DailyTask, MonitoringTemplate, choices
+from health_data.models import MetricType
 from users.models import PatientProfile
 
 
@@ -270,3 +271,140 @@ def complete_daily_checkup_tasks(
         status=choices.TaskStatus.COMPLETED,
         completed_at=completed_at,
     )
+
+
+def _resolve_adherence_date_range(
+    start_date: date | None,
+    end_date: date | None,
+) -> tuple[date, date]:
+    """
+    【功能说明】
+    - 统一依从性计算的日期范围解析。
+
+    【规则说明】
+    - 默认 end_date = 昨天（本地日期）。
+    - 默认 start_date = end_date 往前推 179 天（含起止共 180 天）。
+
+    【参数说明】
+    - start_date: date | None，开始日期（含）。
+    - end_date: date | None，结束日期（含）。
+
+    【返回值说明】
+    - (start_date, end_date)。
+    """
+    if end_date is None:
+        end_date = timezone.localdate() - timedelta(days=1)
+    if start_date is None:
+        start_date = end_date - timedelta(days=179)
+    if start_date > end_date:
+        raise ValueError("start_date 不能晚于 end_date")
+    return start_date, end_date
+
+
+def get_adherence_metrics(
+    patient_id: int,
+    adherence_type: int | str,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> dict:
+    """
+    【功能说明】
+    - 计算指定患者在时间范围内的依从性（按任务完成率统计）。
+    - 依从性 = 已完成任务数 / 计划任务数。
+
+    【适用类型】
+    - choices.PlanItemCategory: MEDICATION / CHECKUP / QUESTIONNAIRE / MONITORING。
+    - health_data.models.MetricType: 血压/血氧/心率/体重/体温/步数等具体监测项。
+
+    【参数说明】
+    - patient_id: int，患者 ID。
+    - adherence_type: int | str，依从性类型（复用现有枚举）。
+    - start_date / end_date: date | None，统计区间（含起止）。
+
+    【返回值说明】
+    - dict，结构示例：
+      {
+        "type": adherence_type,
+        "start_date": date,
+        "end_date": date,
+        "total": int,
+        "completed": int,
+        "rate": float | None,
+      }
+    - 若 total=0，rate 返回 None。
+    """
+    start_date, end_date = _resolve_adherence_date_range(start_date, end_date)
+
+    base_qs = DailyTask.objects.filter(
+        patient_id=patient_id,
+        task_date__range=(start_date, end_date),
+    )
+
+    if adherence_type in choices.PlanItemCategory.values:
+        task_qs = base_qs.filter(task_type=adherence_type)
+    elif adherence_type in MetricType.values:
+        template_ids = list(
+            MonitoringTemplate.objects.filter(code=adherence_type).values_list(
+                "id", flat=True
+            )
+        )
+        if not template_ids:
+            return {
+                "type": adherence_type,
+                "start_date": start_date,
+                "end_date": end_date,
+                "total": 0,
+                "completed": 0,
+                "rate": None,
+            }
+        task_qs = base_qs.filter(
+            task_type=choices.PlanItemCategory.MONITORING,
+            plan_item__template_id__in=template_ids,
+        )
+    else:
+        raise ValueError("不支持的依从性类型")
+
+    total = task_qs.count()
+    completed = task_qs.filter(status=choices.TaskStatus.COMPLETED).count()
+    rate = None if total == 0 else completed / total
+
+    return {
+        "type": adherence_type,
+        "start_date": start_date,
+        "end_date": end_date,
+        "total": total,
+        "completed": completed,
+        "rate": rate,
+    }
+
+
+def get_adherence_metrics_batch(
+    patient: PatientProfile | int,
+    adherence_types: Iterable[int | str],
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> list[dict]:
+    """
+    【功能说明】
+    - 批量计算同一患者的多种依从性，按传入类型顺序返回列表。
+
+    【参数说明】
+    - patient: PatientProfile | int，患者对象或患者 ID。
+    - adherence_types: Iterable[int | str]，依从性类型集合（复用现有枚举）。
+    - start_date / end_date: date | None，统计区间（含起止）。
+
+    【返回值说明】
+    - List[dict]，每项结构同 get_adherence_metrics 返回值。
+    """
+    patient_id = patient.id if isinstance(patient, PatientProfile) else int(patient)
+    results = []
+    for adherence_type in adherence_types:
+        results.append(
+            get_adherence_metrics(
+                patient_id=patient_id,
+                adherence_type=adherence_type,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        )
+    return results
