@@ -328,27 +328,7 @@ def handle_medication_history_section(request: HttpRequest, context: dict) -> st
     })
     return template_name
 
-def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
-    """
-    处理检查报告历史记录板块
-    """
-    from django.core.paginator import Paginator
-    from web_doctor.views.reports_history_data import get_mock_reports_data
-    
-    template_name = "web_doctor/partials/reports_history/list.html"
-    history_list = get_mock_reports_data()
-    
-    paginator = Paginator(history_list, 10)
-    try:
-        page = int(request.GET.get("page", 1))
-    except (TypeError, ValueError):
-        page = 1
-    
-    history_page = paginator.get_page(page)
-    context.update({
-        "history_page": history_page,
-    })
-    return template_name
+
 
 @login_required
 @check_doctor_or_assistant

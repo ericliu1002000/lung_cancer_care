@@ -209,7 +209,7 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
         )
 
     elif section == "reports_history" or section == "reports":
-        from web_doctor.views.home import handle_reports_history_section
+        from web_doctor.views.reports_history_data import handle_reports_history_section
         # 确保 active_tab 正确设置为 'reports'，以便 tab 高亮
         context["active_tab"] = "reports"
         return render(

@@ -1122,6 +1122,10 @@ video {
   height: 100vh;
 }
 
+.h-\[120px\] {
+  height: 120px;
+}
+
 .max-h-56 {
   max-height: 14rem;
 }
@@ -1336,6 +1340,10 @@ video {
 
 .w-px {
   width: 1px;
+}
+
+.w-\[120px\] {
+  width: 120px;
 }
 
 .min-w-0 {
@@ -2643,6 +2651,10 @@ video {
   --tw-gradient-to: #fff var(--tw-gradient-to-position);
 }
 
+.bg-\[length\:12px_12px\] {
+  background-size: 12px 12px;
+}
+
 .object-contain {
   -o-object-fit: contain;
      object-fit: contain;
@@ -2924,6 +2936,14 @@ video {
 
 .pt-8 {
   padding-top: 2rem;
+}
+
+.pl-1 {
+  padding-left: 0.25rem;
+}
+
+.pr-6 {
+  padding-right: 1.5rem;
 }
 
 .text-left {
