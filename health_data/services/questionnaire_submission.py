@@ -1,8 +1,9 @@
 """问卷提交业务逻辑服务。"""
 
 import logging
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -14,6 +15,9 @@ from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from users.models import PatientProfile
 
 
 class QuestionnaireSubmissionService:
@@ -196,3 +200,365 @@ class QuestionnaireSubmissionService:
             )
 
         return submission
+
+    @classmethod
+    def get_submission_dates(
+        cls,
+        *,
+        patient: "PatientProfile",
+        start_date: date,
+        end_date: date,
+    ) -> list[date]:
+        """
+        查询患者在指定日期范围内提交问卷的日期列表（按日期倒序）。
+
+        【功能说明】
+        - 在闭区间 [start_date, end_date] 内筛选问卷提交记录；
+        - 按本地时区归并到自然日，同一天多次提交只保留一天；
+        - 返回日期列表按最近日期在前。
+
+        【参数说明】
+        :param patient: PatientProfile 实例。
+        :param start_date: 起始日期（包含）。
+        :param end_date: 结束日期（包含）。
+
+        【返回值说明】
+        :return: list[date]，按日期倒序排列。
+
+        【异常说明】
+        - 起止日期为空或 start_date > end_date：抛出 ValidationError。
+        - patient 无效：抛出 ValidationError。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValidationError("患者信息无效。")
+        if start_date is None or end_date is None:
+            raise ValidationError("起止日期不能为空。")
+        if start_date > end_date:
+            raise ValidationError("起始日期不能晚于结束日期。")
+
+        start_dt, end_dt = cls._build_date_range(start_date, end_date)
+
+        created_times = QuestionnaireSubmission.objects.filter(
+            patient_id=patient.id,
+            created_at__gte=start_dt,
+            created_at__lt=end_dt,
+        ).values_list("created_at", flat=True)
+
+        local_dates: set[date] = set()
+        for created_at in created_times:
+            local_dt = cls._to_localtime(created_at)
+            local_dates.add(local_dt.date())
+
+        return sorted(local_dates, reverse=True)
+
+    @classmethod
+    def list_daily_questionnaire_summaries(
+        cls,
+        *,
+        patient_id: int,
+        target_date: date,
+    ) -> list[dict[str, Any]]:
+        """
+        查询患者在指定日期的问卷提交摘要（按问卷维度聚合）。
+
+        【功能说明】
+        - 仅获取目标日期内的问卷提交记录；
+        - 同一问卷同一天多次提交时，仅取当天最新一条；
+        - 返回当前提交、上次提交（不含当日）以及分数变化信息。
+
+        【参数说明】
+        :param patient_id: 患者 ID。
+        :param target_date: 目标日期（自然日）。
+
+        【返回值说明】
+        :return: list[dict]，按问卷排序返回，示例：
+            [
+                {
+                    "questionnaire_id": 1,
+                    "questionnaire_name": "体能与呼吸困难",
+                    "submission_id": 123,
+                    "submitted_at": datetime(...),
+                    "total_score": Decimal("8.00"),
+                    "prev_submission_id": 101,
+                    "prev_score": Decimal("7.00"),
+                    "prev_submitted_at": datetime(...),
+                    "score_change": Decimal("1.00"),
+                    "change_type": "up",
+                    "change_text": "较上次提升1分",
+                },
+            ]
+
+        【异常说明】
+        - patient_id 为空或 target_date 为空：抛出 ValidationError。
+        """
+        if not patient_id:
+            raise ValidationError("患者ID不能为空。")
+        if target_date is None:
+            raise ValidationError("查询日期不能为空。")
+
+        start_dt, end_dt = cls._build_date_range(target_date, target_date)
+        submissions = (
+            QuestionnaireSubmission.objects.filter(
+                patient_id=patient_id,
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
+            )
+            .select_related("questionnaire")
+            .order_by("-created_at")
+        )
+
+        latest_by_questionnaire: dict[int, QuestionnaireSubmission] = {}
+        for submission in submissions:
+            if submission.questionnaire_id not in latest_by_questionnaire:
+                latest_by_questionnaire[submission.questionnaire_id] = submission
+
+        sorted_submissions = sorted(
+            latest_by_questionnaire.values(),
+            key=lambda item: (item.questionnaire.sort_order, item.questionnaire.name),
+        )
+
+        summaries: list[dict[str, Any]] = []
+        for submission in sorted_submissions:
+            prev_submission = (
+                QuestionnaireSubmission.objects.filter(
+                    patient_id=patient_id,
+                    questionnaire_id=submission.questionnaire_id,
+                    created_at__lt=start_dt,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+            change_info = cls._build_change_info(
+                submission.total_score,
+                prev_submission.total_score if prev_submission else None,
+                prefix="较上次",
+            )
+
+            summaries.append(
+                {
+                    "questionnaire_id": submission.questionnaire_id,
+                    "questionnaire_name": submission.questionnaire.name,
+                    "submission_id": submission.id,
+                    "submitted_at": cls._to_localtime(submission.created_at),
+                    "total_score": submission.total_score,
+                    "prev_submission_id": prev_submission.id if prev_submission else None,
+                    "prev_score": prev_submission.total_score if prev_submission else None,
+                    "prev_submitted_at": cls._to_localtime(prev_submission.created_at)
+                    if prev_submission
+                    else None,
+                    "score_change": change_info["score_change"],
+                    "change_type": change_info["change_type"],
+                    "change_text": change_info["change_text"],
+                }
+            )
+
+        return summaries
+
+    @classmethod
+    def get_questionnaire_comparison(
+        cls,
+        *,
+        submission_id: int,
+    ) -> dict[str, Any]:
+        """
+        获取单份问卷提交与上一份提交的对比详情（含题目级别）。
+
+        【功能说明】
+        - 基于 submission_id 获取当前问卷提交；
+        - 找到该问卷在当前日期之前的上一条提交；
+        - 生成问卷总分和题目级别的对比数据。
+
+        【参数说明】
+        :param submission_id: 当前问卷提交 ID。
+
+        【返回值说明】
+        :return: dict，包含问卷摘要与题目对比明细。
+
+        【异常说明】
+        - submission_id 为空或不存在：抛出 ValidationError。
+        """
+        if not submission_id:
+            raise ValidationError("提交记录不能为空。")
+
+        try:
+            submission = QuestionnaireSubmission.objects.select_related(
+                "questionnaire"
+            ).get(id=submission_id)
+        except QuestionnaireSubmission.DoesNotExist as exc:
+            raise ValidationError("提交记录不存在。") from exc
+
+        current_local_date = cls._to_localtime(submission.created_at).date()
+        start_dt, _ = cls._build_date_range(current_local_date, current_local_date)
+
+        prev_submission = (
+            QuestionnaireSubmission.objects.filter(
+                patient_id=submission.patient_id,
+                questionnaire_id=submission.questionnaire_id,
+                created_at__lt=start_dt,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+        current_answers = list(
+            QuestionnaireAnswer.objects.filter(submission=submission).select_related(
+                "question", "option"
+            )
+        )
+        prev_answers: list[QuestionnaireAnswer] = []
+        if prev_submission:
+            prev_answers = list(
+                QuestionnaireAnswer.objects.filter(
+                    submission=prev_submission
+                ).select_related("question", "option")
+            )
+
+        answers_by_question = cls._group_answers(current_answers)
+        prev_answers_by_question = cls._group_answers(prev_answers)
+
+        questions = QuestionnaireQuestion.objects.filter(
+            questionnaire=submission.questionnaire
+        ).order_by("seq", "id")
+
+        question_details: list[dict[str, Any]] = []
+        for question in questions:
+            current_items = answers_by_question.get(question.id, [])
+            prev_items = prev_answers_by_question.get(question.id, [])
+
+            current_score = cls._sum_answer_score(current_items) if current_items else None
+            prev_score = cls._sum_answer_score(prev_items) if prev_items else None
+
+            change_info = cls._build_change_info(
+                current_score,
+                prev_score,
+                prefix="",
+            )
+
+            question_details.append(
+                {
+                    "question_id": question.id,
+                    "question_text": question.text,
+                    "current_answer": cls._render_answers(current_items),
+                    "prev_answer": cls._render_answers(prev_items),
+                    "current_score": current_score,
+                    "prev_score": prev_score,
+                    "score_change": change_info["score_change"],
+                    "change_type": change_info["change_type"],
+                    "change_text": change_info["change_text"],
+                }
+            )
+
+        summary_change = cls._build_change_info(
+            submission.total_score,
+            prev_submission.total_score if prev_submission else None,
+            prefix="较上次",
+        )
+        prev_submitted_at = (
+            cls._to_localtime(prev_submission.created_at) if prev_submission else None
+        )
+
+        return {
+            "questionnaire_id": submission.questionnaire_id,
+            "questionnaire_name": submission.questionnaire.name,
+            "submission_id": submission.id,
+            "submitted_at": cls._to_localtime(submission.created_at),
+            "current_score": submission.total_score,
+            "prev_submission_id": prev_submission.id if prev_submission else None,
+            "prev_score": prev_submission.total_score if prev_submission else None,
+            "prev_submitted_at": prev_submitted_at,
+            "prev_date": prev_submitted_at.date() if prev_submitted_at else None,
+            "score_change": summary_change["score_change"],
+            "change_type": summary_change["change_type"],
+            "change_text": summary_change["change_text"],
+            "questions": question_details,
+        }
+
+    @staticmethod
+    def _build_date_range(start_date: date, end_date: date) -> tuple[datetime, datetime]:
+        query_end_date = end_date + timedelta(days=1)
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(query_end_date, datetime.min.time())
+
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+
+        return start_dt, end_dt
+
+    @staticmethod
+    def _to_localtime(dt: datetime) -> datetime:
+        if timezone.is_aware(dt):
+            return timezone.localtime(dt)
+        return dt
+
+    @staticmethod
+    def _group_answers(
+        answers: list[QuestionnaireAnswer],
+    ) -> dict[int, list[QuestionnaireAnswer]]:
+        grouped: dict[int, list[QuestionnaireAnswer]] = {}
+        for answer in answers:
+            grouped.setdefault(answer.question_id, []).append(answer)
+        return grouped
+
+    @staticmethod
+    def _render_answers(answers: list[QuestionnaireAnswer]) -> str | None:
+        if not answers:
+            return None
+
+        texts: list[str] = []
+        for answer in answers:
+            if answer.option and answer.option.text:
+                texts.append(answer.option.text)
+            if answer.value_text:
+                texts.append(answer.value_text)
+
+        if not texts:
+            return None
+
+        return "、".join(texts)
+
+    @staticmethod
+    def _sum_answer_score(answers: list[QuestionnaireAnswer]) -> Decimal:
+        total = Decimal("0.00")
+        for answer in answers:
+            if answer.option:
+                total += answer.option.score
+        return total
+
+    @staticmethod
+    def _format_decimal(value: Decimal) -> str:
+        text = format(value.quantize(Decimal("0.01")), "f")
+        return text.rstrip("0").rstrip(".")
+
+    @classmethod
+    def _build_change_info(
+        cls,
+        current_score: Decimal | None,
+        prev_score: Decimal | None,
+        *,
+        prefix: str,
+    ) -> dict[str, Any]:
+        if current_score is None or prev_score is None:
+            return {
+                "score_change": None,
+                "change_type": "none",
+                "change_text": "无上次记录",
+            }
+
+        diff = current_score - prev_score
+        if diff == 0:
+            return {
+                "score_change": Decimal("0.00"),
+                "change_type": "neutral",
+                "change_text": "持平",
+            }
+
+        label = "提升" if diff > 0 else "下降"
+        change_value = cls._format_decimal(abs(diff))
+        prefix_text = f"{prefix}" if prefix else ""
+        return {
+            "score_change": diff,
+            "change_type": "up" if diff > 0 else "down",
+            "change_text": f"{prefix_text}{label}{change_value}分",
+        }

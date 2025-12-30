@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -169,3 +170,171 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         metric = metrics.first()
         self.assertEqual(metric.value_main, Decimal("5"))
         self.assertEqual(metric.source, MetricSource.MANUAL)
+
+    def test_get_submission_dates_returns_unique_dates_desc(self):
+        """
+        查询提交日期：同一天只保留一次，且最近日期排在最前。
+        """
+        tz = timezone.get_current_timezone()
+
+        submission_1 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+        )
+        submission_2 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+        )
+        submission_3 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+        )
+        submission_4 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+        )
+
+        dt_1 = timezone.make_aware(datetime(2025, 1, 10, 9, 0), tz)
+        dt_2 = timezone.make_aware(datetime(2025, 1, 10, 20, 0), tz)
+        dt_3 = timezone.make_aware(datetime(2025, 1, 8, 8, 30), tz)
+        dt_4 = timezone.make_aware(datetime(2025, 2, 1, 9, 0), tz)
+
+        QuestionnaireSubmission.objects.filter(id=submission_1.id).update(
+            created_at=dt_1
+        )
+        QuestionnaireSubmission.objects.filter(id=submission_2.id).update(
+            created_at=dt_2
+        )
+        QuestionnaireSubmission.objects.filter(id=submission_3.id).update(
+            created_at=dt_3
+        )
+        QuestionnaireSubmission.objects.filter(id=submission_4.id).update(
+            created_at=dt_4
+        )
+
+        dates = QuestionnaireSubmissionService.get_submission_dates(
+            patient=self.patient,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+        )
+
+        self.assertEqual(dates, [date(2025, 1, 10), date(2025, 1, 8)])
+
+    def test_list_daily_questionnaire_summaries_latest_per_questionnaire(self):
+        """
+        查询指定日期摘要：每份问卷仅保留当天最新提交，上一份不含当日。
+        """
+        tz = timezone.get_current_timezone()
+        questionnaire_2 = Questionnaire.objects.create(
+            name="测试问卷2",
+            code="Q_TEST_2",
+            sort_order=1,
+        )
+
+        q1_prev = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("3.00"),
+        )
+        q1_early = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("4.00"),
+        )
+        q1_late = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("6.00"),
+        )
+        q2_prev = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire_2,
+            total_score=Decimal("2.00"),
+        )
+        q2_current = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire_2,
+            total_score=Decimal("5.00"),
+        )
+
+        QuestionnaireSubmission.objects.filter(id=q1_prev.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 8, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=q1_early.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 10, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=q1_late.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 10, 20, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=q2_prev.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 5, 8, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=q2_current.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 10, 10, 0), tz)
+        )
+
+        summaries = QuestionnaireSubmissionService.list_daily_questionnaire_summaries(
+            patient_id=self.patient.id,
+            target_date=date(2025, 1, 10),
+        )
+
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual(
+            [item["questionnaire_id"] for item in summaries],
+            [self.questionnaire.id, questionnaire_2.id],
+        )
+
+        q1_summary = summaries[0]
+        self.assertEqual(q1_summary["submission_id"], q1_late.id)
+        self.assertEqual(q1_summary["prev_submission_id"], q1_prev.id)
+        self.assertEqual(q1_summary["score_change"], Decimal("3.00"))
+        self.assertEqual(q1_summary["change_type"], "up")
+
+        q2_summary = summaries[1]
+        self.assertEqual(q2_summary["submission_id"], q2_current.id)
+        self.assertEqual(q2_summary["prev_submission_id"], q2_prev.id)
+
+    def test_get_questionnaire_comparison_returns_question_details(self):
+        """
+        查询问卷对比：返回题目明细与分数变化。
+        """
+        prev_submission = QuestionnaireSubmissionService.submit_questionnaire(
+            patient_id=self.patient.id,
+            questionnaire_id=self.questionnaire.id,
+            answers_data=[
+                {"option_id": self.q1_opt1.id},
+                {"option_id": self.q2_opt1.id},
+            ],
+        )
+        current_submission = QuestionnaireSubmissionService.submit_questionnaire(
+            patient_id=self.patient.id,
+            questionnaire_id=self.questionnaire.id,
+            answers_data=[
+                {"option_id": self.q1_opt2.id},
+                {"option_id": self.q2_opt2.id},
+            ],
+        )
+
+        tz = timezone.get_current_timezone()
+        QuestionnaireSubmission.objects.filter(id=prev_submission.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 8, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=current_submission.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 10, 10, 0), tz)
+        )
+
+        comparison = QuestionnaireSubmissionService.get_questionnaire_comparison(
+            submission_id=current_submission.id
+        )
+
+        self.assertEqual(comparison["questionnaire_id"], self.questionnaire.id)
+        self.assertEqual(comparison["current_score"], Decimal("6.00"))
+        self.assertEqual(comparison["prev_score"], Decimal("4.00"))
+        self.assertEqual(comparison["change_type"], "up")
+        self.assertEqual(comparison["change_text"], "较上次提升2分")
+
+        questions = comparison["questions"]
+        self.assertEqual(len(questions), 2)
+        self.assertEqual(questions[0]["current_answer"], self.q1_opt2.text)
+        self.assertEqual(questions[0]["prev_answer"], self.q1_opt1.text)
+        self.assertEqual(questions[0]["change_text"], "提升1分")
