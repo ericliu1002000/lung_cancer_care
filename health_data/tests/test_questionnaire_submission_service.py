@@ -5,7 +5,14 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import DailyTask, Questionnaire, QuestionnaireOption, QuestionnaireQuestion, choices
+from core.models import (
+    DailyTask,
+    Questionnaire,
+    QuestionnaireCode,
+    QuestionnaireOption,
+    QuestionnaireQuestion,
+    choices,
+)
 from health_data.models import (
     HealthMetric,
     MetricSource,
@@ -293,6 +300,84 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         q2_summary = summaries[1]
         self.assertEqual(q2_summary["submission_id"], q2_current.id)
         self.assertEqual(q2_summary["prev_submission_id"], q2_prev.id)
+
+    def test_list_daily_questionnaire_scores_fill_missing_and_latest(self):
+        """
+        按日返回问卷分数：缺失日期补 0，同日多次提交取最新。
+        """
+        tz = timezone.get_current_timezone()
+        questionnaire = Questionnaire.objects.filter(code=QuestionnaireCode.Q_SLEEP).first()
+        if not questionnaire:
+            questionnaire = Questionnaire.objects.create(
+                name="睡眠质量评估",
+                code=QuestionnaireCode.Q_SLEEP,
+            )
+        other_questionnaire = Questionnaire.objects.create(
+            name="其他问卷",
+            code="Q_OTHER",
+        )
+
+        day1_early = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("2.00"),
+        )
+        day1_late = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("5.00"),
+        )
+        day2_other = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=other_questionnaire,
+            total_score=Decimal("9.00"),
+        )
+        day3 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("3.00"),
+        )
+
+        QuestionnaireSubmission.objects.filter(id=day1_early.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 1, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day1_late.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 1, 20, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day2_other.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 2, 10, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day3.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 3, 11, 0), tz)
+        )
+
+        results = QuestionnaireSubmissionService.list_daily_questionnaire_scores(
+            patient=self.patient,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 3),
+            questionnaire_code=QuestionnaireCode.Q_SLEEP,
+        )
+
+        self.assertEqual(
+            results,
+            [
+                {"date": date(2025, 1, 1), "score": Decimal("5.00")},
+                {"date": date(2025, 1, 2), "score": Decimal("0")},
+                {"date": date(2025, 1, 3), "score": Decimal("3.00")},
+            ],
+        )
+
+    def test_list_daily_questionnaire_scores_invalid_code(self):
+        """
+        无效问卷编码应抛出 ValidationError。
+        """
+        with self.assertRaises(ValidationError):
+            QuestionnaireSubmissionService.list_daily_questionnaire_scores(
+                patient=self.patient,
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 2),
+                questionnaire_code="Q_NOT_EXIST",
+            )
 
     def test_get_questionnaire_comparison_returns_question_details(self):
         """

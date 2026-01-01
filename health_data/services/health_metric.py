@@ -635,10 +635,10 @@ class HealthMetricService:
     def count_metric_uploads_by_month(
         cls,
         patient: "PatientProfile",
-        metric_types: list[MetricType],
+        metric_types: list[str],
         start_date: date,
         end_date: date,
-    ) -> dict[str, list[dict[str, int]]]:
+    ) -> dict[str, list[dict[str, int | str]]]:
         """
         统计指定指标在日期范围内按自然月拆分的上传次数。
 
@@ -653,7 +653,7 @@ class HealthMetricService:
 
         【参数说明】
         - patient: PatientProfile 实例。
-        - metric_types: List[MetricType]，指标类型常量列表。
+        - metric_types: List[str]，指标类型常量或自定义指标类型字符串列表。
         - start_date: date，开始日期（含）。
         - end_date: date，结束日期（含）。
 
@@ -676,12 +676,12 @@ class HealthMetricService:
             raise ValueError("metric_types 不能为空")
 
         normalized_types: list[str] = []
-        seen = set()
+        seen: set[str] = set()
         for metric_type in metric_types:
+            if not metric_type:
+                raise ValueError("metric_types 不支持空值")
             if metric_type == task_service.MONITORING_ADHERENCE_ALL:
                 raise ValueError("metric_types 不支持 MONITORING_ADHERENCE_ALL")
-            if metric_type not in MetricType.values:
-                raise ValueError("不支持的指标类型")
             if metric_type not in seen:
                 normalized_types.append(metric_type)
                 seen.add(metric_type)
