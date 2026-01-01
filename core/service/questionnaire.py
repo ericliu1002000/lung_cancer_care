@@ -6,11 +6,28 @@ from typing import Any, Dict, List, Optional
 
 from django.db.models import Prefetch
 
-from core.models import Questionnaire, QuestionnaireOption, QuestionnaireQuestion
+from core.models import (
+    Questionnaire,
+    QuestionnaireCode,
+    QuestionnaireOption,
+    QuestionnaireQuestion,
+)
 
 
 class QuestionnaireService:
     """问卷业务服务封装。"""
+
+    Q_PHYSICAL = QuestionnaireCode.Q_PHYSICAL
+    Q_BREATH = QuestionnaireCode.Q_BREATH
+    Q_COUGH = QuestionnaireCode.Q_COUGH
+    Q_APPETITE = QuestionnaireCode.Q_APPETITE
+    Q_PAIN = QuestionnaireCode.Q_PAIN
+    Q_SLEEP = QuestionnaireCode.Q_SLEEP
+    Q_DEPRESSIVE = QuestionnaireCode.Q_DEPRESSIVE
+    Q_ANXIETY = QuestionnaireCode.Q_ANXIETY
+    Q_PSYCH = QuestionnaireCode.Q_PSYCH
+
+    QUESTIONNAIRE_CODES = tuple(QuestionnaireCode.values)
 
     @staticmethod
     def get_active_questionnaires() -> List[Questionnaire]:

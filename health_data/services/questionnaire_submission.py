@@ -9,7 +9,12 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Questionnaire, QuestionnaireOption, QuestionnaireQuestion
+from core.models import (
+    Questionnaire,
+    QuestionnaireCode,
+    QuestionnaireOption,
+    QuestionnaireQuestion,
+)
 from core.service import tasks as task_service
 from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
@@ -287,6 +292,90 @@ class QuestionnaireSubmissionService:
 
         return sorted(local_dates, reverse=True)
 
+    @classmethod
+    def list_daily_questionnaire_scores(
+        cls,
+        *,
+        patient: "PatientProfile",
+        start_date: date,
+        end_date: date,
+        questionnaire_code: str,
+    ) -> list[dict[str, Any]]:
+        """
+        按日返回指定问卷在时间区间内的得分列表（缺失日期补 0）。
+
+        【功能说明】
+        - 在闭区间 [start_date, end_date] 内统计某问卷每天的得分；
+        - 同一天多次提交时，取当天最新一条提交的分数；
+        - 若当日没有提交，分数返回 0。
+
+        【使用方法】
+        - list_daily_questionnaire_scores(
+              patient=patient,
+              start_date=date(2025, 1, 1),
+              end_date=date(2025, 1, 31),
+              questionnaire_code=QuestionnaireCode.Q_SLEEP,
+          )
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - start_date: date，开始日期（含）。
+        - end_date: date，结束日期（含）。
+        - questionnaire_code: str，问卷编码，例如 Q_SLEEP。
+
+        【返回值说明】
+        - list[dict]，结构示例：
+          [
+            {"date": date(2025, 1, 1), "score": Decimal("3.00")},
+            {"date": date(2025, 1, 2), "score": Decimal("0")},
+          ]
+
+        【异常说明】
+        - patient 无效或日期非法：抛出 ValidationError。
+        - questionnaire_code 无效：抛出 ValidationError。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValidationError("患者信息无效。")
+        if start_date is None or end_date is None:
+            raise ValidationError("起止日期不能为空。")
+        if start_date > end_date:
+            raise ValidationError("起始日期不能晚于结束日期。")
+        if not questionnaire_code:
+            raise ValidationError("问卷编码不能为空。")
+        if not Questionnaire.objects.filter(code=questionnaire_code).exists():
+            raise ValidationError("问卷编码无效。")
+
+        start_dt, end_dt = cls._build_date_range(start_date, end_date)
+
+        submissions = (
+            QuestionnaireSubmission.objects.filter(
+                patient_id=patient.id,
+                questionnaire__code=questionnaire_code,
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
+            )
+            .only("created_at", "total_score")
+            .order_by("-created_at")
+        )
+
+        scores_by_date: dict[date, Decimal | None] = {}
+        current_date = start_date
+        while current_date <= end_date:
+            scores_by_date[current_date] = None
+            current_date += timedelta(days=1)
+
+        for submission in submissions:
+            local_date = cls._to_localtime(submission.created_at).date()
+            if local_date in scores_by_date and scores_by_date[local_date] is None:
+                scores_by_date[local_date] = submission.total_score or Decimal("0")
+
+        results: list[dict[str, Any]] = []
+        for day in sorted(scores_by_date.keys()):
+            score = scores_by_date[day]
+            results.append({"date": day, "score": score or Decimal("0")})
+
+        return results
+
     # 以下这个方法生命周期很短。 仅随着问卷对比功能上线而存在，后续可能会被废弃。有点类似 view.
     @classmethod
     def list_daily_questionnaire_summaries(
@@ -547,7 +636,10 @@ class QuestionnaireSubmissionService:
             )
             total_score = cls._sum_answer_score(answers)
 
-        if questionnaire_code in ("Q_PHYSICAL", "Q_BREATH"):
+        if questionnaire_code in (
+            QuestionnaireCode.Q_PHYSICAL,
+            QuestionnaireCode.Q_BREATH,
+        ):
             if total_score <= 1:
                 grade_level = 1
             elif total_score == 2:
@@ -558,7 +650,7 @@ class QuestionnaireSubmissionService:
                 grade_level = 4
             else:
                 raise ValidationError("问卷分数不在有效范围内。")
-        elif questionnaire_code == "Q_COUGH":
+        elif questionnaire_code == QuestionnaireCode.Q_COUGH:
             bleeding_score = Decimal("0.00")
             bleeding_answers = QuestionnaireAnswer.objects.filter(
                 submission=submission,
@@ -580,7 +672,7 @@ class QuestionnaireSubmissionService:
                 grade_level = 1
             else:
                 raise ValidationError("问卷分数不在有效范围内。")
-        elif questionnaire_code == "Q_APPETITE":
+        elif questionnaire_code == QuestionnaireCode.Q_APPETITE:
             if total_score >= Decimal("14"):
                 grade_level = 4
             elif total_score >= Decimal("9"):
@@ -591,7 +683,7 @@ class QuestionnaireSubmissionService:
                 grade_level = 1
             else:
                 raise ValidationError("问卷分数不在有效范围内。")
-        elif questionnaire_code == "Q_PAIN":
+        elif questionnaire_code == QuestionnaireCode.Q_PAIN:
             pain_answers = QuestionnaireAnswer.objects.filter(
                 submission=submission
             ).select_related("option")
@@ -620,7 +712,7 @@ class QuestionnaireSubmissionService:
                 grade_level = 4
             else:
                 raise ValidationError("问卷分数不在有效范围内。")
-        elif questionnaire_code == "Q_SLEEP":
+        elif questionnaire_code == QuestionnaireCode.Q_SLEEP:
             raw_score = int(total_score)
             t_score = cls.SLEEP_T_SCORE_MAP.get(raw_score)
             if t_score is None:
@@ -634,7 +726,7 @@ class QuestionnaireSubmissionService:
                 grade_level = 3
             else:
                 grade_level = 4
-        elif questionnaire_code == "Q_DEPRESSIVE":
+        elif questionnaire_code == QuestionnaireCode.Q_DEPRESSIVE:
             if total_score >= Decimal("15"):
                 grade_level = 4
             elif total_score >= Decimal("10"):
@@ -645,7 +737,7 @@ class QuestionnaireSubmissionService:
                 grade_level = 1
             else:
                 raise ValidationError("问卷分数不在有效范围内。")
-        elif questionnaire_code == "Q_ANXIETY":
+        elif questionnaire_code == QuestionnaireCode.Q_ANXIETY:
             if total_score >= Decimal("15"):
                 grade_level = 4
             elif total_score >= Decimal("10"):

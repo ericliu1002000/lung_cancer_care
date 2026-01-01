@@ -3,6 +3,18 @@
 from django.db import models
 
 
+class QuestionnaireCode(models.TextChoices):
+    Q_PHYSICAL = "Q_PHYSICAL", "体能评分"
+    Q_BREATH = "Q_BREATH", "呼吸困难评估"
+    Q_COUGH = "Q_COUGH", "咳嗽与痰色评估"
+    Q_APPETITE = "Q_APPETITE", "食欲评估"
+    Q_PAIN = "Q_PAIN", "身体疼痛评估"
+    Q_SLEEP = "Q_SLEEP", "睡眠质量评估"
+    Q_DEPRESSIVE = "Q_DEPRESSIVE", "抑郁评估"
+    Q_ANXIETY = "Q_ANXIETY", "焦虑评估"
+    Q_PSYCH = "Q_PSYCH", "心理痛苦分级评估"
+
+
 class Questionnaire(models.Model):
     """问卷模板（原随访计划模板）。"""
 
