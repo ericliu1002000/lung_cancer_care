@@ -104,7 +104,9 @@ class ManagementStatsView:
         # 生成图表数据
         charts = self._generate_charts_data(patient, start_date, end_date)
         
-        # 生成咨询数据
+        # TODO 生成咨询数据-待联调
+        # TODO 按月统计-在线咨询次数
+        # TODO 按时间段分布-在线咨询次数
         query_stats = self._generate_query_stats()
 
         return {
