@@ -318,7 +318,7 @@ def build_indicators_context(
         "title": "呼吸评估",
         "dates": date_strs,
         "series": [
-            {"name": "呼吸困难评分", "data": breath_score_data, "color": "#3b82f6"} # Teal
+            {"name": "呼吸评分", "data": breath_score_data, "color": "#3b82f6"} # Teal
         ],
         "y_min": 0,
         "y_max": 5
@@ -339,7 +339,7 @@ def build_indicators_context(
         "id": "chart-cough",
         "title": "",
         "dates": date_strs,
-        "series": [{"name": "咳嗽量表", "data": cough_score_data, "color": "#3b82f6"}],
+        "series": [{"name": "咳嗽评分", "data": cough_score_data, "color": "#3b82f6"}],
         "y_min": 0,
         "y_max": 12
     }
@@ -357,9 +357,9 @@ def build_indicators_context(
         
     charts['appetite'] = {
         "id": "chart-appetite",
-        "title": "食欲评估量表",
+        "title": "食欲评估",
         "dates": date_strs,
-        "series": [{"name": "食欲量表", "data": app_data, "color": "#3b82f6"}],
+        "series": [{"name": "食欲评分", "data": app_data, "color": "#3b82f6"}],
         "y_min": 0,
         "y_max": 12
     }
@@ -370,9 +370,9 @@ def build_indicators_context(
         
     charts['pain'] = {
         "id": "chart-pain",
-        "title": "疼痛量表",
+        "title": "身体疼痛评估",
         "dates": date_strs,
-        "series": [{"name": "疼痛量表", "data": pain_data, "color": "#3b82f6"}],
+        "series": [{"name": "身体疼痛评分", "data": pain_data, "color": "#3b82f6"}],
         "y_min": 0,
         "y_max": 10
     }
@@ -383,26 +383,36 @@ def build_indicators_context(
 
     charts['sleep'] = {
         "id": "chart-sleep",
-        "title": "睡眠质量量表",
+        "title": "睡眠质量评估",
         "dates": date_strs,
-        "series": [{"name": "睡眠质量", "data": sleep_data, "color": "#3b82f6"}],
+        "series": [{"name": "睡眠质量评分", "data": sleep_data, "color": "#3b82f6"}],
         "y_min": 0,
         "y_max": 6
     }
     
     # 4.6 心理痛苦分级 (Q_PSYCH)
     # 模拟数据：0-10分
-    psych_data = [random.randint(0, 10) for _ in date_strs]
+    anxiety_data = [random.randint(0, 10) for _ in date_strs]
 
     charts['psych'] = {
         "id": "chart-psych",
-        "title": "心理痛苦分级评估量表",
+        "title": "抑郁评估",
         "dates": date_strs,
-        "series": [{"name": "心理痛苦", "data": psych_data, "color": "#3b82f6"}],
+        "series": [{"name": "抑郁评分", "data": anxiety_data, "color": "#3b82f6"}],
         "y_min": 0,
         "y_max": 10
     }
+     # 4.7 焦虑评估 (Q_PSYCH)
+    psych_data = [random.randint(0, 10) for _ in date_strs]
 
+    charts['anxiety'] = {
+        "id": "chart-anxiety",
+        "title": "焦虑评估",
+        "dates": date_strs,
+        "series": [{"name": "焦虑评分", "data": psych_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 10
+    }
     return {
         "medication_data": medication_data,
         "medication_stats": {
