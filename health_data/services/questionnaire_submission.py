@@ -287,6 +287,7 @@ class QuestionnaireSubmissionService:
 
         return sorted(local_dates, reverse=True)
 
+    # 以下这个方法生命周期很短。 仅随着问卷对比功能上线而存在，后续可能会被废弃。有点类似 view.
     @classmethod
     def list_daily_questionnaire_summaries(
         cls,
