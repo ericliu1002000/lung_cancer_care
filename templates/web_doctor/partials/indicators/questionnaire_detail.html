@@ -7,7 +7,7 @@
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-bold text-slate-800">随访问卷详情</h1>
             <div class="h-6 w-px bg-slate-200"></div>
-            <span class="text-slate-500 text-sm">{{ patient.name }} ({{ patient.gender_display }}, {{ patient.age }}岁)</span>
+            <span class="text-slate-500 text-sm">{{ patient.name }} ({{ patient.age }}岁)</span>
         </div>
          <div onclick="history.back()"   class="cursor-pointer flex items-center text-indigo-600 hover:text-indigo-800 text-sm font-medium transition-colors">
             <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -19,127 +19,13 @@
     <!-- 主体内容 -->
     <div class="flex flex-1 overflow-hidden">
         <!-- 左侧历史记录 -->
-        <div class="w-64 h-full bg-white border-r border-slate-200 flex flex-col shrink-0">
-            <div class="p-4 border-b border-slate-100 bg-slate-50">
-                <h2 class="font-bold text-slate-700">历史记录</h2>
-            </div>
-            <div class="flex-1 overflow-y-auto">
-                {% for cycle in history %}
-                <div class="border-b border-slate-100">
-                    <div class="px-4 py-2 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0">
-                        {{ cycle.name }}
-                    </div>
-                    {% if cycle.dates %}
-                    <ul>
-                        {% for d in cycle.dates %}
-                        <li>
-                            <a href="?date={{ d|date:'Y-m-d' }}" 
-                               class="block px-6 py-3 text-sm border-l-4 transition-colors hover:bg-slate-50
-                                      {% if d == selected_date %}
-                                        border-indigo-500 bg-indigo-50 text-indigo-700 font-medium
-                                      {% else %}
-                                        border-transparent text-slate-600
-                                      {% endif %}">
-                                {{ d|date:"Y-m-d" }}
-                            </a>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                         <div class="flex flex-row items-center justify-center  text-slate-600 p-2">
-                            <span class="text-[#999999] text-sm">当前疗程下暂无问卷记录日期</p>
-                        </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
+        <div id="sidebar-container" class="w-64 h-full bg-white border-r border-slate-200 flex flex-col shrink-0">
+            {% include "web_doctor/partials/indicators/_questionnaire_sidebar.html" %}
         </div>
 
         <!-- 右侧详情内容 -->
-        <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- 列表内容 -->
-            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
-                <div class="mx-auto space-y-6 max-w-5xl">
-                    {% if questionnaires %}
-                        {% for data_obj in questionnaires %}
-                         <!-- 添加TAB切换模块 -->
-                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <!-- 模块头部 -->
-                            <div class="p-6 border-b border-slate-100">
-                                <h2 class="text-lg font-bold text-slate-800 mb-4">{{ data_obj.questionnaire_name }}</h2>
-                                <div class="flex items-baseline gap-4 mb-4">
-                                    <div class="text-sm text-slate-500">当前评分:</div>
-                                    <div class="text-2xl font-bold text-indigo-600">{{ data_obj.current_score|floatformat:"-2" }}分</div>
-                                    <div class="flex items-center text-sm font-semibold
-                                        {% if data_obj.change_type == 'down' %}text-emerald-600
-                                        {% elif data_obj.change_type == 'up' %}text-rose-600
-                                        {% else %}text-slate-500{% endif %}">
-                                         {{ data_obj.change_text }}
-                                          {% if data_obj.change_type == 'up' %}<svg t="1767246932779" class="icon w-8 h-8" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6090" width="48" height="48"><path d="M703.28 365.512c-4.33 10.697-13.92 17.04-25.236 17.04h-133.81V835.11c0 17.838-14.399 32.297-32.232 32.297-17.838 0-32.236-14.459-32.236-32.297V382.552H345.559c-11.314 0-20.906-6.343-25.234-17.04-4.331-10.7-2.082-22.149 5.92-30.335l166.242-170.104c5.333-5.46 11.773-8.172 19.316-8.172 7.543 0 13.982 2.743 19.316 8.202l166.242 170.069c7.998 8.186 10.25 19.641 5.92 30.34z" fill="#D81E06" p-id="6091"></path></svg>
-                                           {% elif data_obj.change_type == 'down' %}<svg t="1767246961143" class="icon w-8 h-8" viewBox="0 0 1280 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="8961" width="48" height="48"><path d="M25.6 0h1024v1024H25.6z" fill-opacity="0" p-id="8962" fill="#059669"></path><path d="M716.8 660.48c-5.12-10.24-15.36-15.36-25.6-15.36H558.08V194.56c0-15.36-15.36-30.72-30.72-30.72s-30.72 15.36-30.72 30.72v450.56H363.52c-10.24 0-20.48 5.12-25.6 15.36-5.12 10.24 0 20.48 5.12 30.72l163.84 168.96c5.12 5.12 10.24 10.24 20.48 10.24 5.12 0 15.36-5.12 20.48-10.24l163.84-168.96c10.24-5.12 10.24-20.48 5.12-30.72z" fill="#059669" p-id="8963"></path></svg>
-                                        {% else %}{% endif %}
-                                    </div>
-                                </div>
-                                {% if data_obj.ai_summary %}
-                                <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
-                                    <div class="flex gap-3">
-                                        <div class="shrink-0 text-amber-500"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div>
-                                        <div class="text-sm text-amber-900">{{ data_obj.ai_summary }}</div>
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
-                            <!-- 题目列表 -->   
-                            <div class="w-full overflow-x-auto px-6 py-4">
-                                 <p class="mb-4 font-semibold">问卷题目对比详情</p>
-                                <table class="w-full text-sm text-left table-fixed border-collapse">
-                                    <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                                    <tr>
-                                        <th class="px-6 py-3 w-[40%]">题目</th> 
-                                        <th class="px-6 py-3 w-[25%]">本次回答 <span class="text-slate-600 font-normal">({{ selected_date|date:"Y-m-d" }})</span></th>
-                                        <th class="px-6 py-3 w-[25%]">上次回答 
-                                            <span class="text-slate-600 font-normal">
-                                                {% if data_obj.prev_date %}({{ data_obj.prev_date|date:"Y-m-d" }}){% else %}(无){% endif %}
-                                            </span>
-                                        </th>
-                                        <th class="px-6 py-3 w-[10%] text-center">变化</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                    {% for q in data_obj.questions %}
-                                    <tr class="hover:bg-slate-50 transition-colors">
-                                        <td class="px-6 py-4 font-medium text-slate-800 align-top break-words whitespace-normal">
-                                        {{ q.text }}
-                                        </td>
-                                        <td class="px-6 py-4 text-slate-600 align-top break-words whitespace-normal">
-                                        {{ q.current_answer }}
-                                        </td>
-                                        <td class="px-6 py-4 text-slate-600 align-top break-words whitespace-normal">
-                                        {{ q.prev_answer|default:"-" }}
-                                        </td>
-                                        <td class="px-6 py-4 text-center font-semibold align-top
-                                        {% if q.change_type == 'up' %}text-emerald-600
-                                        {% elif q.change_type == 'down' %}text-rose-600
-                                        {% else %}text-slate-600{% endif %}">
-                                        {{ q.change }}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                         <div class="flex flex-col items-center justify-center h-64 text-slate-600 bg-white rounded-xl border border-slate-200">
-                            <svg class="w-12 h-12 mb-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <p>该日期暂无问卷数据</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
+        <div id="detail-container" class="flex-1 flex flex-col overflow-hidden">
+            {% include "web_doctor/partials/indicators/_questionnaire_content.html" %}
         </div>
     </div>
 </div>

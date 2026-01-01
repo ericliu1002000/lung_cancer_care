@@ -1,18 +1,18 @@
 from typing import Any, Dict, Optional, List
 from datetime import date
 import random
+from market.service.order import get_paid_orders_for_patient
 
 class ManagementStatsView:
     def get_context_data(self, patient: Any, selected_package_id: Optional[int] = None) -> Dict[str, Any]:
         """
         获取管理统计页面的上下文数据
         """
-        # TODO 获取患者服务包列表数据，服务包名称、服务包开始日期-结束日期
         # TODO 1、根据当前的服务包日期去查询管理数据概览、管理数据统计、咨询数据统计接口
         # TODO 2、管理数据概览模块：
-        # TODO 显示药物调整次数、药物服务次数、服药已从率；指标监测项数量、指标记录次数、监测依从率
-        # TODO 显示在线咨询次数、随访次数、复查次数、住院次数
-        # 3、管理数据统计模块
+        # TODO 2.1 显示药物调整次数、药物服务次数、服药已从率；指标监测项数量、指标记录次数、监测依从率
+        # TODO 2.2显示在线咨询次数、随访次数、复查次数、住院次数
+        # TODO 3、管理数据统计模块
         # 服药统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
         # 体温统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
         # 呼吸困难统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
@@ -23,34 +23,28 @@ class ManagementStatsView:
         # 血氧统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
         # 血压统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
         # 心率统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 3、咨询数据统计模块
-        # 在线咨询次数总计数量
-        # 按月统计咨询次数: X轴：1-12月，Y轴：每月咨询次数
-        # 按时间段分布：
-        # 按00:00-07:00的咨询次数
-        # 按07:00-10:00的咨询次数
-        # 按10:00-13:00的咨询次数
-        # 按13:00-18:00的咨询次数
-        # 按18:00-21:00的咨询次数
-        # 按21:00-24:00的咨询次数
+        # TODO 4、咨询数据统计模块
+        # TODO 在线咨询次数总计数量
+        # TODO 4.1 按月统计咨询次数: X轴：1-12月，Y轴：每月咨询次数
+        # TODO 4.2 按时间段分布：
+        # TODO 按00:00-07:00的咨询次数
+        # TODO 按07:00-10:00的咨询次数
+        # TODO 按10:00-13:00的咨询次数
+        # TODO 按13:00-18:00的咨询次数
+        # TODO 按18:00-21:00的咨询次数
+        # TODO 按21:00-24:00的咨询次数
         
-        # 模拟服务包数据
-        service_packages = [
-            {
-                "id": 1,
-                "name": "肺癌康复服务包",
-                "start_date": "2025-09-21",
-                "end_date": "2026-09-20",
+        # 获取真实服务包数据（已支付订单）
+        orders = get_paid_orders_for_patient(patient)
+        service_packages = []
+        for order in orders:
+            service_packages.append({
+                "id": order.id,
+                "name": order.product.name,
+                "start_date": order.start_date,
+                "end_date": order.end_date,
                 "is_active": False,
-            },
-            {
-                "id": 2,
-                "name": "肺癌康复服务包",
-                "start_date": "2024-09-21",
-                "end_date": "2025-09-20",
-                "is_active": False,
-            }
-        ]
+            })
 
         # 设置选中状态
         if selected_package_id:
@@ -78,11 +72,9 @@ class ManagementStatsView:
         }
 
         # 生成图表数据
-        # TODO 待联调管理数据统计接口
         charts = self._generate_charts_data()
         
         # 生成咨询数据
-        # TODO 咨询数据统计接口待联调
         query_stats = self._generate_query_stats()
 
         return {
@@ -91,7 +83,6 @@ class ManagementStatsView:
             "charts": charts,
             "query_stats": query_stats,
         }
-    # TODO 数据统计接口待联调
     def _generate_charts_data(self) -> Dict[str, Any]:
         months = [f"{i}月" for i in range(1, 13)]
         
@@ -149,7 +140,6 @@ class ManagementStatsView:
         """
         months = [f"{i}月" for i in range(1, 13)]
         
-        # TODO 咨询数据统计接口待联调 模拟折线图数据：咨询次数随月份变化
         line_data = [0, 0, 0, 30, 31, 23, 26, 31, 27, 31, 5, 0] # 模拟数据，模仿图中趋势
         
         line_chart = {

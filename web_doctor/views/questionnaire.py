@@ -40,7 +40,6 @@ def questionnaire_detail(request, patient_id):
             start_date=cycle.start_date,
             end_date=cycle.end_date
         )
-        
         history.append({
             "name": cycle.name,
             "is_current": False, 
@@ -64,6 +63,7 @@ def questionnaire_detail(request, patient_id):
             patient_id=patient.id,
             target_date=selected_date
         )
+        print(f'{summaries}')
         
         for summary in summaries:
             submission_id = summary['submission_id']
@@ -116,4 +116,35 @@ def questionnaire_detail(request, patient_id):
         "questionnaires": questionnaires # 传递列表而非字典
     }
     
+    # HTMX 请求处理：返回右侧详情内容，并附带左侧边栏更新 (OOB)
+    if request.headers.get('HX-Request'):
+        from django.template.loader import render_to_string
+        
+        # 渲染右侧详情内容
+        content_html = render_to_string(
+            "web_doctor/partials/indicators/_questionnaire_content.html", 
+            context, 
+            request=request
+        )
+        
+        # 渲染左侧边栏内容 (为了更新选中高亮)
+        sidebar_html = render_to_string(
+            "web_doctor/partials/indicators/_questionnaire_sidebar.html", 
+            context, 
+            request=request
+        )
+        
+        # 拼接返回：主内容 + 左侧OOB更新
+        # 注意：左侧容器 ID 为 sidebar-container，我们在 _questionnaire_sidebar.html 
+        # 外层并没有 ID，所以我们需要用 hx-swap-oob="innerHTML:#sidebar-container" 
+        # 包裹 sidebar_html 或者在返回的 HTML 中构造一个带有 hx-swap-oob 属性的 div
+        
+        response_content = f"""
+        {content_html}
+        <div hx-swap-oob="innerHTML:#sidebar-container">
+            {sidebar_html}
+        </div>
+        """
+        return HttpResponse(response_content)
+
     return render(request, "web_doctor/partials/indicators/questionnaire_detail.html", context)
