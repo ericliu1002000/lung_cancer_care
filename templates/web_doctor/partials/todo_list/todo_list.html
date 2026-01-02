@@ -1,0 +1,126 @@
+{% extends "layouts/base_doctor.html" %}
+
+{% block content %}
+<div class="flex flex-col h-full bg-white" x-data="todoListFilter()">
+    <!-- 顶部标题区 -->
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <button onclick="window.history.back()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors" title="返回上一页">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+            </button>
+            <h2 class="text-lg font-bold text-slate-800 border-l-4 border-blue-500 pl-3">患者待办</h2>
+        </div>
+        <!-- Loading Indicator -->
+        <div id="todo-loading" class="htmx-indicator flex items-center gap-2 text-slate-500 text-sm">
+            <svg class="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>加载中...</span>
+        </div>
+    </div>
+
+    <!-- 筛选与搜索区 -->
+    <div class="px-6 py-4">
+        <form id="todo-filter-form"
+              hx-get="{% url 'web_doctor:doctor_todo_list' %}"
+              hx-target="#todo-table-container"
+              hx-indicator="#todo-loading"
+              hx-replace-url="true"
+              class="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
+            
+            <div class="flex flex-wrap items-center gap-6">
+                <!-- 状态筛选 -->
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-medium text-slate-700">事件状态：</span>
+                    <div class="flex bg-slate-100 p-1 rounded-md">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="status" value="all" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">所有</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="status" value="pending" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">待跟进</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="status" value="escalate" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">升级主任</span>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="status" value="completed" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">已完成</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 日期筛选 -->
+                <div class="flex items-center gap-3 ml-auto">
+                    <span class="text-sm font-medium text-slate-700">日期：</span>
+                    <div class="flex items-center gap-2">
+                        <input type="date" name="start_date" x-model="startDate" class="px-3 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-600" placeholder="YYYY-MM-DD">
+                        <span class="text-slate-400">-</span>
+                        <input type="date" name="end_date" x-model="endDate" class="px-3 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-600" placeholder="YYYY-MM-DD">
+                    </div>
+                    
+                    <div class="flex items-center gap-2 ml-2">
+                        <button type="submit" class="px-5 py-1.5 bg-blue-600  text-white rounded text-sm font-medium transition-colors">
+                            搜索
+                        </button>
+                        <button type="button" @click="resetFilters()" class="px-4 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded text-sm font-medium transition-colors active:scale-95">
+                            重置
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- 隐藏的分页重置 -->
+            <input type="hidden" name="page" value="1">
+            
+            <!-- 触发 HTMX 的隐藏按钮，用于 Alpine.js 调度 -->
+            <button type="submit" id="hidden-search-btn" class="hidden"></button>
+        </form>
+    </div>
+
+    <!-- 数据列表区 -->
+    <div class="flex-1 px-6 pb-6 overflow-hidden flex flex-col">
+        <div id="todo-table-container" class="border border-slate-200 rounded-lg overflow-hidden flex-1 flex flex-col">
+            {% include "web_doctor/partials/todo_list/todo_list_table.html" %}
+        </div>
+    </div>
+</div>
+
+<!-- 引入 jQuery (必需，因为组件使用了 jQuery) -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- 引入待办事项弹框组件 -->
+{% include "components/todo_modal.html" %}
+
+<script>
+    function todoListFilter() {
+        return {
+            status: '{{ current_status|default:"all" }}',
+            startDate: '{{ start_date|default:"" }}',
+            endDate: '{{ end_date|default:"" }}',
+            
+            init() {
+                // 监听自定义事件来触发搜索
+                this.$el.addEventListener('submit-search', () => {
+                    // 使用 setTimeout 确保 x-model 更新完成后再触发
+                    setTimeout(() => {
+                        htmx.trigger('#todo-filter-form', 'submit');
+                    }, 50);
+                });
+            },
+            
+            resetFilters() {
+                this.status = 'all';
+                this.startDate = '';
+                this.endDate = '';
+                // 触发 HTMX 请求
+                this.$dispatch('submit-search');
+            }
+        }
+    }
+</script>
+{% endblock %}

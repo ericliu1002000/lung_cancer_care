@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from web_doctor.views import home
+from web_doctor.views import todo_workspace
 
 app_name = "web_doctor"
 
@@ -9,7 +10,8 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     # path("doctor/dashboard/", views.doctor_dashboard, name="doctor_dashboard"), # 已删除
     
-    path("doctor/workspace/", views.doctor_workspace, name="doctor_workspace"),
+    path("doctor/workspace/", todo_workspace.doctor_workspace, name="doctor_workspace"),
+    path("doctor/todo-list/", todo_workspace.doctor_todo_list_page, name="doctor_todo_list"),
     path(
         "doctor/workspace/patient-list/",
         views.doctor_workspace_patient_list,
