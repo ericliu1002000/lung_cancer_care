@@ -89,6 +89,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     - 左侧展示该医生名下患者列表（可搜索）
     - 右侧展示患者待办事项
     """
+    # TODO 待联调首页-患者待办列表：列表项包含事项分类、事项名称、事项报警内容、事项处理状态、事项创建时间
     # 获取基础上下文以保证页面布局正常（如左侧患者列表）
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     patients = _get_workspace_patients(request.user, request.GET.get("q"))
@@ -119,6 +120,9 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
     """
     待办列表全屏页面
     """
+    # TODO 待联调患者待办列表接口
+    # TODO 1、分页查询、筛选条件包含事件状态（待跟进、升级主任、已完成）、开始日期、结束日期
+    # TODO 2、列表项内容包含：事件名称、事件类型、事件等级、事件时间、处理时间、处理人、当前状态
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     display_name = get_user_display_name(request.user)
     
