@@ -1,0 +1,150 @@
+<!-- 弹框HTML结构 -->
+<div id="todo-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-[650px] shadow-xl">
+        <h3 class="text-lg font-medium mb-4 text-slate-800" id="modal-title">处理患者待办</h3>
+        
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-slate-700 mb-1">待处理事件</label>
+            <div id="event-title" class="p-2 bg-slate-50 rounded text-slate-800 font-medium border border-slate-100"></div>
+            <div id="event-content" class="p-2 bg-slate-50 rounded mt-1 text-sm text-slate-600 border border-slate-100"></div>
+        </div>
+        
+        <div class="mb-4">
+            <label for="event-handle" class="block text-sm font-medium text-slate-700 mb-1">事件处理情况 <span class="text-rose-500" id="handle-required-mark">*</span></label>
+            <textarea id="event-handle" class="w-full p-2 border border-slate-300 rounded focus:ring-rose-500 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-500" rows="3" required placeholder="请填写处理详情..."></textarea>
+        </div>
+        
+        <div class="mb-6">
+            <label for="event-status" class="block text-sm font-medium text-slate-700 mb-1">事件状态 <span class="text-rose-500" id="status-required-mark">*</span></label>
+            <select id="event-status" class="w-full p-2 border border-slate-300 rounded focus:ring-rose-500 focus:border-rose-500 outline-none bg-white disabled:bg-slate-50 disabled:text-slate-500">
+                <option value="" disabled selected>请选择状态</option>
+                <option value="pending">待跟进</option>
+                <option value="escalate">升级主任</option>
+                <option value="completed">已完成</option>
+            </select>
+        </div>
+        
+        <div class="flex justify-end space-x-3">
+            <button id="cancel-btn" class="px-4 py-2 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 transition">取消</button>
+            <button id="save-btn" class="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition shadow-sm">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /** 
+     * @param {Object} itemData - 列表项数据 
+     * @param {Boolean} isEditMode - 是否编辑模式 
+     * @param {Function} onSave - 保存回调函数 
+     */ 
+    window.showTodoModal = function(itemData, isEditMode, onSave) {
+        // 保存当前操作的数据ID和回调
+        const currentItemId = itemData.id;
+        
+        // 填充数据
+        $('#event-title').text(itemData.title || '');
+        $('#event-content').text(itemData.content || '');
+        
+        // 根据模式设置界面
+        if (isEditMode) {
+            // 编辑模式
+            $('#modal-title').text('处理患者待办');
+            $('#event-handle').val('').prop('disabled', false);
+            $('#event-status').val('pending').prop('disabled', false); // 默认为待跟进
+            $('#save-btn').removeClass('hidden');
+            $('#cancel-btn').text('取消');
+            $('#handle-required-mark').removeClass('hidden');
+            $('#status-required-mark').removeClass('hidden');
+            
+            // 绑定保存事件
+            $('#save-btn').off('click').on('click', function() {
+                const handleContent = $('#event-handle').val().trim();
+                const status = $('#event-status').val();
+                
+                if (!handleContent) {
+                    alert('请填写事件处理情况');
+                    return;
+                }
+                
+                if (!status) {
+                    alert('请选择事件状态');
+                    return;
+                }
+                
+                const newData = {
+                    id: currentItemId,
+                    handle_content: handleContent,
+                    status: status
+                };
+                
+                console.log('保存数据:', newData);
+                
+                if (typeof onSave === 'function') {
+                    onSave(newData);
+                }
+                
+                // 关闭弹框
+                closeModal();
+            });
+            
+        } else {
+            // 查看模式
+            $('#modal-title').text('查看待办详情');
+            $('#event-handle').val(itemData.handle_content || '').prop('disabled', true);
+            $('#event-status').val(itemData.status || '').prop('disabled', true);
+            $('#save-btn').addClass('hidden');
+            $('#cancel-btn').text('关闭');
+            $('#handle-required-mark').addClass('hidden');
+            $('#status-required-mark').addClass('hidden');
+        }
+        
+        // 显示弹框
+        $('#todo-modal').removeClass('hidden');
+    };
+
+    function closeModal() {
+        $('#todo-modal').addClass('hidden');
+    }
+
+    /**
+     * 辅助函数：处理按钮点击，从 dataset 获取数据并打开弹框
+     * @param {HTMLElement} btn - 点击的按钮元素
+     * @param {Boolean} isEditMode - 是否编辑模式
+     */
+    window.handleTodoModalTrigger = function(btn, isEditMode) {
+        const dataset = btn.dataset;
+        const itemData = {
+            id: dataset.todoId,
+            title: dataset.todoTitle,
+            content: dataset.todoContent,
+            status: dataset.todoStatus,
+            handle_content: dataset.todoHandleContent
+        };
+        
+        showTodoModal(itemData, isEditMode, function(data) {
+            alert('保存成功（模拟）：' + JSON.stringify(data));
+            // 如果使用了 HTMX，这里可以触发列表刷新
+            // htmx.trigger('#todo-filter-form', 'submit');
+        });
+    };
+
+    // 初始化事件绑定
+    $(document).ready(function() {
+        // 取消按钮
+        $('#cancel-btn').click(closeModal);
+        
+        // 点击遮罩层关闭
+        $('#todo-modal').click(function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+        
+        // ESC键关闭
+        $(document).keydown(function(e) {
+            if (e.key === "Escape" && !$('#todo-modal').hasClass('hidden')) {
+                closeModal();
+            }
+        });
+    });
+</script>

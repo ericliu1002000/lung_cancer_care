@@ -84,3 +84,28 @@
         </a>
     {% endif %}
 </div>
+
+<script>
+    (function() {
+        // 全局监听 HTMX swap 事件
+        // 使用标志位防止重复绑定，因为此模板可能会被多次加载
+        if (!window.hasPatientTabScrollHandler) {
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                // 检查是否是内容区域的更新
+                if (evt.detail.target.id === 'patient-content') {
+                    // 使用 setTimeout 确保 DOM 渲染完成，避免竞态条件
+                    setTimeout(function() {
+                        // 1. 重置窗口滚动
+                        window.scrollTo(0, 0);
+                        // 2. 重置容器滚动 (针对 overflow-y-auto 的容器)
+                        var container = document.getElementById('patient-content');
+                        if (container) {
+                            container.scrollTop = 0;
+                        }
+                    }, 50);
+                }
+            });
+            window.hasPatientTabScrollHandler = true;
+        }
+    })();
+</script>

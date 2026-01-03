@@ -1,0 +1,104 @@
+<div class="overflow-x-auto">
+    <table class="w-full text-sm text-left">
+        <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b border-slate-200">
+            <tr>
+                <th scope="col" class="px-6 py-3 font-medium">事件</th>
+                <th scope="col" class="px-6 py-3 font-medium">事件类型</th>
+                <th scope="col" class="px-6 py-3 font-medium">事件等级</th>
+                <th scope="col" class="px-6 py-3 font-medium">事件时间</th>
+                <th scope="col" class="px-6 py-3 font-medium">处理时间</th>
+                <th scope="col" class="px-6 py-3 font-medium">处理人</th>
+                <th scope="col" class="px-6 py-3 font-medium">当前状态</th>
+                <th scope="col" class="px-6 py-3 font-medium text-center">操作</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 opacity-100 transition-opacity duration-300" id="todo-table-body">
+            {% for item in todo_page %}
+            <tr class="bg-white hover:bg-slate-50 transition-colors">
+                <td class="px-6 py-4 font-medium text-slate-900">{{ item.event_title }}</td>
+                <td class="px-6 py-4 text-slate-600">{{ item.event_type }}</td>
+                <td class="px-6 py-4 text-slate-600">{{ item.event_level }}</td>
+                <td class="px-6 py-4 text-slate-500">{{ item.event_time }}</td>
+                <td class="px-6 py-4 text-slate-500">{{ item.handle_time|default:"-" }}</td>
+                <td class="px-6 py-4 text-slate-600">{{ item.handler|default:"-" }}</td>
+                <td class="px-6 py-4">
+                    {% if item.status == 'pending' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">待跟进</span>
+                    {% elif item.status == 'escalate' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">升级主任</span>
+                    {% elif item.status == 'completed' %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">已完成</span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">{{ item.status_display }}</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 text-center">
+                    {% if item.status == 'completed' %}
+                        <button 
+                            data-todo-id="{{ item.id }}"
+                            data-todo-title="{{ item.patient_name }} - {{ item.event_title }}"
+                            data-todo-content="{{ item.event_content }}"
+                            data-todo-status="{{ item.status }}"
+                            data-todo-handle-content="{{ item.handle_content }}"
+                            onclick="handleTodoModalTrigger(this, false)"
+                            class="text-blue-600 hover:text-blue-800 font-medium text-xs px-3 py-1 border border-blue-200 rounded hover:bg-blue-50 transition-colors">去查看</button>
+                    {% else %}
+                        <button 
+                            data-todo-id="{{ item.id }}"
+                            data-todo-title="{{ item.patient_name }} - {{ item.event_title }}"
+                            data-todo-content="{{ item.event_content }}"
+                            data-todo-status="{{ item.status }}"
+                            data-todo-handle-content=""
+                            onclick="handleTodoModalTrigger(this, true)"
+                            class="text-rose-600 hover:text-rose-800 font-medium text-xs px-3 py-1 border border-rose-200 rounded hover:bg-rose-50 transition-colors">去处理</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="px-6 py-12 text-center text-slate-400">
+                    暂无符合条件的待办事项
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 分页区 -->
+{% if todo_page.paginator.num_pages > 1 %}
+<div class="mt-4 flex items-center justify-center space-x-2 pb-6">
+    {% if todo_page.has_previous %}
+        <a hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.previous_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}"
+           hx-target="#todo-table-container"
+           hx-replace-url="true"
+           class="px-3 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 text-sm cursor-pointer">
+            &lt;
+        </a>
+    {% else %}
+        <span class="px-3 py-1 border border-slate-100 rounded text-slate-300 text-sm cursor-not-allowed">&lt;</span>
+    {% endif %}
+
+    {% for i in todo_page.paginator.page_range %}
+        {% if todo_page.number == i %}
+            <span class="px-3 py-1 border border-blue-500 bg-blue-500 text-white rounded text-sm">{{ i }}</span>
+        {% else %}
+            <a hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ i }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}"
+               hx-target="#todo-table-container"
+               hx-replace-url="true"
+               class="px-3 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 text-sm cursor-pointer">{{ i }}</a>
+        {% endif %}
+    {% endfor %}
+
+    {% if todo_page.has_next %}
+        <a hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.next_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}"
+           hx-target="#todo-table-container"
+           hx-replace-url="true"
+           class="px-3 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 text-sm cursor-pointer">
+            &gt;
+        </a>
+    {% else %}
+        <span class="px-3 py-1 border border-slate-100 rounded text-slate-300 text-sm cursor-not-allowed">&gt;</span>
+    {% endif %}
+</div>
+{% endif %}
