@@ -150,8 +150,8 @@ def evaluate_heart_rate_level(
 def evaluate_temperature_level(
     current_temp: Optional[Decimal | float | int],
     *,
-    has_24h_persistent_high: bool = False,
     has_48h_persistent_high: bool = False,
+    has_72h_persistent_high: bool = False,
 ) -> int:
     """
     体温异常等级评估。
@@ -163,16 +163,16 @@ def evaluate_temperature_level(
       - 38.5–39.4°C：2 级；
       - ≥39.5°C 或 ≤35.0°C：3 级。
     - 时间维度判断：
-      - 连续 24 小时高于 38°C：至少 2 级；
-      - 连续 48 小时高于 38°C：3 级。
+      - 连续 48 小时高于 38°C：至少 2 级；
+      - 连续 72 小时高于 38°C：3 级。
     - 最终结果取“单次值等级”和“时间维度等级”中较高者。
     """
     temp = _to_decimal(current_temp)
 
     level_from_time = 0
-    if has_48h_persistent_high:
+    if has_72h_persistent_high:
         level_from_time = 3
-    elif has_24h_persistent_high:
+    elif has_48h_persistent_high:
         level_from_time = 2
 
     if temp is None:

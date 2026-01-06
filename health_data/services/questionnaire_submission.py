@@ -18,6 +18,7 @@ from core.models import (
 from core.service import tasks as task_service
 from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
+from patient_alerts.services.questionnaire_alerts import QuestionnaireAlertService
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,15 @@ class QuestionnaireSubmissionService:
         except Exception:
             logger.exception(
                 "问卷 %s 提交成功，但同步 HealthMetric 失败。submission_id=%s",
+                questionnaire.name,
+                submission.id,
+            )
+
+        try:
+            QuestionnaireAlertService.process_submission(submission)
+        except Exception:
+            logger.exception(
+                "问卷 %s 提交成功，但同步报警失败。submission_id=%s",
                 questionnaire.name,
                 submission.id,
             )

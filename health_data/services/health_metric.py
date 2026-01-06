@@ -28,6 +28,7 @@ from business_support.models import Device
 from health_data.models import HealthMetric, MetricSource, MetricType
 from core.service import tasks as task_service
 from core.utils.sentinel import UNSET
+from patient_alerts.services.metric_alerts import MetricAlertService
 import datetime
 
 logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ class HealthMetricService:
             )
             return
 
-        cls._persist_metric(
+        metric = cls._persist_metric(
             patient_id=context.patient_id,
             metric_type=MetricType.BLOOD_PRESSURE,
             value_main=Decimal(str(sbp)),
@@ -139,6 +140,7 @@ class HealthMetricService:
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
         )
+        MetricAlertService.process_metric(metric)
         task_service.complete_daily_monitoring_tasks(
             patient_id=context.patient_id,
             metric_type=MetricType.BLOOD_PRESSURE,
@@ -175,13 +177,14 @@ class HealthMetricService:
             )
             return
 
-        cls._persist_metric(
+        metric = cls._persist_metric(
             patient_id=context.patient_id,
             metric_type=MetricType.BLOOD_OXYGEN,
             value_main=Decimal(str(avg_oxy)),
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
         )
+        MetricAlertService.process_metric(metric)
         task_service.complete_daily_monitoring_tasks(
             patient_id=context.patient_id,
             metric_type=MetricType.BLOOD_OXYGEN,
@@ -219,7 +222,7 @@ class HealthMetricService:
             )
             return
 
-        cls._persist_metric(
+        metric = cls._persist_metric(
             patient_id=context.patient_id,
             metric_type=MetricType.HEART_RATE,
             value_main=Decimal(str(heart_rate)),
@@ -331,13 +334,14 @@ class HealthMetricService:
             )
             return
 
-        cls._persist_metric(
+        metric = cls._persist_metric(
             patient_id=context.patient_id,
             metric_type=MetricType.WEIGHT,
             value_main=weight,
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
         )
+        MetricAlertService.process_metric(metric)
         task_service.complete_daily_monitoring_tasks(
             patient_id=context.patient_id,
             metric_type=MetricType.WEIGHT,
@@ -819,6 +823,7 @@ class HealthMetricService:
                 questionnaire_submission_id=questionnaire_submission_id,
                 task_id=task_id,
             )
+            MetricAlertService.process_metric(metric)
             return metric
 
         if measured_at is None:
@@ -833,6 +838,7 @@ class HealthMetricService:
             source=MetricSource.MANUAL,
             questionnaire_submission_id=questionnaire_submission_id,
         )
+        MetricAlertService.process_metric(metric)
         if metric_type in _MONITORING_TASK_TYPES:
             task_service.complete_daily_monitoring_tasks(
                 patient_id=patient_id,

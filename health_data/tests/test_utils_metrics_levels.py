@@ -138,29 +138,29 @@ class EvaluateTemperatureLevelTests(SimpleTestCase):
         base = evaluate_temperature_level(Decimal("38.2"))
         self.assertEqual(base, 1)
 
-        # 连续 24 小时高于 38°C：至少 2 级
+        # 连续 48 小时高于 38°C：至少 2 级
         self.assertEqual(
             evaluate_temperature_level(
-                Decimal("38.2"), has_24h_persistent_high=True
+                Decimal("38.2"), has_48h_persistent_high=True
             ),
             2,
         )
 
-        # 连续 48 小时高于 38°C：至少 3 级
+        # 连续 72 小时高于 38°C：至少 3 级
         self.assertEqual(
             evaluate_temperature_level(
-                Decimal("38.2"), has_48h_persistent_high=True
+                Decimal("38.2"), has_72h_persistent_high=True
             ),
             3,
         )
 
     def test_temperature_none_relies_on_time_flags_only(self):
         self.assertEqual(
-            evaluate_temperature_level(None, has_24h_persistent_high=False), 0
+            evaluate_temperature_level(None, has_48h_persistent_high=False), 0
         )
         self.assertEqual(
-            evaluate_temperature_level(None, has_24h_persistent_high=True), 2
+            evaluate_temperature_level(None, has_48h_persistent_high=True), 2
         )
         self.assertEqual(
-            evaluate_temperature_level(None, has_48h_persistent_high=True), 3
+            evaluate_temperature_level(None, has_72h_persistent_high=True), 3
         )
