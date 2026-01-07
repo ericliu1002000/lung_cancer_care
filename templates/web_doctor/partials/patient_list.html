@@ -31,9 +31,24 @@
   if (!tmpl) return;
 
   // 监听患者列表区域内的点击，在 htmx 请求真正发出前先替换 main 内容为 loading
-  document.addEventListener("click", function (event) {
+    // 同时触发聊天窗口切换患者事件
+    document.addEventListener("click", function (event) {
     const btn = event.target.closest("button[hx-get][hx-target='#main-content']");
     if (!btn) return;
+    
+    // 获取患者ID和姓名 (假设 URL 格式为 .../patient/<id>/ )
+    // 更好的方式是直接在 button 上 data-patient-id
+    // 但目前我们只有 URL，正则解析一下
+    const url = btn.getAttribute('hx-get');
+    const match = url.match(/patient\/(\d+)\//);
+    const patientName = btn.querySelector('.text-gray-900').innerText;
+    
+    if (match) {
+        const patientId = parseInt(match[1]);
+        window.dispatchEvent(new CustomEvent('update-chat-patient', {
+            detail: { id: patientId, name: patientName }
+        }));
+    }
 
     // 高亮当前选中的患者按钮
     document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
