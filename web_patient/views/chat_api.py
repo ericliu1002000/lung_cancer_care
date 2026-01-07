@@ -3,6 +3,7 @@ from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_GET, require_POST
 from django.core.exceptions import ValidationError
 from chat.services.chat import ChatService
+from chat.models import MessageContentType
 from users.decorators import check_patient, auto_wechat_login
 
 @require_GET
@@ -27,14 +28,18 @@ def list_messages(request: HttpRequest):
         
         data = []
         for msg in messages:
+            content_type_str = 'text'
+            if msg.content_type == MessageContentType.IMAGE:
+                content_type_str = 'image'
+            
             data.append({
                 'id': msg.id,
                 'sender_id': msg.sender_id,
                 'sender_role': msg.sender_role_snapshot,
                 'sender_name': msg.sender_display_name_snapshot,
                 'studio_name': msg.studio_name_snapshot,
-                'content_type': msg.content_type,
-                'text_content': msg.text_content,
+                'content_type': content_type_str,
+                'text_content': msg.text_content or "",
                 'image_url': msg.image.url if msg.image else '',
                 'created_at': msg.created_at.isoformat(),
             })
