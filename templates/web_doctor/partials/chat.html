@@ -20,8 +20,16 @@
             </button>
             <button @click="switchTab('internal')" 
                     :class="{'bg-white shadow text-slate-700': activeTab === 'internal', 'text-slate-500 hover:text-slate-600': activeTab !== 'internal'}"
-                    class="px-3 py-1 text-xs font-medium rounded-md transition-all duration-200 ml-1">
+                    class=" px-3 py-1 text-xs font-medium rounded-md transition-all duration-200 ml-1 relative">
                 <span class="truncate" x-text="internalLabel">内部会话</span>
+                <!-- 未读红点 -->
+                <span x-show="internalUnreadCount > 0 && activeTab !== 'internal'" 
+                      x-transition:enter="transition ease-out duration-300"
+                      x-transition:enter-start="transform scale-0 opacity-0"
+                      x-transition:enter-end="transform scale-100 opacity-100"
+                      class="absolute top-0 right-0 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] flex items-center justify-center rounded-full shadow-sm border border-white z-10"
+                      x-text="internalUnreadCount > 99 ? '99+' : internalUnreadCount">
+                </span>
             </button>
         </div>
         </div>
@@ -130,6 +138,8 @@ function chatWidget() {
         activeTab: 'patient', // 'patient' or 'internal'
         patientLabel: '患者',
         internalLabel: '内部会话',
+        internalUnreadCount: 0,
+        isDirector: false,
         
         conversations: {
             patient: null,
@@ -193,6 +203,11 @@ function chatWidget() {
                         
                         this.permissions.patient = info.can_send_patient;
                         this.permissions.internal = info.can_send_internal;
+                        
+                        // 设置未读数
+                        this.internalUnreadCount = info.internal_unread_count || 0;
+                        // 判断是否为主任 (根据 role_label 简单判断，或者后端返回明确字段)
+                        this.isDirector = (info.role_label === '主任');
                     }
                 }
             } catch (e) {
@@ -222,6 +237,13 @@ function chatWidget() {
         switchTab(tab) {
             if (this.activeTab === tab) return;
             this.activeTab = tab;
+            
+            // 切换到内部会话时，清除未读
+            if (tab === 'internal' && this.conversations.internal) {
+                this.internalUnreadCount = 0;
+                // 注意：真正的 markRead 会在 loadMessages 加载完后调用
+            }
+            
             this.messages = [];
             this.$nextTick(() => {
                 this.loadMessages();
@@ -317,7 +339,23 @@ function chatWidget() {
                 if (this.currentConversationId) {
                     this.pollMessages();
                 }
+                // 如果是主任且在患者Tab，轮询内部会话未读数
+                if (this.isDirector && this.activeTab === 'patient' && this.conversations.internal) {
+                    this.pollUnreadCount();
+                }
             }, 5000);
+        },
+
+        async pollUnreadCount() {
+            try {
+                const res = await fetch(`/doctor/chat/api/messages/unread-count/?conversation_id=${this.conversations.internal}`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    this.internalUnreadCount = data.unread_count;
+                }
+            } catch (e) {
+                console.error('Unread poll error', e);
+            }
         },
 
         async pollMessages() {

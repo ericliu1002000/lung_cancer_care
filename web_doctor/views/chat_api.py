@@ -54,6 +54,7 @@ def get_chat_context(request: HttpRequest):
     tab_internal_label = "内部会话"
     can_send_patient = True
     can_send_internal = True
+    internal_unread_count = 0
     
     if patient_id:
         try:
@@ -75,6 +76,10 @@ def get_chat_context(request: HttpRequest):
                     
                     i_conv = chat_service.get_or_create_internal_conversation(patient, target_studio, user)
                     internal_conv_id = i_conv.id
+                    
+                    # 获取内部会话未读数 (仅当当前用户是主任时才有意义，但通用逻辑也无妨)
+                    internal_unread_count = chat_service.get_unread_count(i_conv, user)
+                    
                 except Exception as e:
                     print(f"Error creating conversation: {e}")
 
@@ -121,7 +126,8 @@ def get_chat_context(request: HttpRequest):
             'patient_conversation_id': patient_conv_id,
             'internal_conversation_id': internal_conv_id,
             'can_send_patient': can_send_patient,
-            'can_send_internal': can_send_internal
+            'can_send_internal': can_send_internal,
+            'internal_unread_count': internal_unread_count
         }
     })
 
@@ -314,5 +320,28 @@ def mark_read(request: HttpRequest):
         return JsonResponse({'status': 'error', 'message': 'Conversation not found'}, status=404)
     except ValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@require_GET
+@login_required
+@check_doctor_or_assistant
+def get_unread_count(request: HttpRequest):
+    """获取指定会话的未读数量"""
+    conversation_id = request.GET.get('conversation_id')
+    if not conversation_id:
+        return JsonResponse({'status': 'error', 'message': 'conversation_id is required'}, status=400)
+        
+    service = ChatService()
+    try:
+        conversation = Conversation.objects.get(pk=conversation_id)
+        # 权限检查
+        if not service._is_user_studio_member(request.user, conversation.studio):
+             return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+             
+        count = service.get_unread_count(conversation, request.user)
+        return JsonResponse({'status': 'success', 'unread_count': count})
+    except Conversation.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Conversation not found'}, status=404)
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

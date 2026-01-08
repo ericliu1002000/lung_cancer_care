@@ -106,5 +106,6 @@ urlpatterns = [
     path("doctor/chat/api/messages/upload/", chat_api.upload_image_message, name="chat_api_upload_image"),
     path("doctor/chat/api/messages/forward/", chat_api.forward_message, name="chat_api_forward_message"),
     path("doctor/chat/api/messages/read/", chat_api.mark_read, name="chat_api_mark_read"),
+    path("doctor/chat/api/messages/unread-count/", chat_api.get_unread_count, name="chat_api_get_unread_count"),
     path("doctor/chat/api/context/", chat_api.get_chat_context, name="chat_api_get_context"),
 ]
