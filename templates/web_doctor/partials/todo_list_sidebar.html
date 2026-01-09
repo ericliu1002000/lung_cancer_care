@@ -1,4 +1,4 @@
-<div id="patient-todo-list" class="h-1/2 flex flex-col border-b border-slate-200" hx-swap-oob="true">
+<div id="patient-todo-list" class="h-[350px] flex flex-col border-b border-slate-200" hx-swap-oob="true">
     <div class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
         <h3 class="font-semibold text-slate-700 text-sm">患者待办 <span class="text-rose-500">({{ todo_list|length|default:0 }})</span></h3>
         <a href="{% url 'web_doctor:doctor_todo_list' %}" class="cursor-pointer flex flex-row items-center text-sm text-indigo-600 hover:underline">
@@ -9,7 +9,7 @@
     <div class="flex-1 overflow-y-auto p-4 space-y-3">
         {% for item in todo_list %}
         <div class="relative p-3 bg-rose-50 border border-rose-100 rounded-lg text-sm todo-item" data-id="{{ item.id }}">
-            <div class="flex justify-between">
+            <div class="flex justify-between pt-3">
                 <span class="font-medium text-black">{{ item.patient_name }} - {{ item.event_title }}</span>
                 
             </div>

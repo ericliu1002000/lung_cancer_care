@@ -279,7 +279,6 @@ LOGGING = {
     },
 }
 
-
 #短信配置
 SMS_CONFIG = {
     'API_URL': os.environ.get('SMS_API_URL', 'http://124.172.234.157:8180/service.asmx/SendMessageStr'),

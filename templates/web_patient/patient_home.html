@@ -74,7 +74,7 @@
   <!-- Main Content Area -->
   <div class="px-4 -mt-14 relative z-20 space-y-6">
     <a
-      href="{% if patient.is_member and patient.membership_expire_date %}{% url 'web_patient:consultation_chat' %}?patient_id={{ patient_id }}{% else %}{{ buy_url }}{% endif %}"
+      href="{% if patient.is_member and patient.membership_expire_date %}{% url 'web_patient:consultation_chat' %}{% else %}{{ buy_url }}{% endif %}"
       class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
     >
       <div class="flex items-center gap-4 relative z-10">

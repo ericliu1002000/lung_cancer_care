@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import views
+from .views import chat_api
 
 app_name = "web_patient"
 
@@ -57,4 +58,9 @@ urlpatterns = [
     path("api/health/metric/delete/", views.delete_health_metric, name="delete_health_metric"),
     path("api/health/metric/update/", views.update_health_metric, name="update_health_metric"),
     path("api/medication/submit/", views.submit_medication, name="submit_medication"),
+    # Chat API
+    path("chat/api/messages/list/", chat_api.list_messages, name="chat_api_list_messages"),
+    path("chat/api/messages/send/", chat_api.send_text_message, name="chat_api_send_text"),
+    path("chat/api/messages/upload/", chat_api.upload_image_message, name="chat_api_upload_image"),
+    path("chat/api/messages/read/", chat_api.mark_read, name="chat_api_mark_read"),
 ]
