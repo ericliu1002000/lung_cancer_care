@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
 from django.utils import timezone
 
+from core.models import QuestionnaireCode
+from health_data.models import MetricType
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
-from users.models import CustomUser
+from users.models import CustomUser, PatientProfile
 
 
 _EVENT_TYPE_LABELS = {
@@ -35,6 +38,14 @@ _STATUS_DISPLAY = {
     AlertStatus.PENDING: "待跟进",
     AlertStatus.ESCALATED: "升级主任",
     AlertStatus.COMPLETED: "已完成",
+}
+
+_MONITORING_TASK_TYPES = {
+    MetricType.BODY_TEMPERATURE,
+    MetricType.BLOOD_PRESSURE,
+    MetricType.BLOOD_OXYGEN,
+    MetricType.HEART_RATE,
+    MetricType.WEIGHT,
 }
 
 
@@ -89,6 +100,84 @@ class TodoListService:
         page_obj = paginator.get_page(page_num)
         page_obj.object_list = [cls._serialize_alert(alert) for alert in page_obj.object_list]
         return page_obj
+
+    @classmethod
+    def count_abnormal_events(
+        cls,
+        *,
+        patient: PatientProfile,
+        start_date: str | date,
+        end_date: str | date,
+        type: str | None = None,
+        type_code: str | None = None,
+    ) -> int:
+        """
+        统计患者在时间范围内的异常次数。
+
+        【功能说明】
+        - 按患者、时间区间统计异常记录数量。
+        - type 支持监测指标（_MONITORING_TASK_TYPES）或问卷编码（QuestionnaireCode）。
+
+        【使用方法】
+        - TodoListService.count_abnormal_events(
+              patient=patient,
+              start_date="2025-01-01",
+              end_date="2025-01-31",
+              type=MetricType.BODY_TEMPERATURE,
+          )
+        - TodoListService.count_abnormal_events(
+              patient=patient,
+              start_date=date(2025, 1, 1),
+              end_date=date(2025, 1, 31),
+              type=QuestionnaireCode.Q_COUGH,
+          )
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - start_date: str | date，开始日期（包含）。
+        - end_date: str | date，结束日期（包含）。
+        - type: str | None，监测指标或问卷编码。
+        - type_code: str | None，type 的别名（优先级高于 type）。
+
+        【返回值说明】
+        - int：异常次数。
+
+        【异常说明】
+        - ValidationError：患者或类型无效、日期范围非法。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValidationError("患者信息无效。")
+
+        resolved_type = type_code or type
+        if not resolved_type:
+            raise ValidationError("type 不能为空。")
+
+        start_dt, end_dt = cls._parse_date_range(start_date, end_date)
+        if not start_dt or not end_dt:
+            raise ValidationError("起止日期不能为空。")
+
+        qs = PatientAlert.objects.filter(
+            patient_id=patient.id,
+            is_active=True,
+        )
+
+        if resolved_type in _MONITORING_TASK_TYPES:
+            qs = qs.filter(
+                event_type=AlertEventType.DATA,
+                source_type="metric",
+                source_payload__metric_type=resolved_type,
+            )
+        elif resolved_type in QuestionnaireCode.values:
+            qs = qs.filter(
+                event_type=AlertEventType.QUESTIONNAIRE,
+                source_type="questionnaire",
+                source_payload__questionnaire_code=resolved_type,
+            )
+        else:
+            raise ValidationError("type 无效。")
+
+        qs = qs.filter(event_time__gte=start_dt, event_time__lt=end_dt)
+        return qs.count()
 
     @staticmethod
     def _build_base_queryset(user: CustomUser):

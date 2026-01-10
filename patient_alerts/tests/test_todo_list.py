@@ -3,6 +3,8 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
+from core.models import QuestionnaireCode
+from health_data.models import MetricType
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
 from patient_alerts.services.todo_list import TodoListService
 from users import choices
@@ -77,3 +79,51 @@ class TodoListServiceTests(TestCase):
         self.assertIn("event_level", item)
         self.assertIn("event_time", item)
         self.assertIn("status", item)
+
+    def test_count_abnormal_events_by_metric(self):
+        now = timezone.now()
+        PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="体温异常",
+            event_content="体温 38.5",
+            event_time=now,
+            status=AlertStatus.PENDING,
+            source_type="metric",
+            source_payload={"metric_type": MetricType.BODY_TEMPERATURE},
+        )
+
+        count = TodoListService.count_abnormal_events(
+            patient=self.patient,
+            start_date=timezone.localdate() - timedelta(days=1),
+            end_date=timezone.localdate(),
+            type=MetricType.BODY_TEMPERATURE,
+        )
+
+        self.assertEqual(count, 1)
+
+    def test_count_abnormal_events_by_questionnaire(self):
+        now = timezone.now()
+        PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.QUESTIONNAIRE,
+            event_level=AlertLevel.MODERATE,
+            event_title="咳嗽与痰色评估异常",
+            event_content="总分 6，分级 3 级",
+            event_time=now,
+            status=AlertStatus.PENDING,
+            source_type="questionnaire",
+            source_payload={"questionnaire_code": QuestionnaireCode.Q_COUGH},
+        )
+
+        count = TodoListService.count_abnormal_events(
+            patient=self.patient,
+            start_date=timezone.localdate() - timedelta(days=1),
+            end_date=timezone.localdate(),
+            type=QuestionnaireCode.Q_COUGH,
+        )
+
+        self.assertEqual(count, 1)

@@ -43,11 +43,19 @@ class AssistantDoctorMixin(forms.ModelForm):
                 assistant=instance, doctor_id__in=to_remove
             ).delete()
 
+    def save_m2m(self):
+        if not self.instance or not self.instance.pk:
+            return
+        if getattr(self, "_doctors_synced", False):
+            return
+        selected = self.cleaned_data.get("doctors", self.fields["doctors"].queryset.none())
+        self._sync_doctors(self.instance, selected)
+        self._doctors_synced = True
+
     def save(self, commit=True):
         instance = super().save(commit)
-        if instance.pk:
-            selected = self.cleaned_data.get("doctors", self.fields["doctors"].queryset.none())
-            self._sync_doctors(instance, selected)
+        if commit:
+            self.save_m2m()
         return instance
 
 
@@ -91,7 +99,7 @@ class AssistantCreationForm(AssistantDoctorMixin):
             profile.user = user
             if commit:
                 profile.save()
-        self._sync_doctors(profile, self.cleaned_data.get("doctors", self.fields["doctors"].queryset.none()))
+                self.save_m2m()
         return profile
 
 
