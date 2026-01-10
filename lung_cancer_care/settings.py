@@ -278,7 +278,27 @@ LOGGING = {
         },
     },
 }
-
+# LOGGING = {
+#     "version": 1,
+#     "disable_existing_loggers": False,
+#     "handlers": {
+#         "file": {
+#             "level": "INFO",
+#             "class": "logging.handlers.RotatingFileHandler",
+#             "filename": BASE_DIR / "logs/lung_cancer_care.log",
+#             "maxBytes": 10 * 1024 * 1024,  # 10MB
+#             "backupCount": 10,
+#             "encoding": "utf-8",
+#         },
+#     },
+#     "loggers": {
+#         "lung_cancer_care": {
+#             "handlers": ["file"],
+#             "level": "INFO",
+#             "propagate": False,
+#         },
+#     },
+# }
 #短信配置
 SMS_CONFIG = {
     'API_URL': os.environ.get('SMS_API_URL', 'http://124.172.234.157:8180/service.asmx/SendMessageStr'),

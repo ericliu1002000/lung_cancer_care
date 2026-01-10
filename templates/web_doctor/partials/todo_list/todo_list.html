@@ -76,6 +76,7 @@
             </div>
             <!-- 隐藏的分页重置 -->
             <input type="hidden" name="page" value="1">
+            <input type="hidden" name="patient_id" value="{{ patient_id|default:'' }}">
             
             <!-- 触发 HTMX 的隐藏按钮，用于 Alpine.js 调度 -->
             <button type="submit" id="hidden-search-btn" class="hidden"></button>

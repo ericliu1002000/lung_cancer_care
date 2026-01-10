@@ -46,6 +46,8 @@ _MONITORING_TASK_TYPES = {
     MetricType.BLOOD_OXYGEN,
     MetricType.HEART_RATE,
     MetricType.WEIGHT,
+    MetricType.STEPS,
+    MetricType.USE_MEDICATED,
 }
 
 
@@ -66,6 +68,7 @@ class TodoListService:
         status: str = "all",
         start_date: str | date | None = None,
         end_date: str | date | None = None,
+        patient_id: int | str | None = None,
     ) -> Page:
         """
         获取待办事项分页结果。
@@ -77,6 +80,7 @@ class TodoListService:
         - status: 状态筛选（pending/escalate/completed/all）。
         - start_date: 开始日期（包含）。
         - end_date: 结束日期（包含）。
+        - patient_id: 指定患者ID筛选。
 
         【返回值说明】
         - Page：分页对象，object_list 为列表数据。
@@ -85,6 +89,12 @@ class TodoListService:
         page_size = cls._safe_int(size, default=10)
 
         qs = cls._build_base_queryset(user)
+        
+        if patient_id:
+            pid = cls._safe_int(patient_id, default=0)
+            if pid:
+                qs = qs.filter(patient_id=pid)
+                
         if status in _STATUS_VALUE_BY_CODE:
             qs = qs.filter(status=_STATUS_VALUE_BY_CODE[status])
 

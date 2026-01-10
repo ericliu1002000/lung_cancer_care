@@ -60,7 +60,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     - 左侧展示该医生名下患者列表（可搜索）
     - 右侧展示患者待办事项
     """
-    # TODO 待联调首页-患者待办列表：列表项包含事项分类、事项名称、事项报警内容、事项处理状态、事项创建时间
+    # 待联调首页-患者待办列表：列表项包含事项分类、事项名称、事项报警内容、事项处理状态、事项创建时间
     # 获取基础上下文以保证页面布局正常（如左侧患者列表）
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     patients = _get_workspace_patients(request.user, request.GET.get("q"))
@@ -100,17 +100,19 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
     status = request.GET.get('status', 'all')
     start_date = request.GET.get('start_date', '')
     end_date = request.GET.get('end_date', '')
-    
-    # 调用 Service 获取真实数据
-    todo_page = TodoListService.get_todo_page(
-        user=request.user,
-        page=page,
-        size=size,
-        status=status,
-        start_date=start_date,
-        end_date=end_date
-    )
-    
+    patient_id = request.GET.get('patient_id')
+    todo_page = []
+    if patient_id :
+         # 调用 Service 获取真实数据
+        todo_page = TodoListService.get_todo_page(
+            user=request.user,
+            page=page,
+            size=size,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            patient_id=patient_id
+        )
     context = {
         "doctor": doctor_profile,
         "assistant": assistant_profile,
@@ -120,6 +122,7 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
         "current_status": status,
         "start_date": start_date,
         "end_date": end_date,
+        "patient_id": patient_id,
     }
     
     # HTMX 请求只返回列表部分
