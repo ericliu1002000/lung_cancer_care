@@ -100,17 +100,19 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
     status = request.GET.get('status', 'all')
     start_date = request.GET.get('start_date', '')
     end_date = request.GET.get('end_date', '')
-    
-    # 调用 Service 获取真实数据
-    todo_page = TodoListService.get_todo_page(
-        user=request.user,
-        page=page,
-        size=size,
-        status=status,
-        start_date=start_date,
-        end_date=end_date
-    )
-    
+    patient_id = request.GET.get('patient_id')
+    todo_page = []
+    if patient_id :
+         # 调用 Service 获取真实数据
+        todo_page = TodoListService.get_todo_page(
+            user=request.user,
+            page=page,
+            size=size,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            patient_id=patient_id
+        )
     context = {
         "doctor": doctor_profile,
         "assistant": assistant_profile,
@@ -120,6 +122,7 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
         "current_status": status,
         "start_date": start_date,
         "end_date": end_date,
+        "patient_id": patient_id,
     }
     
     # HTMX 请求只返回列表部分

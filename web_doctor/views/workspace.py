@@ -91,13 +91,13 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     display_name = get_user_display_name(request.user)
     
     # 首页默认加载当前医生的全局待办事项
-    todo_page = TodoListService.get_todo_page(
-        user=request.user,
-        status="pending",
-        page=1,
-        size=5  # 首页侧边栏显示较多条目
-    )
-    logging.info(f"当前待办事项：{todo_page.object_list}")
+    # todo_page = TodoListService.get_todo_page(
+    #     user=request.user,
+    #     status="pending",
+    #     page=1,
+    #     size=5  # 首页侧边栏显示较多条目
+    # )
+    # logging.info(f"当前待办事项：{todo_page.object_list}")
     
     return render(
         request,
@@ -107,7 +107,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
             "assistant": assistant_profile,
             "workspace_display_name": display_name,
             "patients": patients,
-            "todo_list": todo_page.object_list,
+            "todo_list": [], # 首页初始状态为空，点击患者后加载
         },
     )
 
@@ -148,11 +148,25 @@ def patient_workspace(request: HttpRequest, patient_id: int) -> HttpResponse:
     # 默认加载“管理设置”内容，保证初次点击患者时中间区域完整
     context.update(_build_settings_context(patient, tc_page=None, selected_cycle_id=None))
 
-    return render(
-        request,
-        "web_doctor/partials/patient_workspace.html",
-        context,
+    response_content = render_to_string("web_doctor/partials/patient_workspace.html", context, request=request)
+    
+    # 获取该患者的待办事项，用于侧边栏更新 (OOB)
+    todo_page = TodoListService.get_todo_page(
+        user=request.user,
+        patient_id=patient.id,
+        status="pending",
+        page=1,
+        size=5
     )
+    
+    todo_sidebar_html = render_to_string(
+        "web_doctor/partials/todo_list_sidebar.html",
+        {"todo_list": todo_page.object_list, "current_patient": patient},
+        request=request
+    )
+    
+    # 拼接 OOB 内容
+    return HttpResponse(response_content + todo_sidebar_html)
 
 
 @login_required
