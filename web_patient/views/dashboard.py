@@ -45,21 +45,21 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
             "bg": "bg-purple-100",
             "text": "text-purple-600",
             "path": "M5 12h14M12 5l7 7-7 7",
-            "url": "#",
+            "url": reverse("web_patient:my_examination"),
         },
         {
             "title": "我的用药",
             "bg": "bg-blue-100",
             "text": "text-blue-600",
             "path": "M7 5h10v14H7z",
-            "url": "#",
+            "url": reverse("web_patient:my_medication"),
         },
         {
             "title": "健康档案",
             "bg": "bg-teal-100",
             "text": "text-teal-600",
             "path": "M4 6h16v12H4z",
-            "url": "#",
+            "url": reverse("web_patient:health_records"),
         },
     ]
 

@@ -19,6 +19,8 @@ from .record import record_temperature, record_bp, record_spo2, record_weight, r
 from .followup import daily_survey, get_survey_detail, submit_surveys
 from .api import delete_health_metric, update_health_metric, submit_medication
 from .chat import consultation_chat
+from .my_followup import my_followup
+from .my_examination import my_examination, examination_detail
 
 __all__ = [
     "bind_landing",
@@ -59,5 +61,8 @@ __all__ = [
     "delete_health_metric",
     "update_health_metric",
     "submit_medication",
-    "consultation_chat"
+    "consultation_chat",
+    "my_followup",
+    "my_examination",
+    "examination_detail"
 ]

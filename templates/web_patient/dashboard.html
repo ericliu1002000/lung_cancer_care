@@ -80,7 +80,7 @@
       </h2>
       <div class="grid grid-cols-2 gap-3">
         {% for entry in main_entries %}
-        <a href="{{ entry.url }}" class="flex flex-col justify-between p-4 rounded-2xl bg-white shadow-sm border border-slate-200 active:scale-[0.98] transition h-36 relative overflow-hidden group">
+        <a href="{% if entry.title == '我的随访' %}{% url 'web_patient:my_followup' %}{% else %}{{ entry.url }}{% endif %}" class="flex flex-col justify-between p-4 rounded-2xl bg-white shadow-sm border border-slate-200 active:scale-[0.98] transition h-36 relative overflow-hidden group">
           <div class="flex justify-between items-start z-10">
             <span class="text-lg font-extrabold text-slate-800 leading-tight tracking-tight">{{ entry.title }}</span>
             
