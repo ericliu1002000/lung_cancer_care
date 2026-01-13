@@ -8,6 +8,7 @@ app_name = "web_patient"
 
 urlpatterns = [
     path("dashboard/", views.patient_dashboard, name="patient_dashboard"),
+    path("health_calendar/", views.health_calendar, name="health_calendar"),
     path("home/", views.patient_home, name="patient_home"),
     path("plan/", views.management_plan, name="management_plan"),
     path("medication/", views.my_medication, name="my_medication"),

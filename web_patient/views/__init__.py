@@ -21,6 +21,7 @@ from .api import delete_health_metric, update_health_metric, submit_medication
 from .chat import consultation_chat
 from .my_followup import my_followup
 from .my_examination import my_examination, examination_detail
+from .health_calendar import health_calendar
 
 __all__ = [
     "bind_landing",
@@ -64,5 +65,6 @@ __all__ = [
     "consultation_chat",
     "my_followup",
     "my_examination",
-    "examination_detail"
+    "examination_detail",
+    "health_calendar",
 ]
