@@ -20,7 +20,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 
 from users.decorators import check_doctor_or_assistant
-from users.models import PatientProfile
+from users.models import PatientProfile, CustomUser
 
 from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle, terminate_treatment_cycle
 from core.models import TreatmentCycle, PlanItem, choices as core_choices
@@ -36,6 +36,7 @@ from users.services.patient import PatientService
 from web_doctor.views.home import build_home_context
 from patient_alerts.services.todo_list import TodoListService
 from django.template.loader import render_to_string
+from chat.services.chat import ChatService
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,41 @@ def _get_workspace_patients(user, query: str | None):
     return qs.order_by("name").distinct()
 
 
+def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientProfile]:
+    """
+    为患者列表附加待办事项和咨询消息计数
+    """
+    patients = list(patients_qs)
+    chat_service = ChatService()
+    
+    for patient in patients:
+        # 1. 查询待办消息总数
+        try:
+            todo_page = TodoListService.get_todo_page(
+                user=user,
+                patient_id=patient.id,
+                status="pending",
+                page=1,
+                size=100
+            )
+            patient.todo_count = todo_page.paginator.count
+        except Exception as e:
+            logger.error(f"Error fetching todo count for patient {patient.id}: {e}")
+            patient.todo_count = 0
+
+        # 2. 查询咨询消息总数
+        try:
+            # 获取患者会话
+            conversation = chat_service.get_or_create_patient_conversation(patient=patient)
+            # 获取未读消息数
+            patient.consult_count = chat_service.get_unread_count(conversation, user)
+        except Exception as e:
+            logger.error(f"Error fetching consult count for patient {patient.id}: {e}")
+            patient.consult_count = 0
+            
+    return patients
+
+
 @login_required
 @check_doctor_or_assistant
 def doctor_workspace(request: HttpRequest) -> HttpResponse:
@@ -87,7 +123,9 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     - 中间区域为患者工作区入口（初次进入为空或提示）
     """
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
-    patients = _get_workspace_patients(request.user, request.GET.get("q"))
+    patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
+    patients = enrich_patients_with_counts(request.user, patients_qs)
+    
     display_name = get_user_display_name(request.user)
     
     # 首页默认加载当前医生的全局待办事项
@@ -119,7 +157,8 @@ def doctor_workspace_patient_list(request: HttpRequest) -> HttpResponse:
     医生工作台左侧“患者列表”局部刷新视图：
     - 用于搜索或分页等场景，通过 HTMX/Ajax 局部更新列表区域。
     """
-    patients = _get_workspace_patients(request.user, request.GET.get("q"))
+    patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
+    patients = enrich_patients_with_counts(request.user, patients_qs)
     return render(
         request,
         "web_doctor/partials/patient_list.html",

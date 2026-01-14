@@ -3,20 +3,39 @@
         <li>
             <button
                 type="button"
-                class="w-full text-left px-4 py-3 hover:bg-indigo-50 focus:bg-indigo-100 focus:outline-none transition"
+                class="w-full text-left px-4 py-3 hover:bg-indigo-50 focus:bg-indigo-100 focus:outline-none transition border-b border-gray-200"
                 hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
                 hx-target="#main-content"
                 hx-swap="innerHTML"
                 data-patient-item
             >
-                <p class="text-sm font-medium text-gray-900">{{ patient.name }}</p>
+            <div class="flex items-center ">
+                <p class="text-sm font-medium text-gray-900 mr-3">{{ patient.name }}</p>
                 <p class="text-sm text-gray-500">
                     性别：{{ patient.get_gender_display }} · 年龄：{{ patient.age|default:"-" }}
-                </p>
+                </p></div>
+                <div class="mt-2 mb-1 flex items-center text-sm text-gray-500">
+                    <span>待办</span>
+                    <span class="text-red-500 ml-1">
+                        {% if patient.todo_count > 99 %}(99+){% else %}({{ patient.todo_count|default:0 }}){% endif %}
+                    </span>
+                    <span class="ml-3">咨询</span>
+                    <span class="text-red-500 ml-1">
+                        {% if patient.consult_count > 99 %}(99+){% else %}({{ patient.consult_count|default:0 }}){% endif %}
+                    </span>
+                </div>
                 <p class="text-sm text-gray-400 mt-0.5">{{ patient.phone }}</p>
             </button>
         </li>
     {% endfor %}
+    
+    <!-- 自动轮询更新 (3分钟) -->
+    <li class="hidden"
+        hx-get="{% url 'web_doctor:doctor_workspace_patient_list' %}"
+        hx-trigger="every 180s"
+        hx-target="#patient-list-container"
+        hx-swap="innerHTML">
+    </li>
 {% else %}
     <li class="px-4 py-3 text-sm text-gray-400">暂无患者</li>
 {% endif %}
