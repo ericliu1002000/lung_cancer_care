@@ -1,12 +1,19 @@
 import random
+import json
+import os
+import uuid
+import logging
 from typing import List, Dict, Any
 from datetime import datetime
 
-from django.http import HttpRequest, HttpResponse, Http404
+from django.http import HttpRequest, HttpResponse, Http404, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, prefetch_related_objects
 from django.utils import timezone
 
@@ -16,6 +23,8 @@ from health_data.services.report_service import ReportUploadService, ReportArchi
 from health_data.models import ReportImage, ClinicalEvent, ReportUpload
 from core.service.checkup import get_active_checkup_library
 from core.models import CheckupLibrary
+
+logger = logging.getLogger(__name__)
 
 # 预设图片分类
 REPORT_IMAGE_CATEGORIES = [
@@ -273,13 +282,18 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     """
     处理检查报告历史记录板块
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     template_name = "web_doctor/partials/reports_history/list.html"
     
     patient = context.get("patient")
     if not patient:
+        logger.warning("handle_reports_history_section called without patient in context")
         return template_name 
 
     active_tab = request.GET.get("tab", "records")
+    logger.info(f"Refreshing reports history section for patient {patient.id}, tab={active_tab}")
     
     try:
         records_page_num = int(request.GET.get("records_page", 1))
@@ -321,7 +335,6 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
         page=records_page_num,
         page_size=10
     )
-    
     # 预加载
     if events_page.object_list:
         prefetch_related_objects(
@@ -474,8 +487,7 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     try:
         ReportArchiveService.archive_images(archiver, service_updates)
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
+        logger.exception("归档失败")
         return HttpResponse(f"归档失败: {str(e)}", status=400)
     
     patient = get_object_or_404(PatientProfile, pk=patient_id)
@@ -586,3 +598,113 @@ def patient_report_update(request: HttpRequest, patient_id: int, report_id: int)
         response["HX-Trigger"] = '{"show-toast": {"message": "保存成功", "type": "success"}}'
         
     return response
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def create_consultation_record(request: HttpRequest, patient_id: int) -> JsonResponse:
+    """
+    新增诊疗记录接口 (专用于 Reports History 模块)
+    """
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    
+    # 1. 解析表单基本数据
+    record_type_str = request.POST.get("record_type")
+    report_date_str = request.POST.get("report_date")
+    hospital = request.POST.get("hospital", "")
+    remarks = request.POST.get("remarks", "")
+    
+    if not record_type_str or not report_date_str:
+        return JsonResponse({"status": "error", "message": "缺少必填参数"}, status=400)
+        
+    # 映射记录类型
+    type_map = {"门诊": 1, "住院": 2, "复查": 3}
+    event_type = type_map.get(record_type_str)
+    if not event_type:
+        return JsonResponse({"status": "error", "message": "无效的记录类型"}, status=400)
+        
+    try:
+        event_date = datetime.strptime(report_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return JsonResponse({"status": "error", "message": "日期格式错误"}, status=400)
+        
+    # 2. 解析文件及其元数据
+    file_metadata_json = request.POST.get("file_metadata")
+    if not file_metadata_json:
+        return JsonResponse({"status": "error", "message": "缺少文件元数据"}, status=400)
+        
+    try:
+        file_metadata_list = json.loads(file_metadata_json)
+        metadata_map = {m["name"]: m for m in file_metadata_list}
+    except json.JSONDecodeError:
+        return JsonResponse({"status": "error", "message": "元数据格式错误"}, status=400)
+        
+    files = request.FILES.getlist("files[]")
+    if not files:
+        files = request.FILES.getlist("files")
+        
+    if not files:
+         return JsonResponse({"status": "error", "message": "请上传至少一张图片"}, status=400)
+         
+    # 3. 处理文件上传并构造 Service 参数
+    image_payloads = []
+    upload_dir = f"examination_reports/{patient.id}/{event_date}"
+    
+    checkup_libs = {lib.name: lib for lib in CheckupLibrary.objects.all()}
+    
+    try:
+        for file in files:
+            meta = metadata_map.get(file.name)
+            if not meta:
+                logger.warning(f"Missing metadata for file: {file.name}")
+                continue
+                
+            category = meta.get("category")
+            subcategory = meta.get("subcategory")
+            
+            ext = os.path.splitext(file.name)[1].lower()
+            filename = f"{uuid.uuid4()}{ext}"
+            file_path = f"{upload_dir}/{filename}"
+            
+            saved_path = default_storage.save(file_path, ContentFile(file.read()))
+            image_url = default_storage.url(saved_path)
+            
+            payload = {
+                "image_url": image_url,
+            }
+            
+            if event_type == 3: # 复查
+                if category == "复查" and subcategory:
+                    lib_item = checkup_libs.get(subcategory)
+                    if lib_item:
+                        payload["checkup_item"] = lib_item
+                    else:
+                        payload["checkup_item"] = checkup_libs.get("其他")
+                else:
+                    payload["checkup_item"] = checkup_libs.get("其他")
+            
+            image_payloads.append(payload)
+            
+        if not image_payloads:
+             return JsonResponse({"status": "error", "message": "文件处理失败"}, status=400)
+
+        # 4. 调用 Service
+        doctor_profile = request.user.doctor_profile if hasattr(request.user, "doctor_profile") else None
+        
+        event = ReportArchiveService.create_record_with_images(
+            patient=patient,
+            created_by_doctor=doctor_profile,
+            event_type=event_type,
+            event_date=event_date,
+            images=image_payloads,
+            hospital_name=hospital,
+            interpretation=remarks,
+            uploader=request.user
+        )
+        return JsonResponse({"status": "success", "message": "创建成功", "event_id": event.id})
+        
+    except ValidationError as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    except Exception as e:
+        logger.exception(f"Create consultation record failed: {e}")
+        return JsonResponse({"status": "error", "message": "系统错误"}, status=500)

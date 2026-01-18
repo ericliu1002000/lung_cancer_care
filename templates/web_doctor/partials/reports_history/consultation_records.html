@@ -1,11 +1,18 @@
-<div class="space-y-4" x-data="{
+<div id="consultation-records-root" class="space-y-4" 
+     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records"
+     hx-trigger="refresh-records-list from:body"
+     hx-target="#patient-content"
+     hx-swap="innerHTML"
+     hx-indicator="#workspace-loading-overlay"
+     hx-include="[name='csrfmiddlewaretoken']"
+     x-data="{
     filters: {
-        recordType: 'all',
-        reportDateStart: '',
-        reportDateEnd: '',
-        archivedDateStart: '',
-        archivedDateEnd: '',
-        archiver: ''
+        recordType: '{{ request.GET.recordType|default:"all" }}',
+        reportDateStart: '{{ request.GET.reportDateStart|default:"" }}',
+        reportDateEnd: '{{ request.GET.reportDateEnd|default:"" }}',
+        archivedDateStart: '{{ request.GET.archivedDateStart|default:"" }}',
+        archivedDateEnd: '{{ request.GET.archivedDateEnd|default:"" }}',
+        archiver: '{{ request.GET.archiver|default:"" }}'
     }
 }">
     {# 1. 顶部筛选区域 #}
@@ -58,7 +65,7 @@
     {# 2. 功能按钮区 #}
     <div class="flex justify-end">
         <button 
-            @click="$dispatch('open-record-modal', { type: '' })" 
+            @click="$dispatch('open-add-record-modal', { type: '' })" 
             class="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm"
         >
             <span class="text-lg leading-none">+</span> 新增记录
@@ -79,7 +86,7 @@
         {# 列表内容 #}
         <div class="divide-y divide-slate-100">
             {% for report in reports_page %}
-            <div x-data="{ 
+            <div data-event-id="{{ report.id }}" x-data="{ 
                 expanded: false, 
                 editing: false,
                 saving: false,
@@ -89,7 +96,7 @@
                 
                 // Constants for categories
                 categories: ['门诊', '住院', '复查'],
-                subcategories: {{ checkup_subcategories|safe }},
+                subcategories: {{ checkup_subcategories|safe|default:'[]' }},
 
                 async saveChanges() {
                     if (this.saving) return;
@@ -362,6 +369,75 @@
     </div>
     {% endif %}
     
+    <script>
+      (function () {
+        if (window.__consultationRecordsRefreshHooksInstalled) return;
+        window.__consultationRecordsRefreshHooksInstalled = true;
+
+        function showToast(message, type) {
+          if (!message) return;
+          var container = document.getElementById("consultation-records-toast");
+          if (!container) {
+            container = document.createElement("div");
+            container.id = "consultation-records-toast";
+            container.className =
+              "fixed bottom-4 right-4 max-w-sm text-white text-sm px-3 py-2 rounded shadow-lg z-50";
+            document.body.appendChild(container);
+          }
+          var bg = "bg-slate-800";
+          if (type === "error") bg = "bg-rose-600";
+          if (type === "success") bg = "bg-emerald-600";
+          container.className =
+            "fixed bottom-4 right-4 max-w-sm text-white text-sm px-3 py-2 rounded shadow-lg z-50 " + bg;
+          container.textContent = message;
+          container.style.display = "block";
+          clearTimeout(container._hideTimer);
+          container._hideTimer = setTimeout(function () {
+            container.style.display = "none";
+          }, 4000);
+        }
+
+        function isRecordsRequest(event) {
+          var root = document.getElementById("consultation-records-root");
+          var detail = event.detail || {};
+          var elt = detail.elt || event.target;
+          if (!root || !elt || !root.contains(elt)) return false;
+          return true;
+        }
+
+        document.body.addEventListener("htmx:responseError", function (event) {
+          if (!isRecordsRequest(event)) return;
+          showToast("列表刷新失败，请稍后重试", "error");
+        });
+
+        document.body.addEventListener("htmx:sendError", function (event) {
+          if (!isRecordsRequest(event)) return;
+          showToast("网络异常，列表刷新失败", "error");
+        });
+
+        document.body.addEventListener("htmx:afterSwap", function (event) {
+          var pendingId = window.__pendingConsultationEventId;
+          if (!pendingId) return;
+          var target = event.detail && event.detail.target;
+          if (!target || target.id !== "patient-content") return;
+
+          var row = document.querySelector('[data-event-id="' + pendingId + '"]');
+          if (!row) {
+            showToast("已新增记录，但当前页未找到（可能受分页/筛选影响）", "error");
+            window.__pendingConsultationEventId = null;
+            return;
+          }
+
+          row.scrollIntoView({ block: "center" });
+          row.classList.add("ring-2", "ring-emerald-400");
+          setTimeout(function () {
+            row.classList.remove("ring-2", "ring-emerald-400");
+          }, 1200);
+          window.__pendingConsultationEventId = null;
+        });
+      })();
+    </script>
+
     {# 包含 Modal 组件 #}
-    {% include "web_doctor/partials/home/checkup_record_modal.html" %}
+    {% include "web_doctor/partials/reports_history/add_record_modal.html" %}
 </div>

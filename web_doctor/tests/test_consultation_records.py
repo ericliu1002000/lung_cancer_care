@@ -2,7 +2,7 @@ from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import date
-from web_doctor.views.reports_history_data import handle_reports_history_section, patient_report_update
+from web_doctor.views.reports_history_data import handle_reports_history_section, patient_report_update, create_consultation_record
 from health_data.models import ClinicalEvent, ReportImage, ReportUpload, UploadSource
 from core.models import CheckupLibrary
 from users.models import DoctorProfile, PatientProfile
@@ -161,3 +161,114 @@ class ConsultationRecordsTests(TestCase):
         self.assertEqual(self.event1.interpretation, "Updated Interp")
         self.assertEqual(self.image1.record_type, 3)
         self.assertEqual(self.image1.checkup_item, self.checkup_item)
+
+    def test_create_and_refresh_flow(self):
+        """测试新增记录成功后页面数据是否自动更新"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from web_doctor.views.home import create_checkup_record
+
+        # 1. 模拟文件上传
+        file_content = b"fake_image_content"
+        file = SimpleUploadedFile("test_upload.jpg", file_content, content_type="image/jpeg")
+        
+        # 构造 POST 数据
+        payload = {
+            "record_type": "门诊",
+            "report_date": "2025-01-03",
+            "hospital": "Test Hospital",
+            "remarks": "Test Remarks",
+            "file_metadata": json.dumps([{
+                "name": "test_upload.jpg",
+                "category": "门诊",
+                "subcategory": ""
+            }]),
+            "files[]": [file]
+        }
+        
+        # 2. 调用创建接口
+        request = self.factory.post(
+            f'/doctor/workspace/patient/{self.patient.id}/checkup/create/',
+            data=payload
+        )
+        request.user = self.doctor_user
+        
+        # 确保 request.user 正确关联 DoctorProfile
+        # 实际上 request.user 是 User 实例，通过 user.doctor_profile 访问
+        
+        response = create_checkup_record(request, self.patient.id)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content)["status"], "success")
+        
+        # 3. 模拟刷新 (调用 handle_reports_history_section)
+        refresh_request = self.factory.get('/doctor/workspace/reports?tab=records')
+        refresh_request.user = self.doctor_user
+        
+        context = {"patient": self.patient}
+        handle_reports_history_section(refresh_request, context)
+        
+        reports = context.get("reports_page").object_list
+        
+        # 4. 验证新记录是否存在
+        # 原有2条，新增1条，共3条
+        self.assertEqual(len(reports), 3)
+        
+        new_report = next((r for r in reports if r["date"] == date(2025, 1, 3)), None)
+        self.assertIsNotNone(new_report)
+        self.assertEqual(new_report["record_type"], "门诊")
+        self.assertEqual(new_report["interpretation"], "Test Remarks")
+
+    def test_create_consultation_record_flow(self):
+        """测试使用新的 create_consultation_record 接口新增记录"""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        # 1. 模拟文件上传
+        file_content = b"fake_image_content_new"
+        file = SimpleUploadedFile("test_upload_new.jpg", file_content, content_type="image/jpeg")
+        
+        # 构造 POST 数据
+        payload = {
+            "record_type": "住院",
+            "report_date": "2025-01-04",
+            "hospital": "New Hospital",
+            "remarks": "New Remarks",
+            "file_metadata": json.dumps([{
+                "name": "test_upload_new.jpg",
+                "category": "住院",
+                "subcategory": ""
+            }]),
+            "files[]": [file]
+        }
+        
+        # 2. 调用新创建接口
+        request = self.factory.post(
+            f'/doctor/workspace/patient/{self.patient.id}/consultation/create/',
+            data=payload
+        )
+        request.user = self.doctor_user
+        
+        response = create_consultation_record(request, self.patient.id)
+        self.assertEqual(response.status_code, 200)
+        result = json.loads(response.content)
+        self.assertEqual(result["status"], "success")
+        self.assertIn("event_id", result)
+        self.assertTrue(ClinicalEvent.objects.filter(id=result["event_id"], patient=self.patient).exists())
+        
+        # 3. 模拟刷新
+        refresh_request = self.factory.get('/doctor/workspace/reports?tab=records')
+        refresh_request.user = self.doctor_user
+        
+        context = {"patient": self.patient}
+        handle_reports_history_section(refresh_request, context)
+        
+        reports = context.get("reports_page").object_list
+        
+        # 4. 验证新记录是否存在 (Base 2 + TestCreate 1 + This 1 = 4 if run sequentially, but tests are isolated usually)
+        # Actually TestCase runs in transaction, so previous test data is rolled back.
+        # So we expect 2 + 1 = 3.
+        
+        self.assertEqual(len(reports), 3)
+        
+        new_report = next((r for r in reports if r["date"] == date(2025, 1, 4)), None)
+        self.assertIsNotNone(new_report)
+        self.assertEqual(new_report["record_type"], "住院")
+        self.assertEqual(new_report["interpretation"], "New Remarks")

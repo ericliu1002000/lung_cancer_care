@@ -85,6 +85,11 @@ urlpatterns = [
         name="batch_archive_images",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/consultation/create/",
+        views.create_consultation_record,
+        name="create_consultation_record",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/home/remark/update/",
         home.patient_home_remark_update,
         name="patient_home_remark_update",
