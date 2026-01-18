@@ -272,3 +272,23 @@ class ConsultationRecordsTests(TestCase):
         self.assertIsNotNone(new_report)
         self.assertEqual(new_report["record_type"], "住院")
         self.assertEqual(new_report["interpretation"], "New Remarks")
+
+    def test_uploader_display_logic(self):
+        """测试上传人信息显示逻辑：医生录入显示医生名，患者上传显示患者名"""
+        request = self.factory.get('/doctor/workspace/reports?tab=records')
+        request.user = self.doctor_user
+        
+        context = {"patient": self.patient}
+        handle_reports_history_section(request, context)
+        
+        reports = context.get("reports_page").object_list
+        
+        # 1. Check Doctor Created Event (event1)
+        report1 = next(r for r in reports if r["id"] == self.event1.id)
+        # created_by_doctor is set to self.doctor ("Test Doctor")
+        self.assertEqual(report1["uploader_info"]["name"], "Test Doctor")
+        
+        # 2. Check Patient/Unknown Created Event (event2)
+        report2 = next(r for r in reports if r["id"] == self.event2.id)
+        # created_by_doctor is None, should fallback to patient name ("Test Patient")
+        self.assertEqual(report2["uploader_info"]["name"], "Test Patient")

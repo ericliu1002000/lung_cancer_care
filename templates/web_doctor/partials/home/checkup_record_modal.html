@@ -31,11 +31,25 @@
         
         // 5. 文件列表
         files: [], // {file, preview, category, subcategory, searchOpen, searchText}
+        showRecordTypePrompt: false,
+        pendingUploadAction: '',
 
         // 6. 初始化
         init() {
             this.$watch('isOpen', value => {
                 document.body.style.overflow = value ? 'hidden' : '';
+            });
+            this.$watch('formData.record_type', value => {
+                if (!value) return;
+                this.files.forEach(f => {
+                    f.category = value;
+                    if (value !== '复查') {
+                        f.subcategory = '';
+                        f.searchOpen = false;
+                        f.searchText = '';
+                    }
+                });
+                if (this.errors.record_type) delete this.errors.record_type;
             });
         },
 
@@ -64,6 +78,31 @@
             this.errors = {};
             this.isSaving = false;
             this.isDragging = false;
+            this.showRecordTypePrompt = false;
+            this.pendingUploadAction = '';
+        },
+
+        requireRecordType(action) {
+            if (this.formData.record_type) {
+                if (action === 'click') {
+                    this.$refs.fileInput.click();
+                }
+                return true;
+            }
+            this.errors.record_type = '请先选择记录类型';
+            this.pendingUploadAction = action || '';
+            this.showRecordTypePrompt = true;
+            return false;
+        },
+
+        chooseRecordType(type) {
+            this.formData.record_type = type;
+            this.showRecordTypePrompt = false;
+            const action = this.pendingUploadAction;
+            this.pendingUploadAction = '';
+            if (action === 'click') {
+                this.$nextTick(() => this.$refs.fileInput.click());
+            }
         },
 
         validate() {
@@ -86,22 +125,14 @@
                 this.errors.images = '至少上传一张图片';
                 isValid = false;
             } else {
-                let missingCategories = false;
                 let missingSubcategories = false;
                 for (let f of this.files) {
-                    if (!f.category) {
-                        missingCategories = true;
-                        break;
-                    }
-                    if (f.category === '复查' && !f.subcategory) {
+                    if (this.formData.record_type === '复查' && !f.subcategory) {
                         missingSubcategories = true;
                         break;
                     }
                 }
-                if (missingCategories) {
-                    this.errors.images = '请为所有图片选择类目';
-                    isValid = false;
-                } else if (missingSubcategories) {
+                if (missingSubcategories) {
                     this.errors.images = '复查类目必须选择二级分类';
                     isValid = false;
                 }
@@ -110,6 +141,10 @@
         },
 
         handleFileSelect(event) {
+            if (!this.requireRecordType('select')) {
+                event.target.value = '';
+                return;
+            }
             const selectedFiles = Array.from(event.target.files);
             this.processFiles(selectedFiles);
             event.target.value = '';
@@ -117,11 +152,18 @@
 
         handleDrop(event) {
             this.isDragging = false;
+            if (!this.requireRecordType('drop')) {
+                return;
+            }
             const droppedFiles = Array.from(event.dataTransfer.files);
             this.processFiles(droppedFiles);
         },
 
         processFiles(newFiles) {
+            if (!this.formData.record_type) {
+                this.requireRecordType('process');
+                return;
+            }
             const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             const maxSize = 10 * 1024 * 1024;
 
@@ -139,7 +181,7 @@
                     this.files.push({
                         file: file,
                         preview: e.target.result,
-                        category: '',
+                        category: this.formData.record_type,
                         subcategory: '',
                         searchOpen: false,
                         searchText: ''
@@ -319,7 +361,7 @@
                         <div @dragover.prevent="isDragging = true"
                              @dragleave.prevent="isDragging = false"
                              @drop.prevent="handleDrop($event)"
-                             @click="$refs.fileInput.click()"
+                             @click="requireRecordType('click')"
                              class="relative border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-colors cursor-pointer mb-4"
                              :class="isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:bg-slate-50'">
                             
@@ -352,15 +394,12 @@
                                         <div class="flex flex-wrap items-center gap-3">
                                             <div class="flex items-center gap-2">
                                                 <span class="text-sm font-bold text-slate-600">类目:</span>
-                                                <select x-model="file.category" class="block w-32 rounded border-slate-300 text-sm py-1.5 pl-2 pr-8 focus:ring-indigo-500 focus:border-indigo-500 border">
-                                                    <option value="">请选择</option>
-                                                    <template x-for="cat in categories" :key="cat">
-                                                        <option :value="cat" x-text="cat"></option>
-                                                    </template>
+                                                <select x-model="file.category" disabled class="block w-32 rounded border-slate-300 text-sm py-1.5 pl-2 pr-8 border bg-slate-100 text-slate-600 cursor-not-allowed">
+                                                    <option :value="formData.record_type" x-text="formData.record_type"></option>
                                                 </select>
                                             </div>
 
-                                            <div x-show="file.category === '复查'" class="flex items-center gap-2 relative" @click.outside="file.searchOpen = false">
+                                            <div x-show="formData.record_type === '复查'" class="flex items-center gap-2 relative" @click.outside="file.searchOpen = false">
                                                 <div class="relative w-48">
                                                     <input type="text" placeholder="选择检查项目..." x-model="file.subcategory"
                                                            @focus="file.searchOpen = true; file.searchText = ''"
@@ -415,6 +454,24 @@
                         取消
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div x-show="showRecordTypePrompt" class="fixed inset-0 z-[60]" style="display: none;">
+    <div class="absolute inset-0 bg-black/40" @click="showRecordTypePrompt = false"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-lg shadow-xl p-5">
+            <div class="text-base font-bold text-slate-800 mb-2">请先选择记录类型</div>
+            <div class="text-sm text-slate-500 mb-4">选择后才能上传报告图片</div>
+            <div class="flex gap-2">
+                <button type="button" class="flex-1 px-3 py-2 rounded bg-indigo-600 text-white text-sm font-medium" @click="chooseRecordType('门诊')">门诊</button>
+                <button type="button" class="flex-1 px-3 py-2 rounded bg-indigo-600 text-white text-sm font-medium" @click="chooseRecordType('住院')">住院</button>
+                <button type="button" class="flex-1 px-3 py-2 rounded bg-indigo-600 text-white text-sm font-medium" @click="chooseRecordType('复查')">复查</button>
+            </div>
+            <div class="mt-3 flex justify-end">
+                <button type="button" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800" @click="showRecordTypePrompt = false">取消</button>
             </div>
         </div>
     </div>

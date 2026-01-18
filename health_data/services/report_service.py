@@ -288,17 +288,24 @@ class ReportArchiveService:
         if event_date is None:
             raise ValidationError("诊疗记录日期不能为空。")
 
-        event, created = ClinicalEvent.objects.get_or_create(
+        queryset = ClinicalEvent.objects.filter(
             patient=patient,
             event_type=event_type,
             event_date=event_date,
-            defaults={
-                "hospital_name": hospital_name,
-                "department_name": department_name,
-                "interpretation": interpretation,
-                "created_by_doctor": created_by_doctor,
-            },
         )
+        event = queryset.order_by("-created_at", "-id").first()
+        created = False
+        if event is None:
+            event = ClinicalEvent.objects.create(
+                patient=patient,
+                event_type=event_type,
+                event_date=event_date,
+                hospital_name=hospital_name,
+                department_name=department_name,
+                interpretation=interpretation,
+                created_by_doctor=created_by_doctor,
+            )
+            created = True
 
         if not created:
             updates = {}

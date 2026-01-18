@@ -118,6 +118,12 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
     }
     record_type_display = record_type_map.get(event.event_type, "-后台接口未定义")
 
+    # 5. 处理上传人信息
+    # 逻辑：如果是由医生创建(created_by_doctor存在)，则显示医生姓名；否则显示患者姓名
+    uploader_name = event.patient.name
+    if event.created_by_doctor:
+        uploader_name = event.created_by_doctor.name or event.created_by_doctor.user.username
+
     return {
         "id": event.id,
         "date": event.event_date,
@@ -125,6 +131,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         "image_count": len(images),
         "interpretation": event.interpretation or "",
         "patient_info": {"name": event.patient.name, "age": event.patient.age},
+        "uploader_info": {"name": uploader_name},
         "record_type": record_type_display,
         "sub_category": sub_category,
         "archiver": archiver_name,
@@ -522,68 +529,84 @@ def patient_report_update(request: HttpRequest, patient_id: int, report_id: int)
     sub_category_str = data.get("sub_category")
     interpretation = data.get("interpretation") # 前端也可能传这个
     
-    updated_any = False
-    
     # 获取 ClinicalEvent
     event = get_object_or_404(ClinicalEvent, pk=report_id, patient_id=patient_id)
-    
-    # 1. 更新记录类型与解读 (使用 ORM，因 Service update_clinical_event 未暴露 event_type)
-    updates = {}
-    if record_type_str:
-        type_map = {
-            "门诊": ReportImage.RecordType.OUTPATIENT,
-            "住院": ReportImage.RecordType.INPATIENT,
-            "复查": ReportImage.RecordType.CHECKUP,
-        }
-        new_type = type_map.get(record_type_str)
-        if new_type and new_type != event.event_type:
-            event.event_type = new_type
-            updated_any = True
-    
+
+    doctor_profile = getattr(request.user, "doctor_profile", None)
+    assistant_profile = getattr(request.user, "assistant_profile", None)
+    archiver = None
+    if doctor_profile:
+        archiver = doctor_profile
+    elif assistant_profile:
+        related_doctors = assistant_profile.doctors.all()
+        if related_doctors.exists():
+            archiver = related_doctors.first()
+        else:
+            return HttpResponse("助理账号未关联任何医生，无法归档", status=403)
+    else:
+        return HttpResponse("非医生/助理账号无法归档", status=403)
+
+    updated_any = False
+
     if interpretation is not None:
-         event.interpretation = interpretation
-         updated_any = True
-         
-    if updated_any:
-        event.save()
-        
-    # 2. 批量更新图片分类
-    # 这部分逻辑比较复杂，因为涉及 checkup_item 的查找
-    checkup_libs = {lib.name: lib for lib in CheckupLibrary.objects.all()}
-    
+        ReportArchiveService.update_clinical_event(event, interpretation=interpretation)
+        updated_any = True
+
+    type_map = {
+        "门诊": ReportImage.RecordType.OUTPATIENT,
+        "住院": ReportImage.RecordType.INPATIENT,
+        "复查": ReportImage.RecordType.CHECKUP,
+    }
+    record_type = type_map.get(record_type_str) if record_type_str else event.event_type
+
+    checkup_name_to_id = {lib.name: lib.id for lib in CheckupLibrary.objects.all()}
+    service_updates = []
     for update in image_updates:
         img_id = update.get("image_id")
         category_str = update.get("category")
-        
         if not img_id or not category_str:
             continue
-            
-        try:
-            image = ReportImage.objects.get(pk=img_id, clinical_event=event)
-        except ReportImage.DoesNotExist:
-            continue
-            
-        parts = category_str.split("-")
+
+        parts = str(category_str).split("-")
         type_name = parts[0]
         sub_name = parts[1] if len(parts) > 1 else None
-        
-        new_record_type = None
-        if type_name == "门诊":
-            new_record_type = ReportImage.RecordType.OUTPATIENT
-        elif type_name == "住院":
-            new_record_type = ReportImage.RecordType.INPATIENT
-        elif type_name == "复查":
-            new_record_type = ReportImage.RecordType.CHECKUP
-            
-        if new_record_type:
-            image.record_type = new_record_type
-            if new_record_type == ReportImage.RecordType.CHECKUP and sub_name:
-                image.checkup_item = checkup_libs.get(sub_name)
-            else:
-                image.checkup_item = None
-            
-            image.save()
+
+        new_record_type = type_map.get(type_name)
+        if new_record_type is None:
+            continue
+
+        payload = {
+            "image_id": img_id,
+            "record_type": new_record_type,
+            "report_date": event.event_date,
+        }
+        if new_record_type == ReportImage.RecordType.CHECKUP:
+            checkup_item_id = None
+            if sub_name:
+                checkup_item_id = checkup_name_to_id.get(sub_name)
+            if not checkup_item_id:
+                checkup_item_id = checkup_name_to_id.get("其他")
+            if checkup_item_id:
+                payload["checkup_item_id"] = checkup_item_id
+        service_updates.append(payload)
+
+    if record_type != event.event_type:
+        event.event_type = record_type
+        event.save(update_fields=["event_type"])
+        updated_any = True
+
+    if service_updates:
+        try:
+            ReportArchiveService.archive_images(archiver, service_updates)
             updated_any = True
+        except ValidationError as e:
+            return HttpResponse(str(e), status=400)
+        except ClinicalEvent.MultipleObjectsReturned:
+            logger.exception("保存失败")
+            return HttpResponse("保存失败：检测到重复诊疗记录，请联系管理员处理数据", status=500)
+        except Exception:
+            logger.exception("保存失败")
+            return HttpResponse("保存失败，请稍后重试", status=500)
     
     # 返回更新后的报告列表片段
     patient = get_object_or_404(PatientProfile, pk=patient_id)
@@ -708,3 +731,25 @@ def create_consultation_record(request: HttpRequest, patient_id: int) -> JsonRes
     except Exception as e:
         logger.exception(f"Create consultation record failed: {e}")
         return JsonResponse({"status": "error", "message": "系统错误"}, status=500)
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def delete_consultation_record(request: HttpRequest, patient_id: int, event_id: int) -> JsonResponse:
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    event = get_object_or_404(ClinicalEvent, pk=event_id, patient=patient)
+
+    try:
+        updated_count = ReportArchiveService.delete_clinical_event(event)
+        return JsonResponse(
+            {
+                "status": "success",
+                "message": "删除成功",
+                "event_id": event_id,
+                "updated_images": updated_count,
+            }
+        )
+    except Exception:
+        logger.exception("Delete consultation record failed")
+        return JsonResponse({"status": "error", "message": "删除失败，请稍后重试"}, status=500)

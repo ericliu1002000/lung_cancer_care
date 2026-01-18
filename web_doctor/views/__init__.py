@@ -22,7 +22,12 @@ from .workspace import (
     patient_treatment_cycle_terminate,
     patient_health_metrics_update
 )
-from .reports_history_data import patient_report_update, batch_archive_images, create_consultation_record
+from .reports_history_data import (
+    patient_report_update,
+    batch_archive_images,
+    create_consultation_record,
+    delete_consultation_record,
+)
 
 __all__ = [
     "login_view",
@@ -43,5 +48,6 @@ __all__ = [
     "patient_health_metrics_update",
     "patient_report_update",
     "batch_archive_images",
-    "create_consultation_record"
+    "create_consultation_record",
+    "delete_consultation_record",
 ]

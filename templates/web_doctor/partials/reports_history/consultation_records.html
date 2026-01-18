@@ -90,6 +90,10 @@
                 expanded: false, 
                 editing: false,
                 saving: false,
+                originalInterpretation: null,
+                originalImageCats: null,
+                eventId: {{ report.id }},
+                deleteUrl: '{% url 'web_doctor:delete_consultation_record' patient.id report.id %}',
                 recordType: '{{ report.record_type }}',
                 subCategory: '{{ report.sub_category|default:'' }}',
                 interpretation: '{{ report.interpretation|escapejs }}',
@@ -97,6 +101,41 @@
                 // Constants for categories
                 categories: ['门诊', '住院', '复查'],
                 subcategories: {{ checkup_subcategories|safe|default:'[]' }},
+
+                startEdit() {
+                    if (this.saving) return;
+                    this.originalInterpretation = this.interpretation;
+                    this.originalImageCats = {};
+                    const hiddenInputs = $el.querySelectorAll('input[type=hidden][data-image-id]');
+                    hiddenInputs.forEach(input => {
+                        this.originalImageCats[input.dataset.imageId] = input.value;
+                    });
+                    this.editing = true;
+                },
+
+                cancelEdit() {
+                    if (this.saving) return;
+                    if (this.originalInterpretation !== null) {
+                        this.interpretation = this.originalInterpretation;
+                    }
+                    if (this.originalImageCats) {
+                        const cards = $el.querySelectorAll('[data-image-card]');
+                        cards.forEach(card => {
+                            const imageId = card.dataset.imageCard;
+                            if (!imageId) return;
+                            if (!(imageId in this.originalImageCats)) return;
+                            const hidden = card.querySelector('input[type=hidden][data-image-id]');
+                            if (hidden) hidden.value = this.originalImageCats[imageId];
+                            const select = card.querySelector('select[data-subcategory-select]');
+                            if (select) {
+                                const value = this.originalImageCats[imageId] || '';
+                                const parts = value.split('-');
+                                select.value = parts.length > 1 ? parts[1] : (parts[0] === '复查' ? '' : select.value);
+                            }
+                        });
+                    }
+                    this.editing = false;
+                },
 
                 async saveChanges() {
                     if (this.saving) return;
@@ -106,10 +145,12 @@
                     // 收集图片分类更新
                     const hiddenInputs = $el.querySelectorAll('input[type=hidden][data-image-id]');
                     hiddenInputs.forEach(input => {
-                        updates.push({
-                            image_id: input.dataset.imageId,
-                            category: input.value
-                        });
+                        const imageId = input.dataset.imageId;
+                        const currentValue = input.value;
+                        if (this.originalImageCats && imageId in this.originalImageCats) {
+                            if (this.originalImageCats[imageId] === currentValue) return;
+                        }
+                        updates.push({ image_id: imageId, category: currentValue });
                     });
 
                     try {
@@ -122,7 +163,8 @@
                             body: JSON.stringify({ 
                                 image_updates: updates,
                                 record_type: this.recordType,
-                                sub_category: this.subCategory
+                                sub_category: this.subCategory,
+                                interpretation: this.interpretation
                             })
                         });
 
@@ -133,7 +175,7 @@
                                 container.innerHTML = html;
                                 htmx.process(container);
                             }
-                            // 提示成功
+                            this.editing = false;
                         } else {
                             alert('保存失败，请重试');
                             this.saving = false;
@@ -146,9 +188,11 @@
                 },
                 
                 confirmDelete() {
-                    if(confirm('确认删除此条档案吗？此操作不可恢复。')) {
-                        // 模拟删除，实际应调用后端接口
-                        $el.remove();
+                    if (window.openConsultationRecordDeleteModal) {
+                        window.openConsultationRecordDeleteModal({
+                            eventId: this.eventId,
+                            deleteUrl: this.deleteUrl
+                        });
                     }
                 }
             }" class="group transition-colors hover:bg-slate-50/50">
@@ -167,7 +211,6 @@
                                 <i class="fas fa-file-medical mr-1"></i>
                                 <span x-text="recordType"></span>
                             </span>
-                            <span x-show="subCategory" class="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded" x-text="subCategory"></span>
                         </div>
                     </div>
 
@@ -197,37 +240,14 @@
                     {# 图片列表 #}
                     <div class="flex flex-wrap gap-6 mt-4 mb-4">
                         {% for img in report.images %}
-                        <div class="flex flex-col gap-2 w-[180px] relative" 
-                             x-data="{
-                                catPopoverOpen: false,
-                                currentCat: '{{ img.category }}',
-                                tempCat: '',
-                                tempSub: '',
-                                searchQuery: '',
-                                searchOpen: false,
-                                
-                                init() {
-                                    this.syncTemp();
-                                },
-                                
-                                syncTemp() {
-                                    const parts = this.currentCat.split('-');
-                                    this.tempCat = parts[0];
-                                    this.tempSub = parts.length > 1 ? parts[1] : '';
-                                },
-                                
-                                saveSelection() {
-                                    if(this.tempCat === '复查' && this.tempSub) {
-                                        this.currentCat = this.tempCat + '-' + this.tempSub;
-                                    } else {
-                                        this.currentCat = this.tempCat;
-                                    }
-                                    this.catPopoverOpen = false;
-                                }
-                             }"
-                             @click.outside="catPopoverOpen = false"
-                        >
-                            <input type="hidden" data-image-id="{{ img.id }}" :value="currentCat">
+                        <div class="flex flex-col gap-2 w-[180px] relative" data-image-card="{{ img.id }}">
+                            {% if report.record_type == '复查' %}
+                              {% with img.category|cut:'复查-' as checkup_name %}
+                                <input type="hidden" data-image-id="{{ img.id }}" value="复查-{% if checkup_name and checkup_name != '复查' %}{{ checkup_name }}{% else %}其他{% endif %}">
+                              {% endwith %}
+                            {% else %}
+                              <input type="hidden" data-image-id="{{ img.id }}" value="{{ report.record_type }}">
+                            {% endif %}
                             
                             {# 图片 #}
                             <div class="w-full h-[120px] relative bg-white rounded border border-slate-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow group/img"
@@ -241,65 +261,33 @@
                             {# 类目信息 #}
                             <div class="flex text-xs gap-1 items-center">
                                 <span class="text-slate-500 font-medium shrink-0 mr-1">类目:</span>
-                                <div class="flex-1 min-w-0 flex justify-between" 
-                                     :class="editing ? 'pt-2 pb-2 cursor-pointer text-indigo-600 bg-indigo-50 rounded px-1 -mx-1 transition-colors' : 'text-slate-700'"
-                                     @click="if(editing) { catPopoverOpen = true; syncTemp(); }">
-                                    <span x-text="currentCat || '未分类'" class="break-words"></span>
-                                    <span x-show="editing" class="inline-block ml-1 text-indigo-400">
-                                        <svg t="1768219867953" class="icon w-3 h-3" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4219" width="32" height="32"><path d="M183.168 332.501333a42.666667 42.666667 0 0 1 57.621333-2.496l2.709334 2.496L512 600.96l268.501333-268.48a42.666667 42.666667 0 0 1 57.621334-2.496l2.709333 2.496a42.666667 42.666667 0 0 1 2.496 57.621333l-2.496 2.709334-298.666667 298.666666a42.666667 42.666667 0 0 1-57.621333 2.496l-2.709333-2.496-298.666667-298.666666a42.666667 42.666667 0 0 1 0-60.330667z" fill="#000000" p-id="4220"></path></svg>
-                                    </span>
-                                </div>
+                                {% if report.record_type == '复查' %}
+                                  {% with img.category|cut:'复查-' as checkup_name %}
+                                  <div class="flex-1 min-w-0">
+                                    <div class="text-slate-700">复查</div>
+                                    <div x-show="!editing" class="text-slate-700 break-words">{% if checkup_name and checkup_name != '复查' %}{{ checkup_name }}{% else %}其他{% endif %}</div>
+                                    <select
+                                      x-show="editing"
+                                      data-subcategory-select
+                                      class="mt-1 w-full border text-xs border-slate-300 rounded py-1 bg-white"
+                                      @change="
+                                        $el.closest('[data-image-card]').querySelector('input[type=hidden][data-image-id]').value = '复查-' + $event.target.value
+                                      "
+                                    >
+                                      {% for sub in checkup_subcategories %}
+                                        <option value="{{ sub }}" {% if checkup_name and checkup_name != '复查' and sub == checkup_name %}selected{% endif %}>{{ sub }}</option>
+                                      {% endfor %}
+                                    </select>
+                                  </div>
+                                  {% endwith %}
+                                {% else %}
+                                  <div class="flex-1 min-w-0 text-slate-700">{{ report.record_type }}</div>
+                                {% endif %}
                             </div>
                             
                             {# 上传人信息 #}
                             <div class="text-slate-500 font-medium text-xs">
-                                上传人: {{ report.patient_info.name }}
-                            </div>
-
-                            {# 类目选择 Popover #}
-                            <div x-show="catPopoverOpen" 
-                                 class="absolute top-full left-0 z-20 w-56 bg-white rounded-lg shadow-xl border border-slate-200 p-3 mt-1"
-                                 style="display: none;"
-                                 x-transition:enter="transition ease-out duration-200"
-                                 x-transition:enter-start="opacity-0 translate-y-1"
-                                 x-transition:enter-end="opacity-100 translate-y-0"
-                            >
-                                <div class="space-y-3">
-                                    <div>
-                                        <label class="block text-xs font-medium text-slate-500 mb-1">一级分类</label>
-                                        <select x-model="tempCat" class="border w-full text-xs border-slate-300 rounded py-1">
-                                            <template x-for="cat in categories" :key="cat">
-                                                <option :value="cat" x-text="cat"></option>
-                                            </template>
-                                        </select>
-                                    </div>
-                                    
-                                    <div x-show="tempCat === '复查'">
-                                        <label class="block text-xs font-medium text-slate-500 mb-1">二级分类</label>
-                                        <div class="relative">
-                                            <input type="text" 
-                                                   x-model="tempSub"
-                                                   @focus="searchOpen = true"
-                                                   @click="searchOpen = true"
-                                                   class="w-full border text-xs border-slate-300 rounded py-1 pr-6"
-                                                   placeholder="选择或搜索...">
-                                            
-                                            {# 下拉选单 #}
-                                            <ul x-show="searchOpen" @click.outside="searchOpen = false" 
-                                                class="absolute z-30 w-full max-h-32 overflow-y-auto bg-white border border-slate-200 rounded mt-1 shadow-lg text-xs">
-                                                <template x-for="sub in subcategories.filter(s => s.includes(tempSub))" :key="sub">
-                                                    <li @click="tempSub = sub; searchOpen = false" 
-                                                        class="px-2 py-1.5 hover:bg-indigo-50 cursor-pointer"
-                                                        x-text="sub"></li>
-                                                </template>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="flex justify-end pt-1">
-                                        <button @click="saveSelection()" class="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700">确定</button>
-                                    </div>
-                                </div>
+                                上传人: {{ report.uploader_info.name }}
                             </div>
 
                         </div>
@@ -327,13 +315,24 @@
                             删除此条档案
                         </button>
 
-                        <button 
-                            @click="if(editing) { saveChanges(); } else { editing = true; }"
-                            class="px-6 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm"
-                            :class="editing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-600 text-white hover:bg-blue-700'"
-                        >
-                            <span x-text="editing ? '保存' : '编辑'"></span>
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button 
+                                x-show="editing"
+                                @click="cancelEdit()"
+                                class="px-6 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"
+                                :disabled="saving"
+                                style="display: none;"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                @click="if(editing) { saveChanges(); } else { startEdit(); }"
+                                class="px-6 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm bg-blue-600 text-white hover:bg-blue-700"
+                                :disabled="saving"
+                            >
+                                <span x-text="editing ? '保存' : '编辑'"></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -397,6 +396,117 @@
           }, 4000);
         }
 
+        function getCookie(name) {
+          var cookieValue = null;
+          if (document.cookie && document.cookie !== "") {
+            var cookies = document.cookie.split(";");
+            for (var i = 0; i < cookies.length; i++) {
+              var cookie = cookies[i].trim();
+              if (cookie.substring(0, name.length + 1) === name + "=") {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+              }
+            }
+          }
+          return cookieValue;
+        }
+
+        var deleting = false;
+        var pendingDeleteUrl = "";
+        var pendingDeleteEventId = null;
+
+        function setDeleteModalOpen(open) {
+          var modal = document.getElementById("consultation-delete-modal");
+          if (!modal) return;
+          if (open) {
+            modal.classList.remove("hidden");
+          } else {
+            modal.classList.add("hidden");
+          }
+        }
+
+        function setDeleteModalLoading(isLoading) {
+          var confirmBtn = document.getElementById("consultation-delete-confirm-btn");
+          var cancelBtn = document.getElementById("consultation-delete-cancel-btn");
+          if (!confirmBtn || !cancelBtn) return;
+          confirmBtn.disabled = isLoading;
+          cancelBtn.disabled = isLoading;
+          if (isLoading) {
+            confirmBtn.dataset.prevText = confirmBtn.textContent;
+            confirmBtn.textContent = "删除中...";
+            confirmBtn.classList.add("opacity-60", "cursor-wait");
+            cancelBtn.classList.add("opacity-60", "cursor-not-allowed");
+          } else {
+            confirmBtn.textContent = confirmBtn.dataset.prevText || "确定";
+            confirmBtn.classList.remove("opacity-60", "cursor-wait");
+            cancelBtn.classList.remove("opacity-60", "cursor-not-allowed");
+          }
+        }
+
+        function closeConsultationRecordDeleteModal() {
+          if (deleting) return;
+          pendingDeleteUrl = "";
+          pendingDeleteEventId = null;
+          setDeleteModalOpen(false);
+        }
+
+        function openConsultationRecordDeleteModal(options) {
+          var opts = options || {};
+          pendingDeleteUrl = opts.deleteUrl || "";
+          pendingDeleteEventId = opts.eventId;
+          if (!pendingDeleteUrl || !pendingDeleteEventId) {
+            showToast("删除参数缺失", "error");
+            return;
+          }
+          setDeleteModalLoading(false);
+          setDeleteModalOpen(true);
+        }
+
+        async function doDeleteConsultationRecord() {
+          if (deleting) return;
+          if (!pendingDeleteUrl || !pendingDeleteEventId) return;
+          deleting = true;
+          setDeleteModalLoading(true);
+          try {
+            var resp = await fetch(pendingDeleteUrl, {
+              method: "POST",
+              headers: {
+                "X-CSRFToken": getCookie("csrftoken"),
+                "X-Requested-With": "XMLHttpRequest",
+              },
+            });
+            var data = await resp.json().catch(function () {
+              return null;
+            });
+            if (!resp.ok || !data || data.status !== "success") {
+              var msg = (data && data.message) || "删除失败，请稍后重试";
+              showToast(msg, "error");
+              return;
+            }
+
+            var row = document.querySelector('[data-event-id="' + pendingDeleteEventId + '"]');
+            if (row) {
+              row.style.transition = "all 0.2s";
+              row.style.opacity = "0";
+              row.style.transform = "scale(0.98)";
+              setTimeout(function () {
+                row.remove();
+              }, 200);
+            }
+
+            document.body.dispatchEvent(new CustomEvent("refresh-records-list", { bubbles: true }));
+            showToast("删除成功", "success");
+            closeConsultationRecordDeleteModal();
+          } catch (e) {
+            showToast("网络异常，删除失败", "error");
+          } finally {
+            deleting = false;
+            setDeleteModalLoading(false);
+          }
+        }
+
+        window.openConsultationRecordDeleteModal = openConsultationRecordDeleteModal;
+
         function isRecordsRequest(event) {
           var root = document.getElementById("consultation-records-root");
           var detail = event.detail || {};
@@ -435,9 +545,54 @@
           }, 1200);
           window.__pendingConsultationEventId = null;
         });
+
+        document.body.addEventListener("click", function (event) {
+          var target = event.target;
+          if (!target) return;
+          if (target.id === "consultation-delete-modal") {
+            closeConsultationRecordDeleteModal();
+            return;
+          }
+          if (target.id === "consultation-delete-cancel-btn") {
+            closeConsultationRecordDeleteModal();
+            return;
+          }
+          if (target.id === "consultation-delete-confirm-btn") {
+            doDeleteConsultationRecord();
+            return;
+          }
+        });
+
+        document.body.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") {
+            closeConsultationRecordDeleteModal();
+          }
+        });
       })();
     </script>
 
     {# 包含 Modal 组件 #}
     {% include "web_doctor/partials/reports_history/add_record_modal.html" %}
+
+    <div id="consultation-delete-modal" class="fixed inset-0 hidden" style="background: rgba(0,0,0,0.5);z-index: 9999;">
+      <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-[320px] p-6 shadow-2xl flex flex-col items-center">
+          <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">是否删除此条档案？</h3>
+          <p class="text-sm text-slate-500 text-center mb-6 leading-relaxed">删除后数据无法恢复，请谨慎操作。</p>
+          <div class="flex gap-3 w-full">
+            <button id="consultation-delete-cancel-btn" type="button" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold active:bg-slate-50 transition">
+              取消
+            </button>
+            <button id="consultation-delete-confirm-btn" type="button" class="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-200 active:scale-95 transition">
+              确定
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 </div>
