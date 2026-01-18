@@ -35,7 +35,7 @@ def my_examination(request: HttpRequest) -> HttpResponse:
     # ReportUploadService.list_uploads 返回的是 Page 对象
     page_obj = ReportUploadService.list_uploads(
         patient=patient,
-        upload_source=UploadSource.PERSONAL_CENTER,
+        upload_sources=[UploadSource.PERSONAL_CENTER],
         page=page_number,
         page_size=20
     )

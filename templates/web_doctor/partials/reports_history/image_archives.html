@@ -2,13 +2,16 @@
     // Filters
     archiveFilters: {
         dateStart: '{{ filters.startDate|default:"" }}',
-        dateEnd: '{{ filters.endDate|default:"" }}',
-        category: '{{ filters.category|default:"all" }}'
+        dateEnd: '{{ filters.endDate|default:"" }}'
     },
     
     // Helper Data
     categories: ['门诊', '住院', '复查'],
-    subcategories: {{ checkup_subcategories|safe|default:"[]" }}
+    subcategories: {{ checkup_subcategories|safe|default:"[]" }},
+    allowedUploadSources: ['个人中心', '复查计划'],
+    shouldShowArchive(uploadSource) {
+        return this.allowedUploadSources.includes(uploadSource);
+    }
 }">
 
     {# 1. 顶部筛选 #}
@@ -28,22 +31,11 @@
         </div>
         
         <div class="flex items-center gap-2">
-            <label class="text-sm font-medium text-slate-700">类目类型：</label>
-            <select name="category" x-model="archiveFilters.category" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
-                <option value="all">全部</option>
-                <option value="门诊">门诊</option>
-                <option value="住院">住院</option>
-                <option value="复查">复查</option>
-                {% comment %} <option value="未归档">未归档</option> {% endcomment %}
-            </select>
-        </div>
-        
-        <div class="flex items-center gap-2">
             <button type="submit" class="px-4 py-1 bg-indigo-600 text-white rounded  text-sm font-medium transition-colors flex items-center">
               搜索
             </button>
             <button type="button" 
-                    @click="archiveFilters.dateStart=''; archiveFilters.dateEnd=''; archiveFilters.category='all'; $nextTick(() => $el.closest('form').requestSubmit())"
+                    @click="archiveFilters.dateStart=''; archiveFilters.dateEnd=''; $nextTick(() => $el.closest('form').requestSubmit())"
                     class="px-4 py-1 bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 text-sm font-medium transition-colors">
                 重置
             </button>
@@ -54,6 +46,7 @@
     <div class="space-y-4">
         {% for report in archives_list %}
         <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden transition-colors"
+             x-show="shouldShowArchive('{{ report.upload_source }}')"
              x-data="{
                  isGroupEditing: false,
                  isSaving: false,
@@ -288,7 +281,7 @@
         {# 首页 #}
         {% if archives_page_obj.number > 1 %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page=1&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page=1&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
                 hx-target="#patient-content">
             首页
         </button>
@@ -297,7 +290,7 @@
         {# 上一页 #}
         {% if archives_page_obj.has_previous %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.previous_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.previous_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
                 hx-target="#patient-content">
             上一页
         </button>
@@ -311,7 +304,7 @@
         {# 下一页 #}
         {% if archives_page_obj.has_next %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.next_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.next_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
                 hx-target="#patient-content">
             下一页
         </button>
@@ -320,7 +313,7 @@
         {# 末页 #}
         {% if archives_page_obj.number < archives_page_obj.paginator.num_pages %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.paginator.num_pages }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.paginator.num_pages }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
                 hx-target="#patient-content">
             末页
         </button>

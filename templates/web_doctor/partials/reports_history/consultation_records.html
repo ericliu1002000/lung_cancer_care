@@ -13,6 +13,39 @@
         archivedDateStart: '{{ request.GET.archivedDateStart|default:"" }}',
         archivedDateEnd: '{{ request.GET.archivedDateEnd|default:"" }}',
         archiver: '{{ request.GET.archiver|default:"" }}'
+    },
+    isSearching: false,
+    search() {
+        if (this.isSearching) return;
+        this.isSearching = true;
+        const params = new URLSearchParams();
+        params.set('tab', 'records');
+        params.set('records_page', '1');
+        params.set('images_page', '1');
+        if (this.filters.recordType && this.filters.recordType !== 'all') params.set('recordType', this.filters.recordType);
+        if (this.filters.reportDateStart) params.set('reportDateStart', this.filters.reportDateStart);
+        if (this.filters.reportDateEnd) params.set('reportDateEnd', this.filters.reportDateEnd);
+        if (this.filters.archivedDateStart) params.set('archivedDateStart', this.filters.archivedDateStart);
+        if (this.filters.archivedDateEnd) params.set('archivedDateEnd', this.filters.archivedDateEnd);
+        if (this.filters.archiver) params.set('archiver', this.filters.archiver);
+
+        htmx.ajax('GET', '{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?' + params.toString(), {
+            target: '#patient-content',
+            swap: 'innerHTML',
+            source: $el
+        });
+    },
+    resetFilters() {
+        this.filters.recordType = 'all';
+        this.filters.reportDateStart = '';
+        this.filters.reportDateEnd = '';
+        this.filters.archivedDateStart = '';
+        this.filters.archivedDateEnd = '';
+        this.filters.archiver = '';
+        if (window.showConsultationRecordsToast) {
+            window.showConsultationRecordsToast('筛选已重置', 'success');
+        }
+        this.search();
     }
 }">
     {# 1. 顶部筛选区域 #}
@@ -56,8 +89,19 @@
             </div>
             
             {# 搜索按钮 #}
-            <button class="px-4 py-1 bg-indigo-600 text-white rounded  text-sm font-medium transition-colors">
-                搜索
+            <button @click="search()" :disabled="isSearching" class="px-4 py-1 bg-indigo-600 text-white rounded text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+                <span x-show="!isSearching">搜索</span>
+                <span x-show="isSearching" style="display: none;">加载中...</span>
+            </button>
+
+            {# 重置按钮 #}
+            <button
+                type="button"
+                @click="resetFilters()"
+                :disabled="isSearching"
+                class="px-4 py-1 bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+                重置
             </button>
         </div>
     </div>
@@ -394,6 +438,9 @@
           container._hideTimer = setTimeout(function () {
             container.style.display = "none";
           }, 4000);
+        }
+        if (!window.showConsultationRecordsToast) {
+          window.showConsultationRecordsToast = showToast;
         }
 
         function getCookie(name) {

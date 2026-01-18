@@ -8,6 +8,7 @@ from typing import Iterable, List, Dict, Optional
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import CheckupLibrary
@@ -184,6 +185,7 @@ class ReportUploadService:
         patient: PatientProfile,
         include_deleted: bool = False,
         upload_source: Optional[int] = None,
+        upload_sources: Optional[Iterable[int]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         page: int = 1,
@@ -197,6 +199,7 @@ class ReportUploadService:
         - patient: PatientProfile。
         - include_deleted: 是否包含已删除记录。
         - upload_source: UploadSource 枚举值，可空。
+        - upload_sources: UploadSource 枚举值集合，可空；优先级高于 upload_source。
         - start_date/end_date: 日期范围，可空。
         - page: 页码，从 1 开始。
         - page_size: 每页数量，默认 10。
@@ -204,15 +207,32 @@ class ReportUploadService:
         【返回值说明】
         - Django Page 对象，page.object_list 为当前页上传批次列表。
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "ReportUploadService.list_uploads patient_id=%s upload_source=%s upload_sources=%s start_date=%s end_date=%s page=%s page_size=%s include_deleted=%s",
+            patient.id,
+            upload_source,
+            list(upload_sources) if upload_sources else None,
+            start_date,
+            end_date,
+            page,
+            page_size,
+            include_deleted,
+        )
         queryset = ReportUpload.objects.filter(patient=patient)
         if not include_deleted:
             queryset = queryset.filter(deleted_at__isnull=True)
-        if upload_source is not None:
+        if upload_sources:
+            queryset = queryset.filter(upload_source__in=list(upload_sources))
+        elif upload_source is not None:
             queryset = queryset.filter(upload_source=upload_source)
         if start_date is not None:
             queryset = queryset.filter(created_at__date__gte=start_date)
         if end_date is not None:
             queryset = queryset.filter(created_at__date__lte=end_date)
+        logger.info("ReportUploadService.list_uploads queryset_count=%s", queryset.count())
         paginator = Paginator(queryset.order_by("-created_at"), page_size)
         return paginator.get_page(page)
 
@@ -241,18 +261,25 @@ class ReportArchiveService:
     @staticmethod
     def list_clinical_events(
         patient: PatientProfile,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        record_type: Optional[str] = None,
+        report_start_date: Optional[date] = None,
+        report_end_date: Optional[date] = None,
+        archive_start_date: Optional[date] = None,
+        archive_end_date: Optional[date] = None,
+        archiver_name: Optional[str] = None,
         page: int = 1,
         page_size: int = 10,
     ):
         """
         【功能说明】
-        - 获取诊疗记录列表，支持日期范围过滤并分页。
+        - 获取诊疗记录列表，支持多条件过滤并分页。
 
         【参数说明】
         - patient: PatientProfile。
-        - start_date/end_date: 发生日期范围，可空。
+        - record_type: 记录类型（全部/门诊/住院/复查），可空。
+        - report_start_date/report_end_date: 报告日期范围（event_date），可空。
+        - archive_start_date/archive_end_date: 归档日期范围（created_at 日期部分），可空。
+        - archiver_name: 归档人姓名模糊匹配（医生姓名/用户名），可空。
         - page: 页码，从 1 开始。
         - page_size: 每页数量，默认 10。
 
@@ -260,10 +287,36 @@ class ReportArchiveService:
         - Django Page 对象，page.object_list 为当前页 ClinicalEvent 列表。
         """
         queryset = ClinicalEvent.objects.filter(patient=patient)
-        if start_date is not None:
-            queryset = queryset.filter(event_date__gte=start_date)
-        if end_date is not None:
-            queryset = queryset.filter(event_date__lte=end_date)
+
+        normalized_record_type = (record_type or "").strip()
+        if normalized_record_type and normalized_record_type not in ("全部", "all"):
+            type_map = {
+                "门诊": int(ReportImage.RecordType.OUTPATIENT),
+                "住院": int(ReportImage.RecordType.INPATIENT),
+                "复查": int(ReportImage.RecordType.CHECKUP),
+            }
+            event_type = type_map.get(normalized_record_type)
+            if event_type is not None:
+                queryset = queryset.filter(event_type=event_type)
+
+        if report_start_date is not None:
+            queryset = queryset.filter(event_date__gte=report_start_date)
+        if report_end_date is not None:
+            queryset = queryset.filter(event_date__lte=report_end_date)
+
+        if archive_start_date is not None:
+            queryset = queryset.filter(created_at__date__gte=archive_start_date)
+        if archive_end_date is not None:
+            queryset = queryset.filter(created_at__date__lte=archive_end_date)
+
+        normalized_archiver_name = (archiver_name or "").strip()
+        if normalized_archiver_name:
+            queryset = queryset.filter(
+                Q(archiver_name__icontains=normalized_archiver_name)
+                | Q(created_by_doctor__name__icontains=normalized_archiver_name)
+                | Q(created_by_doctor__user__username__icontains=normalized_archiver_name)
+            )
+
         paginator = Paginator(queryset.order_by("-event_date", "-created_at"), page_size)
         return paginator.get_page(page)
 
@@ -478,6 +531,23 @@ class ReportArchiveService:
             resolved_role = _resolve_uploader_role(uploader, None)
             if uploader is None:
                 resolved_role = int(UploaderRole.DOCTOR)
+            archiver_name = "未知"
+            if uploader is not None:
+                try:
+                    if uploader.user_type == user_choices.UserType.DOCTOR and hasattr(uploader, "doctor_profile"):
+                        archiver_name = uploader.doctor_profile.name
+                    elif uploader.user_type == user_choices.UserType.ASSISTANT and hasattr(uploader, "assistant_profile"):
+                        archiver_name = uploader.assistant_profile.name
+                    elif uploader.user_type == user_choices.UserType.SALES and hasattr(uploader, "sales_profile"):
+                        archiver_name = uploader.sales_profile.name
+                    elif uploader.user_type == user_choices.UserType.PATIENT and hasattr(uploader, "patient_profile"):
+                        archiver_name = uploader.patient_profile.name
+                    else:
+                        archiver_name = uploader.wx_nickname or uploader.username or "未知"
+                except Exception:
+                    archiver_name = uploader.wx_nickname or uploader.username or "未知"
+            elif created_by_doctor is not None:
+                archiver_name = created_by_doctor.name or "未知"
             upload = ReportUpload.objects.create(
                 patient=patient,
                 upload_source=UploadSource.DOCTOR_BACKEND,
@@ -492,6 +562,7 @@ class ReportArchiveService:
                 department_name=department_name,
                 interpretation=interpretation,
                 created_by_doctor=created_by_doctor,
+                archiver_name=archiver_name,
             )
 
             image_instances: List[ReportImage] = []

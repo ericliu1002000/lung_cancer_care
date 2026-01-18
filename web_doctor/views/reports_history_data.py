@@ -21,6 +21,7 @@ from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 from health_data.services.report_service import ReportUploadService, ReportArchiveService
 from health_data.models import ReportImage, ClinicalEvent, ReportUpload
+from health_data.models.report_upload import UploadSource
 from core.service.checkup import get_active_checkup_library
 from core.models import CheckupLibrary
 
@@ -102,7 +103,9 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         
     # 2. 处理归档人
     archiver_name = "-后台接口未定义"
-    if event.created_by_doctor:
+    if getattr(event, "archiver_name", None):
+        archiver_name = event.archiver_name
+    elif event.created_by_doctor:
         archiver_name = event.created_by_doctor.name or event.created_by_doctor.user.username
         
     # 3. 处理归档日期
@@ -135,6 +138,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         "record_type": record_type_display,
         "sub_category": sub_category,
         "archiver": archiver_name,
+        "archiver_name": archiver_name,
         "archived_date": archived_date_str,
         "status": "已完成", # 默认状态
     }
@@ -164,14 +168,33 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
         else:
             end_date_obj = end_date
 
+    logger.info(
+        "image_archives _get_archives_data patient_id=%s page=%s page_size=%s start_date=%s end_date=%s",
+        patient.id,
+        page,
+        page_size,
+        start_date,
+        end_date,
+    )
+
     # 1. 调用 Service 获取分页后的上传记录
     uploads_page = ReportUploadService.list_uploads(
         patient=patient,
         include_deleted=False,
+        upload_sources=[UploadSource.PERSONAL_CENTER, UploadSource.CHECKUP_PLAN],
         start_date=start_date_obj,
         end_date=end_date_obj,
         page=page,
         page_size=page_size
+    )
+    logger.info(
+        "image_archives list_uploads patient_id=%s parsed_start=%s parsed_end=%s page=%s page_size=%s count=%s",
+        patient.id,
+        start_date_obj,
+        end_date_obj,
+        page,
+        page_size,
+        getattr(uploads_page.paginator, "count", None),
     )
     
     # 优化：预加载当前页关联的图片和诊疗记录
@@ -312,33 +335,46 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     except (TypeError, ValueError):
         images_page_num = 1
         
-    # 获取筛选参数
-    start_date = request.GET.get("startDate")
-    end_date = request.GET.get("endDate")
-    category = request.GET.get("category", "all")
-    
-    # 日期转换
-    start_date_obj = None
-    if start_date:
+    record_type = request.GET.get("recordType") or request.GET.get("record_type")
+    report_date_start = request.GET.get("reportDateStart") or request.GET.get("report_start_date")
+    report_date_end = request.GET.get("reportDateEnd") or request.GET.get("report_end_date")
+    archived_date_start = request.GET.get("archivedDateStart") or request.GET.get("archive_start_date")
+    archived_date_end = request.GET.get("archivedDateEnd") or request.GET.get("archive_end_date")
+    archiver = request.GET.get("archiver") or request.GET.get("archiver_name")
+    images_start_date = request.GET.get("startDate") or ""
+    images_end_date = request.GET.get("endDate") or ""
+    logger.info(
+        "image_archives request patient_id=%s startDate=%s endDate=%s images_page=%s",
+        patient.id,
+        images_start_date,
+        images_end_date,
+        images_page_num,
+    )
+
+    def _parse_date(value: str):
+        if not value:
+            return None
         try:
-            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            return datetime.strptime(value, "%Y-%m-%d").date()
         except ValueError:
-            pass
-            
-    end_date_obj = None
-    if end_date:
-        try:
-            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
-        except ValueError:
-            pass
+            return None
+
+    report_start_date_obj = _parse_date(report_date_start)
+    report_end_date_obj = _parse_date(report_date_end)
+    archive_start_date_obj = _parse_date(archived_date_start)
+    archive_end_date_obj = _parse_date(archived_date_end)
     
     # -----------------------------------------------------------
     # 处理诊疗记录数据 (Reports) - 切换为真实数据接口
     # -----------------------------------------------------------
     events_page = ReportArchiveService.list_clinical_events(
         patient=patient,
-        start_date=start_date_obj,
-        end_date=end_date_obj,
+        record_type=record_type,
+        report_start_date=report_start_date_obj,
+        report_end_date=report_end_date_obj,
+        archive_start_date=archive_start_date_obj,
+        archive_end_date=archive_end_date_obj,
+        archiver_name=archiver,
         page=records_page_num,
         page_size=10
     )
@@ -367,9 +403,8 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
         patient, 
         page=images_page_num,
         page_size=10,
-        start_date=start_date, 
-        end_date=end_date, 
-        category=category
+        start_date=images_start_date, 
+        end_date=images_end_date
     )
     
     archives_list = archives_data["archives_list"]
@@ -391,9 +426,14 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
         "checkup_subcategories": recheck_sub_categories, 
         "active_tab": active_tab, 
         "filters": {
-            "startDate": start_date or "",
-            "endDate": end_date or "",
-            "category": category
+            "recordType": record_type or "",
+            "reportDateStart": report_date_start or "",
+            "reportDateEnd": report_date_end or "",
+            "archivedDateStart": archived_date_start or "",
+            "archivedDateEnd": archived_date_end or "",
+            "archiver": archiver or "",
+            "startDate": images_start_date,
+            "endDate": images_end_date,
         }
     })
     return template_name
