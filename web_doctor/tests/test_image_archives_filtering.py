@@ -39,15 +39,15 @@ class ImageArchivesFilteringTests(TestCase):
         self._create_upload_with_image(UploadSource.PERSONAL_CENTER, datetime(2025, 1, 2, 10, 0, 0))
         self._create_upload_with_image(UploadSource.CHECKUP_PLAN, datetime(2025, 1, 1, 10, 0, 0))
 
-        result = _get_archives_data(self.patient, page=1, page_size=10)
-        sources = {group["upload_source"] for group in result["archives_list"]}
+        archives_list, _page_obj = _get_archives_data(self.patient, page=1, page_size=10)
+        sources = {group["upload_source"] for group in archives_list}
         self.assertEqual(sources, {UploadSource.PERSONAL_CENTER.label, UploadSource.CHECKUP_PLAN.label})
 
     def test_doctor_backend_uploads_are_excluded(self):
         self._create_upload_with_image(UploadSource.DOCTOR_BACKEND, datetime(2025, 1, 10, 10, 0, 0))
 
-        result = _get_archives_data(self.patient, page=1, page_size=10)
-        sources = [group["upload_source"] for group in result["archives_list"]]
+        archives_list, _page_obj = _get_archives_data(self.patient, page=1, page_size=10)
+        sources = [group["upload_source"] for group in archives_list]
         self.assertNotIn(UploadSource.DOCTOR_BACKEND.label, sources)
 
     def test_pagination_count_and_order_unchanged(self):
@@ -57,12 +57,12 @@ class ImageArchivesFilteringTests(TestCase):
         for j in range(3):
             self._create_upload_with_image(UploadSource.DOCTOR_BACKEND, datetime(2025, 2, 1, 12, 0, 0) + timedelta(days=j))
 
-        page1 = _get_archives_data(self.patient, page=1, page_size=10)["page_obj"]
+        _archives_list_1, page1 = _get_archives_data(self.patient, page=1, page_size=10)
         self.assertEqual(page1.paginator.count, 12)
         self.assertEqual(len(page1.object_list), 10)
         self.assertEqual(timezone.localtime(page1.object_list[0].created_at).date(), date(2025, 1, 12))
 
-        page2 = _get_archives_data(self.patient, page=2, page_size=10)["page_obj"]
+        _archives_list_2, page2 = _get_archives_data(self.patient, page=2, page_size=10)
         self.assertEqual(len(page2.object_list), 2)
         self.assertEqual(timezone.localtime(list(page2.object_list)[-1].created_at).date(), date(2025, 1, 1))
 
@@ -70,5 +70,5 @@ class ImageArchivesFilteringTests(TestCase):
         upload = ReportUpload.objects.create(patient=self.patient, upload_source=UploadSource.PERSONAL_CENTER)
         ReportUpload.objects.filter(id=upload.id).update(created_at=timezone.make_aware(datetime(2025, 1, 1, 10, 0, 0)))
 
-        result = _get_archives_data(self.patient, page=1, page_size=10)
-        self.assertEqual(result["archives_list"], [])
+        archives_list, _page_obj = _get_archives_data(self.patient, page=1, page_size=10)
+        self.assertEqual(archives_list, [])

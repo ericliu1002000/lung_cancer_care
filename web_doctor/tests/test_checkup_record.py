@@ -10,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from users.models import DoctorProfile, PatientProfile, CustomUser
 from health_data.models import ClinicalEvent, ReportImage
 from core.models import CheckupLibrary, choices
+from users import choices as user_choices
 
 class CheckupRecordTest(TestCase):
     def setUp(self):
@@ -17,7 +18,8 @@ class CheckupRecordTest(TestCase):
         self.doctor_user = CustomUser.objects.create_user(
             username="doctor_test",
             password="password123",
-            user_type=CustomUser.UserType.DOCTOR
+            user_type=user_choices.UserType.DOCTOR,
+            phone="13800000000",
         )
         self.doctor_profile = DoctorProfile.objects.create(
             user=self.doctor_user,
@@ -29,7 +31,8 @@ class CheckupRecordTest(TestCase):
         self.patient_user = CustomUser.objects.create_user(
             username="patient_test",
             password="password123",
-            user_type=CustomUser.UserType.PATIENT
+            user_type=user_choices.UserType.PATIENT,
+            wx_openid="openid_checkup_record_test",
         )
         self.patient_profile = PatientProfile.objects.create(
             user=self.patient_user,
@@ -41,12 +44,12 @@ class CheckupRecordTest(TestCase):
         self.checkup_item = CheckupLibrary.objects.create(
             name="血常规",
             code="BLOOD_ROUTINE",
-            category=choices.CheckupCategory.LAB
+            category=choices.CheckupCategory.BLOOD
         )
         self.checkup_item_other = CheckupLibrary.objects.create(
             name="其他",
             code="OTHER",
-            category=choices.CheckupCategory.OTHER
+            category=choices.CheckupCategory.FUNCTION
         )
         
         self.client = Client()

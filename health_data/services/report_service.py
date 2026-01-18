@@ -286,7 +286,11 @@ class ReportArchiveService:
         【返回值说明】
         - Django Page 对象，page.object_list 为当前页 ClinicalEvent 列表。
         """
-        queryset = ClinicalEvent.objects.filter(patient=patient)
+        queryset = ClinicalEvent.objects.filter(patient=patient).select_related(
+            "patient",
+            "created_by_doctor",
+            "created_by_doctor__user",
+        )
 
         normalized_record_type = (record_type or "").strip()
         if normalized_record_type and normalized_record_type not in ("全部", "all"):

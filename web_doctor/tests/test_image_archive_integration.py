@@ -299,7 +299,7 @@ class ImageArchiveIntegrationTest(TestCase):
 
     def test_archive_filtering(self):
         """
-        Integration Test: Verify date and category filtering logic.
+        Integration Test: Verify date filtering logic.
         """
         # Create test data
         u1 = ReportUpload.objects.create(patient=self.patient)
@@ -323,15 +323,9 @@ class ImageArchiveIntegrationTest(TestCase):
         handle_reports_history_section(request, context)
         archives = context['archives_list']
         self.assertEqual(len(archives), 1)
-        
-        # Case 2: Filter by Category (住院)
+
+        # Category filtering has been removed; passing category should not affect results.
         request.GET = {"tab": "images", "category": "住院"}
         handle_reports_history_section(request, context)
         archives = context['archives_list']
-        self.assertEqual(len(archives), 1)
-        
-        # Case 3: Filter by Category (Mismatch)
-        request.GET = {"tab": "images", "category": "复查"}
-        handle_reports_history_section(request, context)
-        archives = context['archives_list']
-        self.assertEqual(len(archives), 0)
+        self.assertEqual(len(archives), 2)

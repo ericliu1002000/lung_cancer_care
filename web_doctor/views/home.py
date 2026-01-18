@@ -21,8 +21,8 @@ from users.decorators import check_doctor_or_assistant
 from users.services.patient import PatientService
 from users import choices as user_choices
 from health_data.services.medical_history_service import MedicalHistoryService
-from health_data.services.report_service import ReportArchiveService, ReportUploadService
-from health_data.models import ClinicalEvent, ReportImage, ReportUpload, UploadSource
+from health_data.services.report_service import ReportArchiveService
+from health_data.models import ClinicalEvent, ReportImage, ReportUpload
 from market.service.order import get_paid_orders_for_patient
 from core.service.treatment_cycle import (
     get_active_treatment_cycle,
@@ -249,50 +249,7 @@ def build_home_context(patient: PatientProfile) -> dict:
     else:
         current_month_str = today.strftime("%Y-%m")
 
-    # 获取患者最新的检查报告数据
-    # NOTE: 仅获取个人中心上传的报告，以保持与患者端 "我的报告" 列表一致
-    # 并且需要聚合"最新一天"的所有上传记录（处理同一天分多次上传的情况）
-    # ReportUploadService.list_uploads 返回 Page 对象，我们请求第一页共20条
-    # recent_uploads_page = ReportUploadService.list_uploads(
-    #     patient, 
-    #     page=1,
-    #     page_size=20
-    # )
-    # recent_uploads = recent_uploads_page.object_list
-    
-    # latest_images = []
-    # latest_date_str = "--"
-    
-    # if recent_uploads:
-    #     first_group_date = None
-        
-    #     for upload in recent_uploads:
-    #         images = upload.images.all()
-    #         if not images.exists():
-    #             continue
-                
-    #         first_img = images.first()
-    #         # 确定该批次的显示日期 (逻辑同 web_patient/views/my_report.py)
-    #         report_date = first_img.report_date if first_img and first_img.report_date else upload.created_at.date()
-            
-    #         if first_group_date is None:
-    #             first_group_date = report_date
-    #             latest_date_str = report_date.strftime("%Y-%m-%d")
-            
-    #         if report_date == first_group_date:
-    #             # 同一天的记录，收集图片
-    #             # 注意：这里按倒序遍历，收集到的图片可能是 2.jpg, 1.jpg
-    #             # 前端展示顺序可能需要考虑，不过通常时间倒序展示也没问题
-    #             current_batch_images = [img.image_url for img in images]
-    #             latest_images.extend(current_batch_images)
-    #         else:
-    #             # 日期变化，说明最新一天的记录已收集完毕
-    #             break
-    
-    # latest_reports = {
-    #     "upload_date": latest_date_str,
-    #     "images": latest_images
-    # }
+    # NOTE: latest_reports（检查报告最新上传展示）功能已下线，不再在主页上下文中提供该字段。
 
     # 7. 获取复查分类二级数据
     try:
@@ -314,7 +271,6 @@ def build_home_context(patient: PatientProfile) -> dict:
         "current_medication": current_medication,
         "timeline_data": timeline_data,
         "current_month": current_month_str,
-        "latest_reports": [],
         "checkup_subcategories": checkup_subcategories,
     }
 

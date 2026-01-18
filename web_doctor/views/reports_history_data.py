@@ -103,7 +103,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         
     # 2. 处理归档人
     archiver_name = "-后台接口未定义"
-    if getattr(event, "archiver_name", None):
+    if getattr(event, "archiver_name", None) and event.archiver_name not in ("未知", ""):
         archiver_name = event.archiver_name
     elif event.created_by_doctor:
         archiver_name = event.created_by_doctor.name or event.created_by_doctor.user.username
@@ -122,10 +122,10 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
     record_type_display = record_type_map.get(event.event_type, "-后台接口未定义")
 
     # 5. 处理上传人信息
-    # 逻辑：如果是由医生创建(created_by_doctor存在)，则显示医生姓名；否则显示患者姓名
+    # 业务逻辑变更：诊疗记录列表项的“图片区上传人”优先展示归档人；若归档人缺失/未知，则回退展示患者姓名。
     uploader_name = event.patient.name
-    if event.created_by_doctor:
-        uploader_name = event.created_by_doctor.name or event.created_by_doctor.user.username
+    if archiver_name != "-后台接口未定义":
+        uploader_name = archiver_name
 
     return {
         "id": event.id,
@@ -143,7 +143,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         "status": "已完成", # 默认状态
     }
 
-def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 10, start_date=None, end_date=None, category=None) -> Dict[str, Any]:
+def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 10, start_date=None, end_date=None, category=None):
     """
     获取真实的图片档案数据
     """
@@ -285,27 +285,10 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
                 "is_archived": bool(img.clinical_event)
             })
             
-    final_archives = []
-    
     for group in grouped_archives.values():
         group["image_count"] = len(group["images"])
-        
-        if category and category != "all":
-            if category == "未归档":
-                if group["is_archived"]: 
-                     continue
-            elif category in ["门诊", "住院", "复查"]:
-                if group["record_type"] != category:
-                    continue
-            
-        final_archives.append(group)
-        
-    archives_list = sorted(final_archives, key=lambda x: (x["date"], x["id"]), reverse=True)
-    
-    return {
-        "archives_list": archives_list,
-        "page_obj": uploads_page
-    }
+    archives_list = sorted(list(grouped_archives.values()), key=lambda x: (x["date"], x["id"]), reverse=True)
+    return archives_list, uploads_page
 
 
 def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
@@ -399,16 +382,13 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     # -----------------------------------------------------------
     # 处理图片档案数据 (Archives)
     # -----------------------------------------------------------
-    archives_data = _get_archives_data(
+    archives_list, archives_page_obj = _get_archives_data(
         patient, 
         page=images_page_num,
         page_size=10,
         start_date=images_start_date, 
         end_date=images_end_date
     )
-    
-    archives_list = archives_data["archives_list"]
-    archives_page_obj = archives_data["page_obj"]
 
     # 动态获取复查二级分类
     try:

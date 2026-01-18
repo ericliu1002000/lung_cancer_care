@@ -292,3 +292,78 @@ class ConsultationRecordsTests(TestCase):
         report2 = next(r for r in reports if r["id"] == self.event2.id)
         # created_by_doctor is None, should fallback to patient name ("Test Patient")
         self.assertEqual(report2["uploader_info"]["name"], "Test Patient")
+
+    def test_uploader_prefers_archiver_name_for_images_area(self):
+        upload = ReportUpload.objects.create(patient=self.patient, upload_source=UploadSource.DOCTOR_BACKEND)
+        event = ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=1,
+            event_date=date(2025, 1, 3),
+            created_by_doctor=self.doctor,
+            archiver_name="小助理",
+        )
+        ReportImage.objects.create(
+            upload=upload,
+            image_url="http://test.com/a.jpg",
+            record_type=1,
+            clinical_event=event,
+            report_date=event.event_date,
+        )
+        ReportImage.objects.create(
+            upload=upload,
+            image_url="http://test.com/b.jpg",
+            record_type=1,
+            clinical_event=event,
+            report_date=event.event_date,
+        )
+
+        request = self.factory.get("/doctor/workspace/reports?tab=records")
+        request.user = self.doctor_user
+        context = {"patient": self.patient}
+        handle_reports_history_section(request, context)
+
+        reports = context.get("reports_page").object_list
+        mapped = next(r for r in reports if r["id"] == event.id)
+        self.assertEqual(mapped["uploader_info"]["name"], "小助理")
+        self.assertEqual(mapped["image_count"], 2)
+
+    def test_uploader_pagination_consistency(self):
+        upload = ReportUpload.objects.create(patient=self.patient, upload_source=UploadSource.DOCTOR_BACKEND)
+        created_ids = []
+        for i in range(12):
+            d = date(2025, 2, 1) + timezone.timedelta(days=i)
+            event = ClinicalEvent.objects.create(
+                patient=self.patient,
+                event_type=1,
+                event_date=d,
+                created_by_doctor=self.doctor,
+                archiver_name="归档人A" if i % 2 == 0 else "归档人B",
+            )
+            created_ids.append(event.id)
+            ReportImage.objects.create(
+                upload=upload,
+                image_url=f"http://test.com/p{i}.jpg",
+                record_type=1,
+                clinical_event=event,
+                report_date=event.event_date,
+            )
+
+        request1 = self.factory.get("/doctor/workspace/reports?tab=records&records_page=1")
+        request1.user = self.doctor_user
+        context1 = {"patient": self.patient}
+        handle_reports_history_section(request1, context1)
+        page1_reports = context1["reports_page"].object_list
+        self.assertEqual(context1["reports_page"].number, 1)
+        for r in page1_reports:
+            if r["id"] in created_ids:
+                self.assertIn(r["uploader_info"]["name"], ("归档人A", "归档人B"))
+
+        request2 = self.factory.get("/doctor/workspace/reports?tab=records&records_page=2")
+        request2.user = self.doctor_user
+        context2 = {"patient": self.patient}
+        handle_reports_history_section(request2, context2)
+        page2_reports = context2["reports_page"].object_list
+        self.assertEqual(context2["reports_page"].number, 2)
+        for r in page2_reports:
+            if r["id"] in created_ids:
+                self.assertIn(r["uploader_info"]["name"], ("归档人A", "归档人B"))

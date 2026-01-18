@@ -47,13 +47,11 @@ class ReportNavigationTests(TestCase):
         """
         Test that the reports.html partial contains the link with ?tab=images.
         """
-        # We need to mock the context required by reports.html
-        # reports.html expects 'patient' and 'latest_reports'
+        # reports.html no longer depends on latest_reports (feature removed), but the link should remain correct.
         from django.template.loader import render_to_string
         
         context = {
             'patient': self.patient,
-            'latest_reports': {'upload_date': '2023-01-01', 'images': []}
         }
         
         rendered = render_to_string('web_doctor/partials/home/reports.html', context)

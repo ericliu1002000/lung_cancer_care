@@ -108,14 +108,12 @@ class TestHomeCheckupTimeline(TestCase):
     @patch('web_doctor.views.home.PatientService')
     @patch('web_doctor.views.home.MedicalHistoryService')
     @patch('web_doctor.views.home.get_active_treatment_cycle')
-    @patch('web_doctor.views.home.ReportUploadService')
     @patch('web_doctor.views.home.get_active_checkup_library')
-    def test_default_month_selection(self, mock_lib, mock_upload, mock_cycle, mock_history, mock_ps, mock_get_orders):
+    def test_default_month_selection(self, mock_lib, mock_cycle, mock_history, mock_ps, mock_get_orders):
         # Mock services to avoid errors
         mock_ps.return_value.get_guard_days.return_value = (10, 20)
         mock_history.get_last_medical_history.return_value = None
         mock_cycle.return_value = None
-        mock_upload.list_uploads.return_value.object_list = []
         mock_lib.return_value = []
 
         # Case 1: Today is in range

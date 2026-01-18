@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, RequestFactory
@@ -46,9 +46,9 @@ class ImageArchivesDateFilterTests(TestCase):
         self._create_upload_with_image(UploadSource.CHECKUP_PLAN, datetime(2025, 1, 5, 12, 0, 0))
         self._create_upload_with_image(UploadSource.PERSONAL_CENTER, datetime(2025, 1, 10, 12, 0, 0))
 
-        result = _get_archives_data(self.patient, page=1, page_size=10, start_date="2025-01-02", end_date="2025-01-09")
-        self.assertEqual(result["page_obj"].paginator.count, 1)
-        self.assertEqual(len(result["archives_list"]), 1)
+        archives_list, page_obj = _get_archives_data(self.patient, page=1, page_size=10, start_date="2025-01-02", end_date="2025-01-09")
+        self.assertEqual(page_obj.paginator.count, 1)
+        self.assertEqual(len(archives_list), 1)
 
     def test_date_values_persist_and_pagination_keeps_params(self):
         base = datetime(2025, 1, 1, 12, 0, 0)
@@ -78,4 +78,3 @@ class ImageArchivesDateFilterTests(TestCase):
         self.assertNotIn("category=", html)
         self.assertIn("startDate=2025-01-01", html)
         self.assertIn("endDate=2025-01-31", html)
-
