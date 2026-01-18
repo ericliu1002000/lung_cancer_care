@@ -23,6 +23,7 @@ from users import choices as user_choices
 from health_data.services.medical_history_service import MedicalHistoryService
 from health_data.services.report_service import ReportArchiveService, ReportUploadService
 from health_data.models import ClinicalEvent, ReportImage, ReportUpload, UploadSource
+from market.service.order import get_paid_orders_for_patient
 from core.service.treatment_cycle import (
     get_active_treatment_cycle,
     get_cycle_confirmer,
@@ -33,6 +34,101 @@ from core.service.plan_item import PlanItemService
 from core.service.checkup import get_active_checkup_library
 
 logger = logging.getLogger(__name__)
+
+def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
+    """
+    获取复查诊疗时间轴数据（基于服务包时间范围）
+    """
+    # 1. 获取已支付订单以确定时间范围
+    orders = get_paid_orders_for_patient(patient)
+    
+    start_date = None
+    end_date = None
+    
+    # 逻辑：取最新（支付时间最晚）的一个有效服务包的时间范围
+    if orders:
+        latest_order = orders[0]
+        start_date = latest_order.start_date
+        end_date = latest_order.end_date
+    
+    # 默认兜底：如果没有服务包，或者服务包时间无效，显示过去12个月
+    if not start_date or not end_date:
+        today = date.today()
+        end_date = today
+        start_date = today - timedelta(days=365)
+
+    # 2. 生成月份列表
+    months_list = []
+    curr = date(start_date.year, start_date.month, 1)
+    end_month = date(end_date.year, end_date.month, 1)
+    
+    while curr <= end_month:
+        months_list.append(curr)
+        # 下个月
+        if curr.month == 12:
+            curr = date(curr.year + 1, 1, 1)
+        else:
+            curr = date(curr.year, curr.month + 1, 1)
+            
+    # 3. 批量查询数据
+    # 查询范围内的所有 Event
+    events_qs = ClinicalEvent.objects.filter(
+        patient=patient,
+        event_date__gte=start_date,
+        event_date__lte=end_date
+    ).values('id', 'event_type', 'event_date', 'created_at')
+    
+    # 在内存中处理分组
+    events_by_month = {}
+    for event in events_qs:
+        e_date = event['event_date']
+        m_key = e_date.strftime("%Y-%m")
+        if m_key not in events_by_month:
+            events_by_month[m_key] = []
+        
+        # 转换类型显示
+        type_map = {1: "门诊", 2: "住院", 3: "复查"}
+        type_code_map = {1: "outpatient", 2: "hospitalization", 3: "checkup"}
+        
+        events_by_month[m_key].append({
+            "type": type_code_map.get(event['event_type'], "other"),
+            "type_display": type_map.get(event['event_type'], "其他"),
+            "date": e_date.strftime("%Y-%m-%d"),
+            "created_at": event['created_at']
+        })
+
+    # 4. 组装 timeline_data
+    timeline_data = []
+    for m_date in months_list:
+        month_label = m_date.strftime("%Y-%m")
+        
+        # 智能显示年份：如果是列表第一个月，或者是一月份，显示年份
+        if m_date == months_list[0] or m_date.month == 1:
+            month_name = f"{m_date.year}年{m_date.month}月"
+        else:
+            month_name = f"{m_date.month}月"
+        
+        events = events_by_month.get(month_label, [])
+        # 按日期倒序
+        events.sort(key=lambda x: x['date'], reverse=True)
+        
+        checkup_count = sum(1 for e in events if e["type"] == "checkup")
+        outpatient_count = sum(1 for e in events if e["type"] == "outpatient")
+        hospitalization_count = sum(1 for e in events if e["type"] == "hospitalization")
+        
+        timeline_data.append({
+            "month_label": month_label,
+            "month_name": month_name,
+            "events": events,
+            "checkup_count": checkup_count,
+            "outpatient_count": outpatient_count,
+            "hospitalization_count": hospitalization_count
+        })
+        
+    return {
+        "timeline_data": timeline_data,
+        "date_range": (start_date, end_date)
+    }
 
 def build_home_context(patient: PatientProfile) -> dict:
     """
@@ -136,58 +232,21 @@ def build_home_context(patient: PatientProfile) -> dict:
             "items": items
         }
 
-    # 5. TODO 模拟复查诊疗时间轴数据（当前月+前11个月）
-    from datetime import date, timedelta
-    
+    # 5. 复查诊疗时间轴数据（真实数据）
+    timeline_result = _get_checkup_timeline_data(patient)
+    timeline_data = timeline_result["timeline_data"]
+    start_date, end_date = timeline_result["date_range"]
+
+    # 默认选中当前月（如果在范围内），否则选中最后一个月
+    # 注意：timeline_data 是按时间正序排列的
     today = date.today()
-    timeline_data = []
-    
-    # 生成过去12个月的月份列表（倒序生成，然后反转以显示时间顺序）
-    for i in range(11, -1, -1):
-        # 计算月份偏移
-        # 简单处理：每月按30天估算，用于生成月份标签
-        target_date = today - timedelta(days=i*30)
-        month_label = target_date.strftime("%Y-%m")
-        month_name = f"{target_date.month}月"
-        
-        # 模拟事件数据
-        events = []
-        
-        # 仅为部分月份添加模拟数据，制造差异感
-        if i % 3 == 0:
-             events.append({
-                "type": "checkup",
-                "type_display": "复查",
-                "date": f"{target_date.year}-{target_date.month:02d}-02"
-            })
-        
-        if i % 4 == 0:
-            events.append({
-                "type": "outpatient",
-                "type_display": "门诊",
-                "date": f"{target_date.year}-{target_date.month:02d}-04"
-            })
-            
-        if i == 0: # 当前月添加住院记录
-            events.append({
-                "type": "hospitalization",
-                "type_display": "住院",
-                "date": f"{target_date.year}-{target_date.month:02d}-09"
-            })
-
-        # 统计计数
-        checkup_count = sum(1 for e in events if e["type"] == "checkup")
-        outpatient_count = sum(1 for e in events if e["type"] == "outpatient")
-        hospitalization_count = sum(1 for e in events if e["type"] == "hospitalization")
-
-        timeline_data.append({
-            "month_label": month_label,
-            "month_name": month_name,
-            "events": events,
-            "checkup_count": checkup_count,
-            "outpatient_count": outpatient_count,
-            "hospitalization_count": hospitalization_count
-        })
+    if start_date and end_date and start_date <= today <= end_date:
+        current_month_str = today.strftime("%Y-%m")
+    elif timeline_data:
+        # 默认选中最后一个月（通常是最新的）
+        current_month_str = timeline_data[-1]["month_label"]
+    else:
+        current_month_str = today.strftime("%Y-%m")
 
     # 获取患者最新的检查报告数据
     # NOTE: 仅获取个人中心上传的报告，以保持与患者端 "我的报告" 列表一致
@@ -253,7 +312,7 @@ def build_home_context(patient: PatientProfile) -> dict:
         "compliance": "用药依从率80%，数据监测完成率80%",
         "current_medication": current_medication,
         "timeline_data": timeline_data,
-        "current_month": today.strftime("%Y-%m"),
+        "current_month": current_month_str,
         "latest_reports": latest_reports,
         "checkup_subcategories": checkup_subcategories,
     }
