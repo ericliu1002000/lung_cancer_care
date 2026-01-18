@@ -85,9 +85,29 @@ urlpatterns = [
         name="batch_archive_images",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/consultation/create/",
+        views.create_consultation_record,
+        name="create_consultation_record",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/consultation/<int:event_id>/delete/",
+        views.delete_consultation_record,
+        name="delete_consultation_record",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/home/remark/update/",
         home.patient_home_remark_update,
         name="patient_home_remark_update",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/checkup/create/",
+        home.create_checkup_record,
+        name="patient_checkup_create",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/checkup/timeline/",
+        home.patient_checkup_timeline,
+        name="patient_checkup_timeline",
     ),
     path(
         "doctor/workspace/patient/<int:patient_id>/medication/stop/",

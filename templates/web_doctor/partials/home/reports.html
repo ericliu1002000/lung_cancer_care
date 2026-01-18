@@ -4,7 +4,7 @@
         <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">检查报告</h3>
         <button 
             class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports_history' %}"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports_history' %}?tab=images"
             hx-target="#patient-content"
         >
             所有报告
@@ -17,11 +17,12 @@
     <div class="p-6">
         {# 信息行 #}
         <div class="text-sm text-slate-700 font-medium mb-4">
-            最新上传： <span class="text-slate-600 font-normal">{{ latest_reports.upload_date }}</span>
+            最新上传： <span class="text-slate-600 font-normal">{% if latest_reports %}{{ latest_reports.upload_date|default:"--" }}{% else %}--{% endif %}</span>
         </div>
 
         {# 图片列表 #}
         <div class="flex flex-wrap gap-4">
+            {% if latest_reports %}
             {% for img_url in latest_reports.images %}
             <div 
                 class="w-[100px] h-[100px] relative shrink-0 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 cursor-pointer group"
@@ -35,6 +36,9 @@
             {% empty %}
             <div class="w-full text-slate-400 text-sm py-4">暂无检查报告</div>
             {% endfor %}
+            {% else %}
+            <div class="w-full text-slate-400 text-sm py-4">暂无检查报告</div>
+            {% endif %}
         </div>
     </div>
 
@@ -48,7 +52,7 @@
         x-transition:leave="transition ease-in duration-200"
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
-        style="display: none;"
+        style="display: none;z-index: 99999;"
     >
         <div class="relative max-w-4xl max-h-full" @click.outside="showPreview = false">
             <button 

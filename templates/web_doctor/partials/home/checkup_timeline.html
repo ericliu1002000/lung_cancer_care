@@ -1,11 +1,10 @@
-<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6" x-data="{ selectedMonth: '{{ current_month }}' }">
+<div id="checkup-timeline-container" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6" x-data="{ selectedMonth: '{{ current_month }}' }">
     {# 标题栏 #}
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-        <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">复查/诊疗</h3>
+        <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">复查/诊疗</h3> 
         <button 
             class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'checkup_history' %}"
-            hx-target="#patient-content"
+            onclick="document.getElementById('tab-reports').click()"
         >
             历史记录
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -18,7 +17,7 @@
         {# 顶部操作栏 #}
         <div class="flex items-center justify-between mb-8">
             <div class="flex gap-4">
-                <button @click="$dispatch('open-record-modal', { type: '' })" class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2 shadow-sm">
+                <button @click="$dispatch('open-record-modal', { type: '', source: 'timeline' })" class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2 shadow-sm">
                     <span class="text-lg leading-none">+</span> 新增记录
                 </button>
             </div>
@@ -94,13 +93,13 @@
         </div>
 
                 {# 底部详情展示区域 #}
-        <div class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto">
-            <div class="flex gap-4 min-w-max relative pt-6">
+        <div class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto ">
+            <div class="w-full flex gap-4 min-w-max relative pt-6">
                 {# 时间轴横线 #}
                 <div class="absolute top-2.5 left-0 w-full h-0.5 bg-slate-200"></div>
 
                 {% for month_data in timeline_data %}
-                <div x-show="selectedMonth === '{{ month_data.month_label }}'" class="flex gap-4 animate-fade-in">
+                <div x-show="selectedMonth === '{{ month_data.month_label }}'" class="flex gap-4 animate-fade-in ">
                     {% for event in month_data.events %}
                     <div class="relative flex flex-col items-center group">
                         {# 时间轴上的圆点 #}
@@ -127,8 +126,11 @@
                         </div>
                     </div>
                     {% empty %}
-                    <div class="text-slate-400 text-sm py-8 px-4">
-                        本月无记录
+                    <div class=" flex flex-col items-center justify-center py-8 text-slate-400 " style="width: 100%;">
+                        <svg class="w-12 h-12 mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                        </svg>
+                        <span class="text-sm">本月暂无诊疗记录</span>
                     </div>
                     {% endfor %}
                 </div>

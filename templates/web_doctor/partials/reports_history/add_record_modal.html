@@ -4,7 +4,6 @@
         isOpen: false,
         isSaving: false,
         isDragging: false,
-        sourcePage: 'timeline',
         
         // 2. 数据模型
         formData: {
@@ -24,8 +23,7 @@
         },
         
         // 4. 配置和数据
-        submitUrl: '{% url 'web_doctor:patient_checkup_create' patient.id %}',
-        refreshUrl: '{% url 'web_doctor:patient_checkup_timeline' patient.id %}',
+        submitUrl: '{% url 'web_doctor:create_consultation_record' patient.id %}',
         categories: ['门诊', '住院', '复查'],
         subcategories: {{ checkup_subcategories|safe|default:'[]' }},
         
@@ -244,12 +242,11 @@
                     // 1. 关闭弹框
                     this.closeModal();
                     
-                    // 2. 触发HTMX局部刷新
-                    htmx.ajax('GET', this.refreshUrl, {
-                        target: '#checkup-timeline-container',
-                        select: '#checkup-timeline-container',
-                        swap: 'outerHTML'
-                    });
+                    // 2. 触发列表刷新事件 (由 consultation_records.html 监听)
+                    if (result.event_id) {
+                        window.__pendingConsultationEventId = result.event_id;
+                    }
+                    document.body.dispatchEvent(new CustomEvent('refresh-records-list', { bubbles: true }));
                     
                 } else {
                     alert(result.message || '保存失败');
@@ -263,7 +260,7 @@
         }
     }
 })()"
-     @open-record-modal.window="openModal($event.detail.type, $event.detail.source)"
+     @open-add-record-modal.window="openModal($event.detail.type)"
      class="relative z-50"
      style="display: none;"
      x-show="isOpen">
@@ -293,7 +290,7 @@
                 <!-- Header -->
                 <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-0 border-b border-transparent">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-bold leading-6 text-slate-800">新增记录</h3>
+                        <h3 class="text-xl font-bold leading-6 text-slate-800">新增诊疗记录</h3>
                         <button @click="closeModal()" class="text-slate-400 hover:text-slate-500">
                             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

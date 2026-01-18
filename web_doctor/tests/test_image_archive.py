@@ -1,11 +1,15 @@
 
 import json
+from datetime import date
+
 from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
-from web_doctor.views.reports_history_data import batch_archive_images, get_mock_archives_data, _init_mock_data
-from users.models import DoctorProfile, PatientProfile
 
+from core.models import CheckupLibrary
+from health_data.models import ReportUpload, ReportImage, UploadSource
+from users.models import DoctorProfile, PatientProfile
 from users import choices
+from web_doctor.views.reports_history_data import batch_archive_images
 
 User = get_user_model()
 
@@ -29,31 +33,25 @@ class ImageArchiveTests(TestCase):
             wx_openid="test_openid"
         )
         self.patient = PatientProfile.objects.create(user=self.patient_user, name='Test Patient')
-        
-        # Initialize mock data
-        _init_mock_data()
+        self.checkup_item = CheckupLibrary.objects.create(name="CT")
         
     def test_batch_archive_images_group_edit(self):
-        # Get a mock report and its images
-        reports = get_mock_archives_data()
-        report = reports[0]
-        image1 = report['images'][0]
-        image2 = report['images'][1] if len(report['images']) > 1 else None
-        
+        upload = ReportUpload.objects.create(patient=self.patient, upload_source=UploadSource.PERSONAL_CENTER)
+        img1 = ReportImage.objects.create(upload=upload, image_url="http://test.com/1.jpg")
+        img2 = ReportImage.objects.create(upload=upload, image_url="http://test.com/2.jpg")
+
         updates = [
             {
-                "image_id": image1['id'],
+                "image_id": img1.id,
                 "category": "门诊",
                 "report_date": "2023-01-01"
             }
         ]
-        
-        if image2:
-            updates.append({
-                "image_id": image2['id'],
-                "category": "复查-CT",
-                "report_date": "2023-01-02"
-            })
+        updates.append({
+            "image_id": img2.id,
+            "category": "复查-CT",
+            "report_date": "2023-01-02"
+        })
             
         payload = {"updates": updates}
         
@@ -68,15 +66,15 @@ class ImageArchiveTests(TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        # Verify data update
-        updated_reports = get_mock_archives_data()
-        updated_report = next(r for r in updated_reports if r['id'] == report['id'])
-        
-        updated_img1 = next(img for img in updated_report['images'] if img['id'] == image1['id'])
-        self.assertEqual(updated_img1['category'], "门诊")
-        self.assertEqual(updated_img1['report_date'], "2023-01-01")
-        
-        if image2:
-            updated_img2 = next(img for img in updated_report['images'] if img['id'] == image2['id'])
-            self.assertEqual(updated_img2['category'], "复查-CT")
-            self.assertEqual(updated_img2['report_date'], "2023-01-02")
+        img1.refresh_from_db()
+        img2.refresh_from_db()
+
+        self.assertEqual(img1.record_type, ReportImage.RecordType.OUTPATIENT)
+        self.assertEqual(img1.report_date, date(2023, 1, 1))
+        self.assertIsNotNone(img1.clinical_event)
+
+        self.assertEqual(img2.record_type, ReportImage.RecordType.CHECKUP)
+        self.assertEqual(img2.report_date, date(2023, 1, 2))
+        self.assertIsNotNone(img2.checkup_item)
+        self.assertEqual(img2.checkup_item.name, "CT")
+        self.assertIsNotNone(img2.clinical_event)

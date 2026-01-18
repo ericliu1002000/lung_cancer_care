@@ -53,6 +53,12 @@ class ClinicalEvent(models.Model):
         verbose_name="记录医生",
         help_text="记录创建/归档的医生或助理。",
     )
+    archiver_name = models.CharField(
+        "归档人",
+        max_length=50,
+        default="未知",
+        help_text="用于诊疗记录列表展示归档人真实姓名，例如“小桃妖”。",
+    )
     created_at = models.DateTimeField(
         "记录创建时间",
         auto_now_add=True,

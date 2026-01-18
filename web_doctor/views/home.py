@@ -1,24 +1,135 @@
 import logging
-from django.http import HttpRequest, HttpResponse, Http404
-from django.shortcuts import render
+import random
+import json
+import os
+import uuid
+from datetime import date, timedelta, datetime
+from typing import List, Dict, Any
+
+from django.http import HttpRequest, HttpResponse, Http404, JsonResponse
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.db.models import Count
+from django.db.models.functions import TruncMonth
 
 from users.models import PatientProfile
 from users.decorators import check_doctor_or_assistant
 from users.services.patient import PatientService
 from users import choices as user_choices
 from health_data.services.medical_history_service import MedicalHistoryService
+from health_data.services.report_service import ReportArchiveService
+from health_data.models import ClinicalEvent, ReportImage, ReportUpload
+from market.service.order import get_paid_orders_for_patient
 from core.service.treatment_cycle import (
     get_active_treatment_cycle,
     get_cycle_confirmer,
     get_treatment_cycles,
 )
-from core.models import TreatmentCycle, choices
+from core.models import TreatmentCycle, choices, CheckupLibrary
 from core.service.plan_item import PlanItemService
+from core.service.checkup import get_active_checkup_library
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
+    """
+    获取复查诊疗时间轴数据（基于服务包时间范围）
+    """
+    # 1. 获取已支付订单以确定时间范围
+    orders = get_paid_orders_for_patient(patient)
+    
+    start_date = None
+    end_date = None
+    
+    # 逻辑：取最新（支付时间最晚）的一个有效服务包的时间范围
+    if orders:
+        latest_order = orders[0]
+        start_date = latest_order.start_date
+        end_date = latest_order.end_date
+    
+    # 默认兜底：如果没有服务包，或者服务包时间无效，显示过去12个月
+    if not start_date or not end_date:
+        today = date.today()
+        end_date = today
+        start_date = today - timedelta(days=365)
+
+    # 2. 生成月份列表
+    months_list = []
+    curr = date(start_date.year, start_date.month, 1)
+    end_month = date(end_date.year, end_date.month, 1)
+    
+    while curr <= end_month:
+        months_list.append(curr)
+        # 下个月
+        if curr.month == 12:
+            curr = date(curr.year + 1, 1, 1)
+        else:
+            curr = date(curr.year, curr.month + 1, 1)
+            
+    # 3. 批量查询数据
+    # 查询范围内的所有 Event
+    events_qs = ClinicalEvent.objects.filter(
+        patient=patient,
+        event_date__gte=start_date,
+        event_date__lte=end_date
+    ).values('id', 'event_type', 'event_date', 'created_at')
+    
+    # 在内存中处理分组
+    events_by_month = {}
+    for event in events_qs:
+        e_date = event['event_date']
+        m_key = e_date.strftime("%Y-%m")
+        if m_key not in events_by_month:
+            events_by_month[m_key] = []
+        
+        # 转换类型显示
+        type_map = {1: "门诊", 2: "住院", 3: "复查"}
+        type_code_map = {1: "outpatient", 2: "hospitalization", 3: "checkup"}
+        
+        events_by_month[m_key].append({
+            "type": type_code_map.get(event['event_type'], "other"),
+            "type_display": type_map.get(event['event_type'], "其他"),
+            "date": timezone.localtime(event['created_at']).strftime("%Y-%m-%d %H:%M:%S") if event.get('created_at') else e_date.strftime("%Y-%m-%d 00:00:00"),
+            "created_at": event['created_at']
+        })
+
+    # 4. 组装 timeline_data
+    timeline_data = []
+    for m_date in months_list:
+        month_label = m_date.strftime("%Y-%m")
+        
+        # 智能显示年份：如果是列表第一个月，或者是一月份，显示年份
+        if m_date == months_list[0] or m_date.month == 1:
+            month_name = f"{m_date.year}年{m_date.month}月"
+        else:
+            month_name = f"{m_date.month}月"
+        
+        events = events_by_month.get(month_label, [])
+        # 按日期倒序
+        events.sort(key=lambda x: x['date'], reverse=True)
+        
+        checkup_count = sum(1 for e in events if e["type"] == "checkup")
+        outpatient_count = sum(1 for e in events if e["type"] == "outpatient")
+        hospitalization_count = sum(1 for e in events if e["type"] == "hospitalization")
+        
+        timeline_data.append({
+            "month_label": month_label,
+            "month_name": month_name,
+            "events": events,
+            "checkup_count": checkup_count,
+            "outpatient_count": outpatient_count,
+            "hospitalization_count": hospitalization_count
+        })
+        
+    return {
+        "timeline_data": timeline_data,
+        "date_range": (start_date, end_date)
+    }
 
 def build_home_context(patient: PatientProfile) -> dict:
     """
@@ -122,58 +233,33 @@ def build_home_context(patient: PatientProfile) -> dict:
             "items": items
         }
 
-    # 5. TODO 模拟复查诊疗时间轴数据（当前月+前11个月）
-    from datetime import date, timedelta
-    
+    # 5. 复查诊疗时间轴数据（真实数据）
+    timeline_result = _get_checkup_timeline_data(patient)
+    timeline_data = timeline_result["timeline_data"]
+    start_date, end_date = timeline_result["date_range"]
+
+    # 默认选中当前月（如果在范围内），否则选中最后一个月
+    # 注意：timeline_data 是按时间正序排列的
     today = date.today()
-    timeline_data = []
-    
-    # 生成过去12个月的月份列表（倒序生成，然后反转以显示时间顺序）
-    for i in range(11, -1, -1):
-        # 计算月份偏移
-        # 简单处理：每月按30天估算，用于生成月份标签
-        target_date = today - timedelta(days=i*30)
-        month_label = target_date.strftime("%Y-%m")
-        month_name = f"{target_date.month}月"
-        
-        # 模拟事件数据
-        events = []
-        
-        # 仅为部分月份添加模拟数据，制造差异感
-        if i % 3 == 0:
-             events.append({
-                "type": "checkup",
-                "type_display": "复查",
-                "date": f"{target_date.year}-{target_date.month:02d}-02"
-            })
-        
-        if i % 4 == 0:
-            events.append({
-                "type": "outpatient",
-                "type_display": "门诊",
-                "date": f"{target_date.year}-{target_date.month:02d}-04"
-            })
-            
-        if i == 0: # 当前月添加住院记录
-            events.append({
-                "type": "hospitalization",
-                "type_display": "住院",
-                "date": f"{target_date.year}-{target_date.month:02d}-09"
-            })
+    if start_date and end_date and start_date <= today <= end_date:
+        current_month_str = today.strftime("%Y-%m")
+    elif timeline_data:
+        # 默认选中最后一个月（通常是最新的）
+        current_month_str = timeline_data[-1]["month_label"]
+    else:
+        current_month_str = today.strftime("%Y-%m")
 
-        # 统计计数
-        checkup_count = sum(1 for e in events if e["type"] == "checkup")
-        outpatient_count = sum(1 for e in events if e["type"] == "outpatient")
-        hospitalization_count = sum(1 for e in events if e["type"] == "hospitalization")
+    # NOTE: latest_reports（检查报告最新上传展示）功能已下线，不再在主页上下文中提供该字段。
 
-        timeline_data.append({
-            "month_label": month_label,
-            "month_name": month_name,
-            "events": events,
-            "checkup_count": checkup_count,
-            "outpatient_count": outpatient_count,
-            "hospitalization_count": hospitalization_count
-        })
+    # 7. 获取复查分类二级数据
+    try:
+        checkup_lib = get_active_checkup_library()
+        # 转换为前端友好的格式
+        # get_active_checkup_library 返回 TypedDict，需用 key 访问
+        checkup_subcategories = [item['name'] for item in checkup_lib]
+    except Exception as e:
+        logger.error(f"Failed to load checkup library: {e}")
+        checkup_subcategories = []
 
     return {
         "served_days": served_days,
@@ -181,28 +267,48 @@ def build_home_context(patient: PatientProfile) -> dict:
         "doctor_info": doctor_info,
         "medical_info": medical_info,
         "patient": patient,
-        "compliance": "用药依从率86%，数据监测完成率68%",
+        "compliance": "用药依从率80%，数据监测完成率80%",
         "current_medication": current_medication,
         "timeline_data": timeline_data,
-        "current_month": today.strftime("%Y-%m"),
-        "latest_reports": {
-            "upload_date": "2025-11-12 14:22",
-            "images": [
-                "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-                 "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-                 "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-                 "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-            ]
-        }
+        "current_month": current_month_str,
+        "checkup_subcategories": checkup_subcategories,
     }
+
+@login_required
+@check_doctor_or_assistant
+def patient_checkup_timeline(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    Partial view to refresh the checkup timeline.
+    """
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    timeline_result = _get_checkup_timeline_data(patient)
+    timeline_data = timeline_result["timeline_data"]
+    start_date, end_date = timeline_result["date_range"]
+    
+    # Logic for default selected month (same as build_home_context)
+    today = date.today()
+    if start_date and end_date and start_date <= today <= end_date:
+        current_month_str = today.strftime("%Y-%m")
+    elif timeline_data:
+        current_month_str = timeline_data[-1]["month_label"]
+    else:
+        current_month_str = today.strftime("%Y-%m")
+    
+    # 获取复查分类二级数据
+    try:
+        checkup_lib = get_active_checkup_library()
+        checkup_subcategories = [item['name'] for item in checkup_lib]
+    except Exception as e:
+        logger.error(f"Failed to load checkup library: {e}")
+        checkup_subcategories = []
+
+    context = {
+        "timeline_data": timeline_data,
+        "current_month": current_month_str,
+        "patient": patient,
+        "checkup_subcategories": checkup_subcategories,
+    }
+    return render(request, "web_doctor/partials/home/checkup_timeline.html", context)
 
 def get_checkup_history_data(filters: dict) -> list:
     """
@@ -260,7 +366,7 @@ def handle_checkup_history_section(request: HttpRequest, context: dict) -> str:
         "operator": request.GET.get("operator", ""),
     }
     
-    history_list = get_checkup_history_data(filters)
+    history_list = get_checkup_history_data(context["patient"], filters)
         
     paginator = Paginator(history_list, 10)
     try:
@@ -313,7 +419,7 @@ def handle_medication_history_section(request: HttpRequest, context: dict) -> st
         plan_view = PlanItemService.get_cycle_plan_view(cycle.id)
         active_meds = [m for m in plan_view["medications"] if m["is_active"]]
         
-        items = []
+        items = [] 
         for med in active_meds:
             items.append({
                 "name": med["name"],
@@ -401,9 +507,140 @@ def patient_medication_stop(request: HttpRequest, patient_id: int) -> HttpRespon
     return HttpResponse("""
         <script>
             document.getElementById('stop-medication-modal').close();
-            // 可选：刷新页面或局部刷新
-            // location.reload(); 
-            // 或者弹出提示
+            # // 可选：刷新页面或局部刷新
+            # // location.reload(); 
+            # // 或者弹出提示
             alert('用药方案已停止');
         </script>
     """)
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def create_checkup_record(request: HttpRequest, patient_id: int) -> JsonResponse:
+    """
+    新增诊疗记录接口
+    """
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    
+    # 1. 解析表单基本数据
+    record_type_str = request.POST.get("record_type")
+    report_date_str = request.POST.get("report_date")
+    hospital = request.POST.get("hospital", "")
+    remarks = request.POST.get("remarks", "")
+    
+    if not record_type_str or not report_date_str:
+        return JsonResponse({"status": "error", "message": "缺少必填参数"}, status=400)
+        
+    # 映射记录类型
+    type_map = {"门诊": 1, "住院": 2, "复查": 3}
+    event_type = type_map.get(record_type_str)
+    if not event_type:
+        return JsonResponse({"status": "error", "message": "无效的记录类型"}, status=400)
+        
+    try:
+        event_date = datetime.strptime(report_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return JsonResponse({"status": "error", "message": "日期格式错误"}, status=400)
+        
+    # 2. 解析文件及其元数据
+    # 前端传递 files[] 数组和 file_metadata JSON 字符串
+    # file_metadata 结构: [{"name": "filename", "category": "...", "subcategory": "..."}, ...]
+    file_metadata_json = request.POST.get("file_metadata")
+    if not file_metadata_json:
+        return JsonResponse({"status": "error", "message": "缺少文件元数据"}, status=400)
+        
+    try:
+        file_metadata_list = json.loads(file_metadata_json)
+        # 转为以文件名(或索引)为key的字典，方便查找
+        # 这里假设 metadata 顺序与 files 顺序一致，或者通过 name 匹配
+        metadata_map = {m["name"]: m for m in file_metadata_list}
+    except json.JSONDecodeError:
+        return JsonResponse({"status": "error", "message": "元数据格式错误"}, status=400)
+        
+    files = request.FILES.getlist("files[]")
+    if not files:
+        # 尝试 'files' key
+        files = request.FILES.getlist("files")
+        
+    if not files:
+         return JsonResponse({"status": "error", "message": "请上传至少一张图片"}, status=400)
+         
+    # 3. 处理文件上传并构造 Service 参数
+    image_payloads = []
+    upload_dir = f"examination_reports/{patient.id}/{event_date}"
+    
+    # 预加载复查项目库，减少数据库查询
+    checkup_libs = {lib.name: lib for lib in CheckupLibrary.objects.all()}
+    
+    try:
+        for file in files:
+            # 获取对应的元数据
+            meta = metadata_map.get(file.name)
+            if not meta:
+                # 如果找不到名字匹配，尝试按顺序匹配（这就要求前端必须严格有序）
+                # 暂时报错处理
+                logger.warning(f"Missing metadata for file: {file.name}")
+                continue
+                
+            category = meta.get("category")
+            subcategory = meta.get("subcategory")
+            
+            # 保存文件
+            ext = os.path.splitext(file.name)[1].lower()
+            filename = f"{uuid.uuid4()}{ext}"
+            file_path = f"{upload_dir}/{filename}"
+            
+            saved_path = default_storage.save(file_path, ContentFile(file.read()))
+            image_url = default_storage.url(saved_path)
+            
+            payload = {
+                "image_url": image_url,
+            }
+            
+            # 处理复查项目逻辑
+            if event_type == 3: # 复查
+                if category == "复查" and subcategory:
+                    lib_item = checkup_libs.get(subcategory)
+                    if lib_item:
+                        payload["checkup_item"] = lib_item
+                    else:
+                        # 如果找不到对应的复查项目，可能需要创建一个或者报错
+                        # 这里暂时忽略或设为空，但 Service 层可能会校验
+                        # Service check: if record_type == CHECKUP and not checkup_item: raise ValidationError
+                        # 所以我们必须提供 checkup_item。如果名字匹配不上，可能是一个新项目？
+                        # 为防止报错，如果找不到，我们可以尝试查找 "其他"
+                        payload["checkup_item"] = checkup_libs.get("其他")
+                else:
+                    # 如果分类不是复查，但 event_type 是复查，这在业务逻辑上有点冲突
+                    # 但 ReportArchiveService create_record_with_images 要求：
+                    # if event_type == CHECKUP and not checkup_item: raise ValidationError
+                    # 所以必须有 checkup_item
+                    payload["checkup_item"] = checkup_libs.get("其他")
+            
+            image_payloads.append(payload)
+            
+        if not image_payloads:
+             return JsonResponse({"status": "error", "message": "文件处理失败"}, status=400)
+
+        # 4. 调用 Service
+        doctor_profile = request.user.doctor_profile if hasattr(request.user, "doctor_profile") else None
+        
+        ReportArchiveService.create_record_with_images(
+            patient=patient,
+            created_by_doctor=doctor_profile,
+            event_type=event_type,
+            event_date=event_date,
+            images=image_payloads,
+            hospital_name=hospital,
+            interpretation=remarks,
+            uploader=request.user
+        )
+        
+        return JsonResponse({"status": "success", "message": "创建成功"})
+        
+    except ValidationError as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    except Exception as e:
+        logger.exception(f"Create checkup record failed: {e}")
+        return JsonResponse({"status": "error", "message": "系统错误"}, status=500)

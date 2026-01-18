@@ -280,6 +280,7 @@ LOGGING = {
     },
 }
 
+
 # 测试环境下禁用控制台日志输出，避免污染测试结果
 if 'test' in sys.argv:
     LOGGING['handlers']['console'] = {'class': 'logging.NullHandler'}
