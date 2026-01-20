@@ -43,9 +43,14 @@ class PlanTableHeaderStylesTests(TestCase):
             },
         )
 
-        self.assertIn("01/01", html)
-        self.assertIn("01/08", html)
-        self.assertIn("01/15", html)
+        self.assertIn('data-plan-date="01/01"', html)
+        self.assertIn('data-plan-date="01/08"', html)
+        self.assertIn('data-plan-date="01/15"', html)
+        self.assertNotIn(">01/01<", html)
+        self.assertNotIn(">01/08<", html)
+        self.assertNotIn(">01/15<", html)
+        self.assertIn('id="plan-day-tooltip"', html)
+        self.assertIn("var showDelayMs = 300", html)
         self.assertIn("D2", html)
 
         self.assertEqual(html.count("border-r border-gray-200"), 3)
