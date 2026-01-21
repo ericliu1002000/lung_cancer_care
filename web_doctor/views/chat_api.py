@@ -5,10 +5,37 @@ from django.views.decorators.http import require_GET, require_POST
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from chat.services.chat import ChatService
 from chat.models import Conversation
 from users.decorators import check_doctor_or_assistant
 from users.models.patient_profile import PatientProfile
+
+
+def _format_datetime_for_display(dt) -> str:
+    if not dt:
+        return ""
+    try:
+        local_dt = timezone.localtime(dt)
+    except Exception:
+        local_dt = dt
+    return local_dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _serialize_message(msg) -> dict:
+    created_at_iso = msg.created_at.isoformat() if getattr(msg, "created_at", None) else ""
+    return {
+        "id": msg.id,
+        "sender_id": msg.sender_id,
+        "sender_role": msg.sender_role_snapshot,
+        "sender_name": msg.sender_display_name_snapshot,
+        "studio_name": msg.studio_name_snapshot,
+        "content_type": msg.content_type,
+        "text_content": msg.text_content,
+        "image_url": msg.image.url if msg.image else "",
+        "created_at": created_at_iso,
+        "created_at_display": _format_datetime_for_display(getattr(msg, "created_at", None)),
+    }
 
 @require_GET
 @login_required
@@ -120,6 +147,7 @@ def get_chat_context(request: HttpRequest):
         'data': {
             'user_name': real_name,
             'role_label': role_label,
+            'is_director': is_director,
             'studio_name': studio.name if studio else '',
             # New fields
             'tab_patient_label': tab_patient_label,
@@ -154,6 +182,10 @@ def list_conversations(request: HttpRequest):
     for studio in studios:
         summaries = service.list_patient_conversation_summaries(studio, user)
         all_summaries.extend(summaries)
+
+    for summary in all_summaries:
+        last_message_at = summary.get("last_message_at")
+        summary["last_message_at_display"] = _format_datetime_for_display(last_message_at)
         
     # Sort by last message time descending
     all_summaries.sort(key=lambda x: str(x.get('last_message_at') or ''), reverse=True)
@@ -185,19 +217,7 @@ def list_messages(request: HttpRequest):
             
         messages = service.list_conversation_messages(conversation, after_id=after_id)
         
-        data = []
-        for msg in messages:
-            data.append({
-                'id': msg.id,
-                'sender_id': msg.sender_id,
-                'sender_role': msg.sender_role_snapshot,
-                'sender_name': msg.sender_display_name_snapshot,
-                'studio_name': msg.studio_name_snapshot,
-                'content_type': msg.content_type,
-                'text_content': msg.text_content,
-                'image_url': msg.image.url if msg.image else '',
-                'created_at': msg.created_at.isoformat(),
-            })
+        data = [_serialize_message(msg) for msg in messages]
             
         return JsonResponse({'status': 'success', 'messages': data})
     except Conversation.DoesNotExist:
@@ -226,7 +246,8 @@ def send_text_message(request: HttpRequest):
             'status': 'success',
             'message': {
                 'id': message.id,
-                'created_at': message.created_at.isoformat()
+                'created_at': message.created_at.isoformat(),
+                'created_at_display': _format_datetime_for_display(message.created_at),
             }
         })
     except Conversation.DoesNotExist:
@@ -257,6 +278,7 @@ def upload_image_message(request: HttpRequest):
             'message': {
                 'id': message.id,
                 'created_at': message.created_at.isoformat(),
+                'created_at_display': _format_datetime_for_display(message.created_at),
                 'image_url': message.image.url
             }
         })
@@ -289,7 +311,8 @@ def forward_message(request: HttpRequest):
             'status': 'success',
             'message': {
                 'id': message.id,
-                'created_at': message.created_at.isoformat()
+                'created_at': message.created_at.isoformat(),
+                'created_at_display': _format_datetime_for_display(message.created_at),
             }
         })
     except Conversation.DoesNotExist:
