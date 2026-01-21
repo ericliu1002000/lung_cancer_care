@@ -32,6 +32,7 @@ MONITORING_ADHERENCE_TYPES = (
 
 # TODO 支持起止时间查询。如果没写，就查当天的。 如果写了，就查起止时间内的。
 # 今日计划  复查和问卷  今日计划测7天内的。 
+# TODO 用药依从性（当前服务包内）   一般监测依从性（当前服务包内）
 def get_daily_plan_summary(
     patient: PatientProfile,
     task_date: date = date.today(),
