@@ -511,9 +511,14 @@ function chatWidget() {
 
                 const rawRemainingHeight = viewportHeight - topNavHeight - todoHeight - chatHeaderHeight;
                 let maxHeight = Math.max(240, Math.min(rawRemainingHeight, viewportHeight));
+                if (maxHeight < 390) {
+                    maxHeight = 280; 
+                }
+
                 if (maxHeight > 500) {
                     maxHeight = 440; 
                 }
+                
                 messagesEl.style.maxHeight = `${maxHeight}px`;
                 messagesEl.style.height = '';
                 messagesEl.style.minHeight = '';
@@ -591,12 +596,3 @@ function chatWidget() {
     }
 }
 </script>
-
-<!-- 
-@Test Cases:
-1. 空状态测试: 初始加载页面，应显示“请从左侧选择患者开始聊天”提示 (data-test="empty-state" visible)。
-2. 患者选择测试: 模拟触发 update-chat-patient 事件，应隐藏空状态，显示聊天界面，且标题栏显示患者姓名。
-3. 消息发送测试: 在输入框 (data-test="chat-input") 输入文本，点击发送 (data-test="send-btn")，应立即在列表显示新消息。
-4. 角色区分测试: 检查消息列表，自己发送的消息应在右侧 (flex-row-reverse)，对方消息在左侧。
-5. 异常处理测试: 断网情况下发送消息，应弹出 alert 提示失败，并移除临时消息。
--->
