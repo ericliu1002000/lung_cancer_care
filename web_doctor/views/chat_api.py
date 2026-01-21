@@ -37,6 +37,38 @@ def _serialize_message(msg) -> dict:
         "created_at_display": _format_datetime_for_display(getattr(msg, "created_at", None)),
     }
 
+
+def _can_view_conversation(user, conversation: Conversation, service: ChatService) -> bool:
+    if conversation is None or user is None:
+        return False
+
+    if service._is_user_studio_member(user, conversation.studio):
+        return True
+
+    patient = getattr(conversation, "patient", None)
+    patient_doctor = getattr(patient, "doctor", None) if patient else None
+    patient_studio = getattr(patient_doctor, "studio", None) if patient_doctor else None
+
+    if not patient_studio:
+        return False
+
+    if service._is_user_studio_member(user, patient_studio):
+        return True
+
+    return False
+
+
+def _log_permission_denied(request: HttpRequest, conversation: Conversation, reason: str) -> None:
+    user = getattr(request, "user", None)
+    doctor_profile = getattr(user, "doctor_profile", None)
+    assistant_profile = getattr(user, "assistant_profile", None)
+    patient = getattr(conversation, "patient", None)
+    patient_doctor = getattr(patient, "doctor", None) if patient else None
+    patient_studio = getattr(patient_doctor, "studio", None) if patient_doctor else None
+
+    
+
+
 @require_GET
 @login_required
 @check_doctor_or_assistant
@@ -203,10 +235,17 @@ def list_messages(request: HttpRequest):
         
     service = ChatService()
     try:
-        conversation = Conversation.objects.get(pk=conversation_id)
-        # 简单权限检查：确保用户属于该工作室
-        if not service._is_user_studio_member(request.user, conversation.studio):
-             return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+        conversation = (
+            Conversation.objects.select_related("patient", "patient__doctor", "patient__doctor__studio", "studio")
+            .get(pk=conversation_id)
+        )
+
+        if not _can_view_conversation(request.user, conversation, service):
+            _log_permission_denied(request, conversation, "list_messages")
+            return JsonResponse(
+                {"status": "error", "message": "Permission denied", "code": "permission_denied"},
+                status=403,
+            )
 
         after_id = request.GET.get('after_id')
         if after_id:
@@ -358,10 +397,16 @@ def get_unread_count(request: HttpRequest):
         
     service = ChatService()
     try:
-        conversation = Conversation.objects.get(pk=conversation_id)
-        # 权限检查
-        if not service._is_user_studio_member(request.user, conversation.studio):
-             return JsonResponse({'status': 'error', 'message': 'Permission denied'}, status=403)
+        conversation = (
+            Conversation.objects.select_related("patient", "patient__doctor", "patient__doctor__studio", "studio")
+            .get(pk=conversation_id)
+        )
+        if not _can_view_conversation(request.user, conversation, service):
+            _log_permission_denied(request, conversation, "get_unread_count")
+            return JsonResponse(
+                {"status": "error", "message": "Permission denied", "code": "permission_denied"},
+                status=403,
+            )
              
         count = service.get_unread_count(conversation, request.user)
         return JsonResponse({'status': 'success', 'unread_count': count})

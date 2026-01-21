@@ -33,9 +33,6 @@
             </button>
         </div>
         </div>
-        <div x-show="patientId && !canChat && activeTab === 'patient'" class="mt-2 text-xs text-slate-500 text-center" style="display: none;">
-            主任查看模式：对患者会话只读
-        </div>
     </div>
 
     <!-- 空状态 -->
@@ -220,7 +217,6 @@ function chatWidget() {
             this.syncChatPermission('init');
             this.$watch('activeTab', () => this.syncChatPermission('activeTab'));
             this.$watch(() => JSON.stringify(this.permissions), () => this.syncChatPermission('permissions'));
-            this.$watch('isDirector', () => this.debugLog('isDirector', { isDirector: this.isDirector }));
             this.updateLayoutHeights();
             this._onResize = () => {
                 this.updateLayoutHeights();
@@ -258,16 +254,10 @@ function chatWidget() {
                         this.internalUnreadCount = info.internal_unread_count || 0;
                         this.isDirector = !!(info.is_director ?? (info.role_label == '主任'));
                         this.syncChatPermission('fetchContext');
-                        this.debugLog('context', {
-                            roleLabel: info.role_label,
-                            isDirector: this.isDirector,
-                            permissions: { ...this.permissions },
-                            patientId: this.patientId,
-                        });
+                        
                     }
                 }
             } catch (e) {
-                console.error('获取上下文失败', e);
                 // Fallback
                 const userType = "{{ request.user.user_type }}";
                 const userName = "{{ request.user.display_name }}";
@@ -297,7 +287,6 @@ function chatWidget() {
         switchTab(tab) {
             if (this.activeTab === tab) return;
             this.activeTab = tab;
-            this.debugLog('switchTab', { activeTab: this.activeTab, canChat: this.canChat, permissions: { ...this.permissions } });
             
             // 切换到内部会话时，清除未读
             if (tab === 'internal' && this.conversations.internal) {
@@ -321,7 +310,24 @@ function chatWidget() {
             
             this.loading = true;
             try {
-                const msgRes = await fetch(`/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`);
+                const url = `/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`;
+                const msgRes = await fetch(url);
+                if (msgRes.status === 403) {
+                    await this.fetchContext(this.patientId);
+                    if (this.currentConversationId) {
+                        const retryUrl = `/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`;
+                        const retryRes = await fetch(retryUrl);
+                        const retryData = await retryRes.json();
+                        if (retryData.status === 'success') {
+                            this.messages = retryData.messages;
+                            this.scrollToBottom();
+                            if (this.messages.length > 0) {
+                                this.markRead(this.currentConversationId, this.messages[this.messages.length - 1].id);
+                            }
+                            return;
+                        }
+                    }
+                }
                 const msgData = await msgRes.json();
                 
                 if (msgData.status === 'success') {
@@ -333,7 +339,6 @@ function chatWidget() {
                     }
                 }
             } catch (e) {
-                console.error('加载消息失败', e);
             } finally {
                 this.loading = false;
             }
@@ -343,7 +348,6 @@ function chatWidget() {
             const content = this.inputText.trim();
             if (!content || !this.patientId) return;
             if (!this.canChat) {
-                this.debugLog('sendBlocked', { activeTab: this.activeTab, isDirector: this.isDirector, permissions: { ...this.permissions } });
                 return;
             }
 
@@ -394,7 +398,6 @@ function chatWidget() {
                     throw new Error(data.message);
                 }
             } catch (e) {
-                console.error('发送失败', e);
                 this.messages.pop(); // 移除失败消息
                 alert('发送失败: ' + e.message);
             }
@@ -416,12 +419,15 @@ function chatWidget() {
         async pollUnreadCount() {
             try {
                 const res = await fetch(`/doctor/chat/api/messages/unread-count/?conversation_id=${this.conversations.internal}`);
+                if (res.status === 403) {
+                    await this.fetchContext(this.patientId);
+                    return;
+                }
                 const data = await res.json();
                 if (data.status === 'success') {
                     this.internalUnreadCount = data.unread_count;
                 }
             } catch (e) {
-                console.error('Unread poll error', e);
             }
         },
 
@@ -431,7 +437,12 @@ function chatWidget() {
             if (!lastId || String(lastId).startsWith('temp')) return; // 只有临时消息时不轮询增量
 
             try {
-                const res = await fetch(`/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}&after_id=${lastId}`);
+                const url = `/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}&after_id=${lastId}`;
+                const res = await fetch(url);
+                if (res.status === 403) {
+                    await this.fetchContext(this.patientId);
+                    return;
+                }
                 const data = await res.json();
                 if (data.status === 'success' && data.messages.length > 0) {
                     // 过滤掉已存在的（以防万一）
@@ -471,22 +482,13 @@ function chatWidget() {
             });
         },
 
-        debugLog(event, payload = {}) {
-            if (!this.debugEnabled) return;
-            console.log('[DoctorChat]', event, payload);
-        },
+       
 
         syncChatPermission(reason = '') {
             const next = !!this.permissions[this.activeTab];
             const changed = this.canChat !== next;
             this.canChat = next;
-            this.debugLog('syncChatPermission', {
-                reason,
-                activeTab: this.activeTab,
-                canChat: this.canChat,
-                isDirector: this.isDirector,
-                permissions: { ...this.permissions },
-            });
+           
             if (changed) {
                 this.$nextTick(() => this.updateLayoutHeights());
             }
@@ -508,10 +510,10 @@ function chatWidget() {
                 const chatHeaderHeight = chatHeaderEl ? chatHeaderEl.getBoundingClientRect().height : 0;
 
                 const rawRemainingHeight = viewportHeight - topNavHeight - todoHeight - chatHeaderHeight;
-                const maxHeight = Math.max(240, Math.min(rawRemainingHeight, viewportHeight));
+                let maxHeight = Math.max(240, Math.min(rawRemainingHeight, viewportHeight));
                 if (maxHeight > 500) {
-  maxHeight = 490;
-}
+                    maxHeight = 440; 
+                }
                 messagesEl.style.maxHeight = `${maxHeight}px`;
                 messagesEl.style.height = '';
                 messagesEl.style.minHeight = '';

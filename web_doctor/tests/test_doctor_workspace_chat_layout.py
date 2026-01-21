@@ -32,4 +32,5 @@ class DoctorWorkspaceChatLayoutTest(TestCase):
         self.assertIn("doctor-chat-input", content)
         self.assertIn('doctor-chat-input" x-show="canChat"', content)
         self.assertNotIn("clamp(120px, 16vh, 360px)", content)
-        self.assertIn("height: 120px", content)
+        self.assertNotIn("--doctor-chat-input-height", content)
+        self.assertIn("this.canChat ? 120 : 0", content)
