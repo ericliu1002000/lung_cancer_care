@@ -9,6 +9,7 @@ from core.models import CheckupLibrary, DailyTask
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import HealthMetric, MetricType
 from users.models import CustomUser, PatientProfile
+from market.models import Product, Order
 
 
 class HealthRecordDetailReviewRecordTests(TestCase):
@@ -20,6 +21,14 @@ class HealthRecordDetailReviewRecordTests(TestCase):
             wx_openid="test_openid_health_record_detail",
         )
         self.patient = PatientProfile.objects.create(user=self.user, name="Test Patient")
+        product = Product.objects.create(name="VIP 服务包", price=Decimal("199.00"), duration_days=30)
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.now(),
+        )
         self.client.force_login(self.user)
         self.url = reverse("web_patient:health_record_detail")
 

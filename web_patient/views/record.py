@@ -12,12 +12,20 @@ from patient_alerts.services.todo_list import TodoListService
 from core.service.tasks import get_daily_plan_summary
 from core.service.checkup import get_active_checkup_library
 from market.service.order import get_paid_orders_for_patient
+from wx.services.oauth import generate_menu_auth_url
 import os
 from decimal import Decimal
 from datetime import datetime
 from django.contrib import messages
 from users.decorators import auto_wechat_login, check_patient
 import logging
+
+
+def _is_member(patient) -> bool:
+    return bool(
+        getattr(patient, "is_member", False)
+        and getattr(patient, "membership_expire_date", None)
+    )
 
 
 @auto_wechat_login
@@ -29,6 +37,9 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
     patient = request.patient
     if not patient:
         return JsonResponse({"error": "No patient info"}, status=400)
+
+    if not _is_member(patient):
+        return JsonResponse({"success": True, "plans": {}})
     
     # 1. 获取今日计划摘要 (包含完成状态)
     summary_list = get_daily_plan_summary(patient)
@@ -129,6 +140,21 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         result[plan_type] = plan_data
 
     return JsonResponse({"success": True, "plans": result})
+
+
+@auto_wechat_login
+@check_patient
+def membership_status(request: HttpRequest) -> JsonResponse:
+    patient = request.patient
+    if not patient:
+        return JsonResponse({"success": False, "message": "未找到患者信息"}, status=400)
+    return JsonResponse(
+        {
+            "success": True,
+            "is_member": _is_member(patient),
+            "buy_url": generate_menu_auth_url("market:product_buy"),
+        }
+    )
 
 
 @auto_wechat_login
@@ -630,21 +656,22 @@ def health_records(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     patient_id = patient.id or None
-
-    orders = get_paid_orders_for_patient(patient)
+    is_member = _is_member(patient)
     selected_package_id = request.GET.get("package_id")
 
     service_packages = []
-    for order in orders:
-        service_packages.append(
-            {
-                "id": order.id,
-                "name": order.product.name if getattr(order, "product_id", None) else "",
-                "start_date": order.start_date,
-                "end_date": order.end_date,
-                "is_active": False,
-            }
-        )
+    if is_member:
+        orders = get_paid_orders_for_patient(patient)
+        for order in orders:
+            service_packages.append(
+                {
+                    "id": order.id,
+                    "name": order.product.name if getattr(order, "product_id", None) else "",
+                    "start_date": order.start_date,
+                    "end_date": order.end_date,
+                    "is_active": False,
+                }
+            )
 
     selected_package = None
     if service_packages:
@@ -744,143 +771,141 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 except Exception as e:
                     logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
                     # 保持默认值 0
-    # 随访问卷
-    health_survey_stats = [
-        {
-            "type": "physical",
-            "title": "体能评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "physical",
-        },
-        {
-            "type": "breath",
-            "title": "呼吸评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "breath",
-        },
-        {
-            "type": "cough",
-            "title": "咳嗽与痰色评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "cough",
-        },
-        {
-            "type": "appetite",
-            "title": "食欲评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "appetite",
-        },
-        {
-            "type": "pain",
-            "title": "身体疼痛评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "pain",
-        },
-        {
-            "type": "sleep",
-            "title": "睡眠质量评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "sleep",
-        },
-        {
-            "type": "psych",
-            "title": "抑郁评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "psych",
-        },
-        {
-            "type": "anxiety",
-            "title": "焦虑评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "anxiety",
-        },
-    ]
-    # 动态获取各项指标的总数
-    if patient_id:
-        metric_type_map_survey = {
-            "physical": QuestionnaireCode.Q_PHYSICAL,
-            "breath": QuestionnaireCode.Q_BREATH,
-            "cough": QuestionnaireCode.Q_COUGH,
-            "appetite": QuestionnaireCode.Q_APPETITE,
-            "pain": QuestionnaireCode.Q_PAIN,
-            "sleep": QuestionnaireCode.Q_SLEEP,
-            "psych": QuestionnaireCode.Q_PSYCH,
-            "anxiety": QuestionnaireCode.Q_ANXIETY,
-        }
-
-        for item in health_survey_stats:
-            m_type = metric_type_map_survey.get(item["type"])
-            if m_type:
-                try:
-                    # 调用 Service 获取分页对象，从而获取总数
-                    # page=1, page_size=1 最小化数据传输
-                    page_obj = HealthMetricService.query_metrics_by_type(
-                        patient_id=int(patient_id),
-                        metric_type=m_type,
-                        page=1,
-                        page_size=1,
-                        start_date=start_dt,
-                        end_date=end_dt,
-                    )
-                    item["count"] = page_obj.paginator.count
-
-                    # 获取异常次数
-                    item["abnormal"] = TodoListService.count_abnormal_events(
-                        patient=patient,
-                        start_date=start_date,
-                        end_date=end_date,
-                        type_code=m_type,
-                    )
-                except Exception as e:
-                    logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
-                    # 保持默认值 0
-    # 复查项目
-    checkup_library_items = get_active_checkup_library()
+    health_survey_stats = []
     checkup_stats = []
-    if patient_id and checkup_library_items:
-        for chk in checkup_library_items:
-            lib_id = chk.get("lib_id")
-            if not lib_id:
-                continue
+    if is_member:
+        health_survey_stats = [
+            {
+                "type": "physical",
+                "title": "体能评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "physical",
+            },
+            {
+                "type": "breath",
+                "title": "呼吸评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "breath",
+            },
+            {
+                "type": "cough",
+                "title": "咳嗽与痰色评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "cough",
+            },
+            {
+                "type": "appetite",
+                "title": "食欲评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "appetite",
+            },
+            {
+                "type": "pain",
+                "title": "身体疼痛评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "pain",
+            },
+            {
+                "type": "sleep",
+                "title": "睡眠质量评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "sleep",
+            },
+            {
+                "type": "psych",
+                "title": "抑郁评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "psych",
+            },
+            {
+                "type": "anxiety",
+                "title": "焦虑评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "anxiety",
+            },
+        ]
+        if patient_id:
+            metric_type_map_survey = {
+                "physical": QuestionnaireCode.Q_PHYSICAL,
+                "breath": QuestionnaireCode.Q_BREATH,
+                "cough": QuestionnaireCode.Q_COUGH,
+                "appetite": QuestionnaireCode.Q_APPETITE,
+                "pain": QuestionnaireCode.Q_PAIN,
+                "sleep": QuestionnaireCode.Q_SLEEP,
+                "psych": QuestionnaireCode.Q_PSYCH,
+                "anxiety": QuestionnaireCode.Q_ANXIETY,
+            }
 
-            base_qs = DailyTask.objects.filter(
-                patient=patient,
-                task_type=PlanItemCategory.CHECKUP,
-                task_date__gte=start_date,
-                task_date__lte=end_date,
-                interaction_payload__checkup_id=lib_id,
-            )
-            completed_count = base_qs.filter(status=TaskStatus.COMPLETED).count()
-            overdue_count = base_qs.filter(
-                status=TaskStatus.PENDING,
-                task_date__lt=today,
-            ).count()
-            checkup_stats.append(
-                {
-                    "lib_id": lib_id,
-                    "title": chk.get("name") or "",
-                    "category": chk.get("category") or "",
-                    "count": completed_count,
-                    "abnormal": overdue_count,
-                }
-            )
+            for item in health_survey_stats:
+                m_type = metric_type_map_survey.get(item["type"])
+                if m_type:
+                    try:
+                        page_obj = HealthMetricService.query_metrics_by_type(
+                            patient_id=int(patient_id),
+                            metric_type=m_type,
+                            page=1,
+                            page_size=1,
+                            start_date=start_dt,
+                            end_date=end_dt,
+                        )
+                        item["count"] = page_obj.paginator.count
+
+                        item["abnormal"] = TodoListService.count_abnormal_events(
+                            patient=patient,
+                            start_date=start_date,
+                            end_date=end_date,
+                            type_code=m_type,
+                        )
+                    except Exception as e:
+                        logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
+
+        checkup_library_items = get_active_checkup_library()
+        if patient_id and checkup_library_items:
+            for chk in checkup_library_items:
+                lib_id = chk.get("lib_id")
+                if not lib_id:
+                    continue
+
+                base_qs = DailyTask.objects.filter(
+                    patient=patient,
+                    task_type=PlanItemCategory.CHECKUP,
+                    task_date__gte=start_date,
+                    task_date__lte=end_date,
+                    interaction_payload__checkup_id=lib_id,
+                )
+                completed_count = base_qs.filter(status=TaskStatus.COMPLETED).count()
+                overdue_count = base_qs.filter(
+                    status=TaskStatus.PENDING,
+                    task_date__lt=today,
+                ).count()
+                checkup_stats.append(
+                    {
+                        "lib_id": lib_id,
+                        "title": chk.get("name") or "",
+                        "category": chk.get("category") or "",
+                        "count": completed_count,
+                        "abnormal": overdue_count,
+                    }
+                )
 
     context = {
         "patient_id": patient_id,
+        "is_member": is_member,
         "health_stats": health_stats,
         "health_survey_stats": health_survey_stats,
         "service_packages": service_packages,
         "selected_package_id": selected_package["id"] if selected_package else None,
         "selected_date_range": {"start_date": start_date, "end_date": end_date},
         "checkup_stats": checkup_stats,
+        "buy_url": generate_menu_auth_url("market:product_buy"),
     }
 
     return render(request, "web_patient/health_records.html", context)
@@ -1115,6 +1140,27 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
 
     patient = request.patient
     patient_id = patient.id or None
+    is_member = _is_member(patient)
+
+    member_only_types = {
+        "review_record",
+        "physical",
+        "breath",
+        "cough",
+        "appetite",
+        "pain",
+        "sleep",
+        "psych",
+        "anxiety",
+    }
+    if record_type in member_only_types and not is_member:
+        buy_url = generate_menu_auth_url("market:product_buy")
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {"success": False, "message": "该功能为会员专属，请先开通会员", "buy_url": buy_url},
+                status=403,
+            )
+        return redirect(buy_url)
 
     # 获取当前月份（YYYY-MM）
     current_month = request.GET.get("month", datetime.now().strftime("%Y-%m"))

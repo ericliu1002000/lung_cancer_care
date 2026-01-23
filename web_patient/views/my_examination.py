@@ -12,13 +12,14 @@ from core.models import (
 )
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models.test_report import TestReport
-from users.decorators import auto_wechat_login, check_patient
+from users.decorators import auto_wechat_login, check_patient, require_membership
 
 logger = logging.getLogger(__name__)
 
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def my_examination(request: HttpRequest) -> HttpResponse:
     """
     我的复查页面
@@ -177,6 +178,7 @@ def my_examination(request: HttpRequest) -> HttpResponse:
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def examination_detail(request: HttpRequest, task_id: int) -> HttpResponse:
     """
     复查报告详情页面

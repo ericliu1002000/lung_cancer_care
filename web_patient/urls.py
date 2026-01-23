@@ -24,6 +24,7 @@ urlpatterns = [
     path("record/checkup/", views.record_checkup, name="record_checkup"),
     path("record/image/<int:image_id>/delete/", views.delete_report_image, name="delete_report_image"),
     path("api/last_metric/", views.query_last_metric, name="query_last_metric"),
+    path("api/membership/status/", views.membership_status, name="membership_status"),
     path("followup/daily/", views.daily_survey, name="daily_survey"),
     path("followup/my/", views.my_followup, name="my_followup"),
     path("examination/my/", views.my_examination, name="my_examination"),

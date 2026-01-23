@@ -212,8 +212,7 @@
     }
     
     function goListReplace() {
-        var url = "{% url 'web_patient:health_records' %}?patient_id={{ patient_id }}";
-        window.location.replace(url);
+       history.back();
     }
     function loadMoreData() {
         if (isLoading || !hasMore) return;
