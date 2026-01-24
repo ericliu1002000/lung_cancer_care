@@ -20,7 +20,6 @@ urlpatterns = [
     path("record/weight/", views.record_weight, name="record_weight"),
     path("record/breath/", views.record_breath, name="record_breath"),
     path("record/sputum/", views.record_sputum, name="record_sputum"),
-    path("record/pain/", views.record_pain, name="record_pain"),
     path("record/checkup/", views.record_checkup, name="record_checkup"),
     path("record/image/<int:image_id>/delete/", views.delete_report_image, name="delete_report_image"),
     path("api/last_metric/", views.query_last_metric, name="query_last_metric"),

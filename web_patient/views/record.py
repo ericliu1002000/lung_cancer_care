@@ -169,6 +169,15 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
     patient = request.patient
 
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -177,12 +186,23 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
 
         if weight_val and patient_id:
             try:
-                record_time_str = record_time.replace("T", " ")
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 1. 解析 naive datetime
-                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
-                # 2. 转换为 aware datetime
+                record_time_naive = datetime.strptime(
+                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 record_time = timezone.make_aware(record_time_naive)
                 
                 HealthMetricService.save_manual_metric(
@@ -200,6 +220,7 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "temperature": {
                                 "value": weight_val,
@@ -219,10 +240,16 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 logging.info(f"保存体重数据失败: {e}")
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_temperature.html", context)
 
@@ -241,6 +268,15 @@ def record_bp(request: HttpRequest) -> HttpResponse:
     # 优先从 GET 参数获取 patient_id
     patient = request.patient
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -251,12 +287,23 @@ def record_bp(request: HttpRequest) -> HttpResponse:
 
         if ssy_val and szy_val and heart_val and patient_id:
             try:
-                record_time_str = record_time.replace("T", " ")
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 1. 解析 naive datetime
-                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
-                # 2. 转换为 aware datetime
+                record_time_naive = datetime.strptime(
+                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 record_time = timezone.make_aware(record_time_naive)
 
                 HealthMetricService.save_manual_metric(
@@ -279,6 +326,7 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "bp_hr": {
                                 "ssy": ssy_val,
@@ -300,10 +348,16 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 logging.info(f"保存体重数据失败: {e}")
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_bp.html", context)
 
@@ -321,6 +375,15 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -330,12 +393,23 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
         if weight_val and patient_id:
             try:
                 # 调用 Service 保存数据
-                record_time_str = record_time.replace("T", " ")
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 1. 解析 naive datetime
-                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
-                # 2. 转换为 aware datetime
+                record_time_naive = datetime.strptime(
+                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 record_time = timezone.make_aware(record_time_naive)
 
                 HealthMetricService.save_manual_metric(
@@ -353,6 +427,7 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "spo2": {
                                 "value": weight_val,
@@ -371,10 +446,16 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
             except Exception as e:
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_spo2.html", context)
 
@@ -392,6 +473,15 @@ def record_weight(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -400,8 +490,15 @@ def record_weight(request: HttpRequest) -> HttpResponse:
 
         if weight_val and patient_id:
             try:
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
                 # 替换T为空格，补全秒数
-                record_time_str = record_time.replace("T", " ")
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
 
@@ -409,6 +506,10 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 record_time_naive = datetime.strptime(
                     record_time_str, "%Y-%m-%d %H:%M:%S"
                 )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 # 2. 转换为带时区的datetime（使用Django配置的TIME_ZONE，如Asia/Shanghai）
                 record_time = timezone.make_aware(record_time_naive)
                 HealthMetricService.save_manual_metric(
@@ -426,6 +527,7 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "weight": {
                                 "value": weight_val,
@@ -445,10 +547,16 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 messages.error(request, f"提交失败：{str(e)}")
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_weight.html", context)
 
@@ -572,77 +680,6 @@ def record_sputum(request: HttpRequest) -> HttpResponse:
     return render(request, "web_patient/record_sputum.html", context)
 
 
-@auto_wechat_login
-@check_patient
-def record_pain(request: HttpRequest) -> HttpResponse:
-    """
-    【页面说明】疼痛情况记录页面 `/p/record/pain/`
-    【功能逻辑】
-    1. 接收 openid 参数标识用户。
-    2. 显示当前时间作为默认测量时间。
-    3. 提供疼痛情况列表（数据由后端传入）。
-    4. 实现联动逻辑：选中非第一项时，展示程度单选。
-    5. 提交按钮。
-    """
-    patient = request.patient
-    patient_id = patient.id or None
-
-    # 获取当前时间，格式化为 YYYY/MM/DD HH:mm
-    now = timezone.now()
-    default_time = now.strftime("%Y/%m/%d %H:%M")
-
-    # 疼痛部位选项
-    pain_locations = [
-        {"value": "0", "label": "今日无疼痛情况", "is_none": True},
-        {"value": "1", "label": "术口/胸膛/肋间"},
-        {"value": "2", "label": "肩峰/肩背/肩胛"},
-        {"value": "3", "label": "肋骨/脊柱/骨盆/四肢"},
-        {"value": "4", "label": "头痛"},
-    ]
-
-    # 疼痛程度选项
-    pain_levels = [
-        {
-            "level": "mild",
-            "label": "轻度：",
-            "desc": "能做家务/正常活动，睡眠基本不受影响",
-            "options": [
-                {"value": "1", "label": "1分"},
-                {"value": "2", "label": "2分"},
-                {"value": "3", "label": "3分"},
-            ],
-        },
-        {
-            "level": "moderate",
-            "label": "中度：",
-            "desc": "活动或睡眠受影响，需要（或增加）止痛药",
-            "options": [
-                {"value": "4", "label": "4分"},
-                {"value": "5", "label": "5分"},
-                {"value": "6", "label": "6分"},
-            ],
-        },
-        {
-            "level": "severe",
-            "label": "重度：",
-            "desc": "明显疼痛或无法入眠，需要立即处理/尽快就医",
-            "options": [
-                {"value": "7", "label": "7分"},
-                {"value": "8", "label": "8分"},
-                {"value": "9", "label": "9分"},
-                {"value": "10", "label": "10分"},
-            ],
-        },
-    ]
-
-    context = {
-        "default_time": default_time,
-        "patient_id": patient_id,
-        "pain_locations": pain_locations,
-        "pain_levels": pain_levels,
-    }
-
-    return render(request, "web_patient/record_pain.html", context)
 
 
 @auto_wechat_login
@@ -1137,10 +1174,27 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     record_type = request.GET.get("type")
     title = request.GET.get("title", "历史记录")
     checkup_id = request.GET.get("checkup_id")
+    source = request.GET.get("source")
 
     patient = request.patient
     patient_id = patient.id or None
     is_member = _is_member(patient)
+
+    general_record_types = {
+        "medical",
+        "temperature",
+        "bp",
+        "spo2",
+        "weight",
+        "step",
+        "heart",
+        "bp_hr",
+    }
+    add_record_types = {"temperature", "weight", "spo2", "bp", "bp_hr"}
+    show_operation_controls = bool(
+        source == "health_records" and record_type in general_record_types
+    )
+    show_add_button = bool(show_operation_controls and record_type in add_record_types)
 
     member_only_types = {
         "review_record",
@@ -1288,6 +1342,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     "has_more": has_more,
                     "next_page": page + 1 if has_more else None,
                     "checkup_id": checkup_id_int if checkup_id else None,
+                    "source": source,
+                    "show_operation_controls": show_operation_controls,
+                    "show_add_button": show_add_button,
                 }
                 return render(request, "web_patient/health_record_detail.html", context)
 
@@ -1450,6 +1507,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "has_more": has_more,
         "next_page": page + 1 if has_more else None,
         "checkup_id": checkup_id,
+        "source": source,
+        "show_operation_controls": show_operation_controls,
+        "show_add_button": show_add_button,
     }
 
     return render(request, "web_patient/health_record_detail.html", context)

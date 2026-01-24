@@ -242,7 +242,6 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
         "weight": reverse("web_patient:record_weight"),
         "breath": reverse("web_patient:record_breath"),
         "sputum": reverse("web_patient:record_sputum"),
-        "pain": reverse("web_patient:record_pain"),
         "followup": reverse("web_patient:daily_survey"), 
         "checkup": reverse("web_patient:record_checkup"),
     }

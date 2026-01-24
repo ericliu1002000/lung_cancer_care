@@ -43,7 +43,7 @@
     </div>
 
     <div class="px-4 pt-6">
-        <div class="text-black font-semibold text-lg mb-2">一般检测指标</div>
+        <div class="text-black font-semibold text-lg mb-2">一般监测指标</div>
         <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
             {% for stat in health_stats %}
             <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
@@ -200,7 +200,7 @@
                     </div>
                 </div>
 
-                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}&source=health_records'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
                     查看详情
                 </button>
             </div>
@@ -226,16 +226,11 @@
                               </div>
                               <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
                                   <span>记录：{{ stat.count }}次</span>
-                                  <div class="flex items-center gap-1">
-                                      <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                      </svg>
-                                      <span class="text-red-500">异常：{{ stat.abnormal }}次</span>
-                                  </div>
+                                 
                               </div>
                           </div>
                       </div>
-                      <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type=review_record&title={{ stat.title }}&checkup_id={{ stat.lib_id }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                      <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type=review_record&title={{ stat.title }}&checkup_id={{ stat.lib_id }}&patient_id={{ patient_id|default:'' }}&source=checkup_list'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
                           查看详情
                       </button>
                   </div>
@@ -289,7 +284,7 @@
                     </div>
                 </div>
 
-                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}&source=survey_list'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
                     查看详情
                 </button>
             </div>
