@@ -1,44 +1,149 @@
 
-from django.shortcuts import render
+import logging
+
 from django.contrib.auth.decorators import login_required
-from users import choices
+from django.core.exceptions import ValidationError
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import render
+from django.utils import timezone
+
+from chat.models.choices import MessageContentType
+from chat.services.chat import ChatService
+from patient_alerts.services.todo_list import TodoListService
+from users.decorators import check_doctor_or_assistant
+from users.models import PatientProfile
 
 @login_required
-def mobile_home(request):
-    """
-    移动端医生首页
-    """
-    # 模拟数据
+@check_doctor_or_assistant
+def mobile_home(request: HttpRequest) -> HttpResponse:
+    logger = logging.getLogger(__name__)
+
+    def format_cn_datetime(value):
+        if not value:
+            return ""
+        try:
+            dt = timezone.localtime(value) if timezone.is_aware(value) else value
+            return f"{dt.year}年{dt.month}月{dt.day}日 {dt.strftime('%H:%M')}"
+        except Exception:
+            return ""
+
+    def truncate_text(value: str, limit: int = 15) -> str:
+        value = (value or "").strip()
+        if len(value) <= limit:
+            return value
+        return value[:limit] + "......"
+
+    doctor_profile = getattr(request.user, "doctor_profile", None)
+    assistant_profile = getattr(request.user, "assistant_profile", None)
+    acting_doctor_profile = doctor_profile
+    if acting_doctor_profile is None and assistant_profile is not None:
+        acting_doctor_profile = assistant_profile.doctors.first()
+
+    if acting_doctor_profile is None:
+        context = {
+            "doctor": {
+                "name": request.user.wx_nickname or request.user.username or "--",
+                "title": "--",
+                "department": "--",
+                "hospital": "--",
+                "phone": getattr(request.user, "phone", "") or "--",
+                "studio_name": "--",
+                "avatar_url": None,
+            },
+            "stats": {
+                "managed_patients": 0,
+                "today_active": 0,
+                "alerts_count": 0,
+                "consultations_count": 0,
+            },
+            "alerts": [],
+            "consultations": [],
+            "doctor_error": "未找到医生档案信息，请联系管理员完善医生资料。",
+        }
+        return render(request, "web_doctor/mobile/index.html", context, status=404)
+
+    studio = acting_doctor_profile.studio
+    if studio is None:
+        owned_studio = acting_doctor_profile.owned_studios.first()
+        if owned_studio:
+            studio = owned_studio
+
     doctor_info = {
-        "name": request.user.wx_nickname or "梅周芳",
-        "title": "主任医师",
-        "department": "呼吸与重症科",
-        "hospital": "上海第五人民医院",
-        "avatar_url": None, # 模板中使用默认或首字母
+        "name": getattr(acting_doctor_profile, "name", "") or "--",
+        "title": '('+getattr(acting_doctor_profile, "title", "")+')' or "--",
+        "department": getattr(acting_doctor_profile, "department", "") or "--",
+        "hospital": getattr(acting_doctor_profile, "hospital", "") or "--",
+        "phone": getattr(request.user, "phone", "") or "--",
+        "studio_name": getattr(studio, "name", "") if studio else "--",
+        "avatar_url": None,
     }
-    
-    stats = {
-        "managed_patients": 120,
-        "today_active": 25,
-        "alerts_count": 3,
-        "consultations_count": 5
-    }
-    
+
+    today = timezone.localdate()
+    managed_patients = PatientProfile.objects.filter(
+        doctor=acting_doctor_profile, is_active=True
+    ).count()
+    today_active = PatientProfile.objects.filter(
+        doctor=acting_doctor_profile,
+        is_active=True,
+        last_active_at__date=today,
+    ).count()
+
+    alerts_page = TodoListService.get_todo_page(
+        user=request.user,
+        page=1,
+        size=5,
+        status=["pending", "escalate"],
+    )
+    alerts_count = alerts_page.paginator.count
     alerts = [
-        {"id": 1, "patient_name": "张鹏", "type": "体征异常", "time": "2026年1月18日 10:00"},
-        # 更多数据可在此添加
+        {
+            "id": item.get("id"),
+            "patient_name": item.get("patient_name", ""),
+            "type": item.get("event_title", ""),
+            "time": format_cn_datetime(item.get("event_time")),
+        }
+        for item in alerts_page.object_list
     ]
-    
-    consultations = [
-        {"id": 1, "patient_name": "张鹏", "content": "已经连续3天发烧......", "time": "2026年1月20日 10:00"},
-        # 更多数据可在此添加
-    ]
-    
+
+    consultations: list[dict] = []
+    consultations_count = 0
+    if studio is not None:
+        try:
+            summaries = ChatService().list_patient_conversation_summaries(studio, request.user)
+            unread_summaries = [s for s in summaries if (s.get("unread_count") or 0) > 0]
+            consultations_count = len(unread_summaries)
+            for s in unread_summaries[:5]:
+                msg_type = s.get("last_message_type")
+                if msg_type == MessageContentType.IMAGE:
+                    content = "[图片]"
+                else:
+                    content = truncate_text(s.get("last_message_text", ""))
+                consultations.append(
+                    {
+                        "id": s.get("conversation_id"),
+                        "patient_name": s.get("patient_name", ""),
+                        "content": content,
+                        "time": format_cn_datetime(s.get("last_message_at")),
+                    }
+                )
+        except ValidationError as e:
+            logger.warning("加载移动端咨询摘要失败: %s", str(e))
+        except Exception:
+            logger.exception("加载移动端咨询摘要失败")
+
+    stats = {
+        "managed_patients": managed_patients,
+        "today_active": today_active,
+        "alerts_count": alerts_count,
+        "consultations_count": consultations_count,
+    }
+
     context = {
         "doctor": doctor_info,
         "stats": stats,
         "alerts": alerts,
         "consultations": consultations,
+        "doctor_error": "",
     }
-    
+
     return render(request, "web_doctor/mobile/index.html", context)
