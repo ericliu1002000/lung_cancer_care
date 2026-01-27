@@ -1431,6 +1431,10 @@ video {
   width: 160px;
 }
 
+.w-\[170px\] {
+  width: 170px;
+}
+
 .w-\[180px\] {
   width: 180px;
 }
@@ -1462,18 +1466,6 @@ video {
 
 .w-screen {
   width: 100vw;
-}
-
-.w-\[300px\] {
-  width: 300px;
-}
-
-.w-\[200px\] {
-  width: 200px;
-}
-
-.w-\[170px\] {
-  width: 170px;
 }
 
 .min-w-0 {
@@ -2386,10 +2378,6 @@ video {
 
 .border-white\/5 {
   border-color: rgb(255 255 255 / 0.05);
-}
-
-.border-white\/50 {
-  border-color: rgb(255 255 255 / 0.5);
 }
 
 .border-t-blue-600 {
