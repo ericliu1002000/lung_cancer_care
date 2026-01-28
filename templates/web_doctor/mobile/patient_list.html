@@ -50,7 +50,17 @@
       <div class="bg-white">
         {% if managed_patients %}
           {% for patient in managed_patients %}
-          <div class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between active:bg-slate-50 transition">
+          <a
+            href="{% url 'web_doctor:mobile_patient_home' patient.id %}"
+            class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between active:bg-slate-50 active:scale-[0.99] transition"
+            data-patient-item
+            data-patient-id="{{ patient.id }}"
+            data-patient-name="{{ patient.name|default:'' }}"
+            data-patient-gender="{{ patient.get_gender_display|default:'' }}"
+            data-patient-age="{{ patient.age|default:'' }}"
+            data-patient-no="P{{ patient.id|stringformat:'06d' }}"
+            data-patient-phone="{{ patient.phone|default:'' }}"
+          >
             <div class="min-w-0">
               <div class="flex items-baseline gap-2">
                 <div class="text-sm font-bold text-slate-800 truncate max-w-[9rem]">{{ patient.name }}</div>
@@ -72,7 +82,7 @@
             <svg class="w-5 h-5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
-          </div>
+          </a>
           {% endfor %}
         {% else %}
           <div class="p-4 text-center text-slate-400 text-sm">暂无管理中患者</div>
@@ -104,7 +114,17 @@
       <div class="bg-white">
         {% if unmanaged_patients %}
           {% for patient in unmanaged_patients %}
-          <div class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between active:bg-slate-50 transition">
+          <a
+            href="{% url 'web_doctor:mobile_patient_home' patient.id %}"
+            class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between active:bg-slate-50 active:scale-[0.99] transition"
+            data-patient-item
+            data-patient-id="{{ patient.id }}"
+            data-patient-name="{{ patient.name|default:'' }}"
+            data-patient-gender="{{ patient.get_gender_display|default:'' }}"
+            data-patient-age="{{ patient.age|default:'' }}"
+            data-patient-no="P{{ patient.id|stringformat:'06d' }}"
+            data-patient-phone="{{ patient.phone|default:'' }}"
+          >
             <div class="min-w-0">
               <div class="flex items-baseline gap-2">
                 <div class="text-sm font-bold text-slate-800 truncate max-w-[9rem]">{{ patient.name }}</div>
@@ -126,7 +146,7 @@
             <svg class="w-5 h-5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
-          </div>
+          </a>
           {% endfor %}
         {% else %}
           <div class="p-4 text-center text-slate-400 text-sm">暂无未管理患者</div>
@@ -150,6 +170,52 @@
       {% endif %}
     </div>
   </div>
+
+  <div id="mobile-patient-nav-loading" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/10"></div>
+    <div class="absolute inset-x-0 top-28 flex justify-center">
+      <div class="bg-white/95 rounded-full shadow-sm px-4 py-2 flex items-center gap-2">
+        <span class="w-4 h-4 rounded-full border-2 border-slate-200 border-t-[#4DB6AC] animate-spin"></span>
+        <span class="text-sm text-slate-600">加载中...</span>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
+{% block extra_head %}
+<script>
+  (function () {
+    const STORAGE_KEY = "mobile_selected_patient";
+    const setSelected = function (payload) {
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      } catch (e) {}
+    };
+
+    document.addEventListener("click", function (event) {
+      const link = event.target.closest("a[data-patient-item]");
+      if (!link) return;
+
+      const payload = {
+        id: link.dataset.patientId || "",
+        name: link.dataset.patientName || "",
+        gender: link.dataset.patientGender || "",
+        age: link.dataset.patientAge || "",
+        patientNo: link.dataset.patientNo || "",
+        phone: link.dataset.patientPhone || "",
+      };
+      setSelected(payload);
+      window.dispatchEvent(new CustomEvent("mobile-patient-selected", { detail: payload }));
+
+      const loading = document.getElementById("mobile-patient-nav-loading");
+      if (loading) loading.classList.remove("hidden");
+    });
+
+    window.addEventListener("pageshow", function () {
+      const loading = document.getElementById("mobile-patient-nav-loading");
+      if (loading) loading.classList.add("hidden");
+    });
+  })();
+</script>
+{% endblock %}

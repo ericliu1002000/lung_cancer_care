@@ -1,0 +1,31 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}{{ section_title }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans">
+  <div class="bg-[#4DB6AC] pt-safe-top pb-5 px-4 shadow-md">
+    <div class="flex items-center gap-3 pt-4">
+      <a href="{% url 'web_doctor:mobile_patient_home' patient.id %}" class="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </a>
+      <div class="min-w-0 text-white">
+        <div class="text-base font-bold truncate">{{ section_title }}</div>
+        <div class="text-xs opacity-90 truncate">{{ patient.name }} · {{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁 · {{ patient_no }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 py-5">
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <div class="text-sm font-bold text-slate-800">{{ section_title }}</div>
+      <div class="mt-2 text-sm text-slate-500 leading-relaxed">
+        该功能模块正在移动端适配中，当前页用于验证导航与权限控制。
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
