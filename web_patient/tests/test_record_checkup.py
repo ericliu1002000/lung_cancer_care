@@ -61,6 +61,9 @@ class RecordCheckupTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "web_patient/record_checkup.html")
+        self.assertContains(response, 'id="instructions-modal"')
+        self.assertContains(response, 'id="modal-content"')
+        self.assertContains(response, 'lockBodyScroll')
         
         # 验证上下文数据
         self.assertEqual(response.context['checkup_date'], self.today.strftime("%Y-%m-%d"))

@@ -789,6 +789,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
             for chk in checkup_library_items:
                 lib_id = chk.get("lib_id")
                 code = chk.get("code")
+                logging.info(f"111查询复查档案统计成功 code={code}")
                 if not lib_id:
                     continue
 
@@ -803,6 +804,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
                             start_date=start_dt,
                             end_date=end_dt,
                         )
+                        logging.info(f"查询复查档案统计成功 code={page_obj.paginator.count}")
                         completed_count = page_obj.paginator.count
                     except Exception as e:
                         logging.error(f"查询复查档案统计失败 code={code}: {e}")
