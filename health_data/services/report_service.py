@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from typing import Iterable, List, Dict, Optional
 
 from django.core.exceptions import ValidationError
@@ -14,6 +14,9 @@ from django.utils import timezone
 from core.models import CheckupLibrary
 from health_data.models import (
     ClinicalEvent,
+    HealthMetric,
+    MetricSource,
+    MetricType,
     ReportImage,
     ReportUpload,
     UploadSource,
@@ -158,7 +161,8 @@ class ReportUploadService:
                 checkup_item = payload.get("checkup_item") or payload.get("checkup_item_id")
 
                 if record_type == ReportImage.RecordType.CHECKUP and not checkup_item:
-                    raise ValidationError("复查图片必须指定复查项目。")
+                    if upload_source != UploadSource.CHECKUP_PLAN:
+                        raise ValidationError("复查图片必须指定复查项目。")
                 if record_type != ReportImage.RecordType.CHECKUP and checkup_item:
                     raise ValidationError("非复查类型不允许指定复查项目。")
 
@@ -452,6 +456,7 @@ class ReportArchiveService:
         now = timezone.now()
         images_to_update: List[ReportImage] = []
         event_cache: Dict[tuple, ClinicalEvent] = {}
+        checkup_groups: Dict[tuple[int, date, int], List[ReportImage]] = {}
 
         for payload in updates:
             raw_image_id = payload.get("image_id")
@@ -504,6 +509,52 @@ class ReportArchiveService:
             image.archived_at = now
             images_to_update.append(image)
 
+            if record_type == ReportImage.RecordType.CHECKUP and checkup_item:
+                group_key = (patient.id, report_date, checkup_item.id)
+                checkup_groups.setdefault(group_key, []).append(image)
+
+        if checkup_groups:
+            from core.models import DailyTask
+            from core.models.choices import PlanItemCategory, TaskStatus
+
+            for (patient_id, report_date, checkup_item_id), images in checkup_groups.items():
+                measured_at = datetime.combine(report_date, time.min)
+                if timezone.is_aware(now) and timezone.is_naive(measured_at):
+                    measured_at = timezone.make_aware(
+                        measured_at, timezone.get_current_timezone()
+                    )
+
+                metric = HealthMetric.objects.create(
+                    patient_id=patient_id,
+                    metric_type=MetricType.CHECKUP,
+                    source=MetricSource.MANUAL,
+                    measured_at=measured_at,
+                )
+
+                for image in images:
+                    image.health_metric = metric
+
+                window_start = report_date - timedelta(days=6)
+                task_qs = DailyTask.objects.filter(
+                    patient_id=patient_id,
+                    task_type=PlanItemCategory.CHECKUP,
+                    task_date__range=(window_start, report_date),
+                    status__in=[TaskStatus.PENDING, TaskStatus.NOT_STARTED],
+                ).filter(
+                    Q(plan_item__template_id=checkup_item_id)
+                    | Q(interaction_payload__checkup_id=checkup_item_id)
+                )
+                task = task_qs.order_by("-task_date", "-id").first()
+                if task:
+                    payload = task.interaction_payload or {}
+                    payload["health_metric_id"] = metric.id
+                    task.status = TaskStatus.COMPLETED
+                    task.completed_at = now
+                    task.interaction_payload = payload
+                    task.save(update_fields=["status", "completed_at", "interaction_payload"])
+                    metric.task_id = task.id
+                    metric.save(update_fields=["task_id"])
+
         ReportImage.objects.bulk_update(
             images_to_update,
             [
@@ -511,6 +562,7 @@ class ReportArchiveService:
                 "checkup_item",
                 "report_date",
                 "clinical_event",
+                "health_metric",
                 "archived_by",
                 "archived_at",
             ],
@@ -610,6 +662,62 @@ class ReportArchiveService:
                 )
 
             ReportImage.objects.bulk_create(image_instances)
+            if event_type == ReportImage.RecordType.CHECKUP:
+                from core.models import DailyTask
+                from core.models.choices import PlanItemCategory, TaskStatus
+
+                created_images = list(
+                    ReportImage.objects.filter(
+                        upload=upload,
+                        record_type=event_type,
+                        report_date=event_date,
+                    )
+                )
+                images_by_checkup: Dict[int, List[ReportImage]] = {}
+                for image in created_images:
+                    if not image.checkup_item_id:
+                        continue
+                    images_by_checkup.setdefault(image.checkup_item_id, []).append(image)
+
+                for checkup_item_id, grouped_images in images_by_checkup.items():
+                    measured_at = datetime.combine(event_date, time.min)
+                    if timezone.is_aware(now) and timezone.is_naive(measured_at):
+                        measured_at = timezone.make_aware(
+                            measured_at, timezone.get_current_timezone()
+                        )
+
+                    metric = HealthMetric.objects.create(
+                        patient=patient,
+                        metric_type=MetricType.CHECKUP,
+                        source=MetricSource.MANUAL,
+                        measured_at=measured_at,
+                    )
+
+                    ReportImage.objects.filter(
+                        id__in=[img.id for img in grouped_images]
+                    ).update(health_metric=metric)
+
+                    window_start = event_date - timedelta(days=6)
+                    task_qs = DailyTask.objects.filter(
+                        patient=patient,
+                        task_type=PlanItemCategory.CHECKUP,
+                        task_date__range=(window_start, event_date),
+                        status__in=[TaskStatus.PENDING, TaskStatus.NOT_STARTED],
+                    ).filter(
+                        Q(plan_item__template_id=checkup_item_id)
+                        | Q(interaction_payload__checkup_id=checkup_item_id)
+                    )
+                    task = task_qs.order_by("-task_date", "-id").first()
+                    if task:
+                        payload = task.interaction_payload or {}
+                        payload["health_metric_id"] = metric.id
+                        task.status = TaskStatus.COMPLETED
+                        task.completed_at = now
+                        task.interaction_payload = payload
+                        task.save(update_fields=["status", "completed_at", "interaction_payload"])
+                        metric.task_id = task.id
+                        metric.save(update_fields=["task_id"])
+
             return event
 
     @staticmethod

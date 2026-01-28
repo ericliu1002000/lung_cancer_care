@@ -93,18 +93,20 @@ class RecordCheckupTests(TestCase):
         self.assertEqual(json_response['status'], 'success')
         
         # 验证数据库变更
-        # 1. 任务状态更新
+        # 1. 任务状态保持未完成（归档时再匹配）
         self.task.refresh_from_db()
-        self.assertEqual(self.task.status, TaskStatus.COMPLETED)
+        self.assertEqual(self.task.status, TaskStatus.PENDING)
+        self.assertIsNone(self.task.completed_at)
         
         # 2. ReportUpload 创建
-        uploads = ReportUpload.objects.filter(related_task=self.task)
+        uploads = ReportUpload.objects.all()
         self.assertEqual(uploads.count(), 1)
+        upload = uploads.first()
         
         # 3. ReportImage 创建
-        images = ReportImage.objects.filter(upload=uploads.first())
+        images = ReportImage.objects.filter(upload=upload)
         self.assertEqual(images.count(), 1)
-        self.assertEqual(images.first().checkup_item, self.checkup_lib)
+        self.assertIsNone(images.first().checkup_item)
 
     def test_record_checkup_post_no_files(self):
         """测试未上传文件提交"""
@@ -190,11 +192,13 @@ class RecordCheckupTests(TestCase):
         # 验证两个任务都已完成
         self.task.refresh_from_db()
         task2.refresh_from_db()
-        self.assertEqual(self.task.status, TaskStatus.COMPLETED)
-        self.assertEqual(task2.status, TaskStatus.COMPLETED)
+        self.assertEqual(self.task.status, TaskStatus.PENDING)
+        self.assertEqual(task2.status, TaskStatus.PENDING)
+        self.assertIsNone(self.task.completed_at)
+        self.assertIsNone(task2.completed_at)
         
-        # 验证创建了两个 ReportUpload (因为是循环处理)
-        self.assertEqual(ReportUpload.objects.count(), 2)
+        # 验证只创建一个 ReportUpload
+        self.assertEqual(ReportUpload.objects.count(), 1)
 
     def test_record_checkup_transaction_rollback(self):
         """测试异常时事务回滚"""

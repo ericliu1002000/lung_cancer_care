@@ -9,6 +9,7 @@ class MetricType(models.TextChoices):
     WEIGHT = "M_WEIGHT", "体重"
     BODY_TEMPERATURE = "M_TEMP", "体温"
     USE_MEDICATED = "M_USE_MEDICATED", "用药情况"
+    CHECKUP = "M_CHECKUP", "复查"
 
    
 
