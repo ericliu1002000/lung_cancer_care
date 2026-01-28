@@ -126,6 +126,15 @@ class ReportImage(models.Model):
         blank=True,
         help_text="报告出具日期，归档时填写。",
     )
+    health_metric = models.ForeignKey(
+        "health_data.HealthMetric",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="report_images",
+        verbose_name="关联指标",
+        help_text="归档后关联的指标记录（复查场景）。",
+    )
     clinical_event = models.ForeignKey(
         "health_data.ClinicalEvent",
         null=True,

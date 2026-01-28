@@ -4,8 +4,17 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import CheckupLibrary
-from health_data.models import ClinicalEvent, ReportImage, ReportUpload, UploadSource, UploaderRole
+from core.models import CheckupLibrary, DailyTask
+from core.models.choices import PlanItemCategory, TaskStatus
+from health_data.models import (
+    ClinicalEvent,
+    HealthMetric,
+    MetricType,
+    ReportImage,
+    ReportUpload,
+    UploadSource,
+    UploaderRole,
+)
 from health_data.services.report_service import ReportArchiveService, ReportUploadService
 from users import choices as user_choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
@@ -97,6 +106,15 @@ class ReportServiceTest(TestCase):
             self._create_upload(
                 images=[{"image_url": "https://example.com/a.png", "record_type": ReportImage.RecordType.CHECKUP}]
             )
+
+    def test_create_upload_allows_checkup_without_item_for_plan(self):
+        upload = self._create_upload(
+            images=[{"image_url": "https://example.com/a.png", "record_type": ReportImage.RecordType.CHECKUP}],
+            upload_source=UploadSource.CHECKUP_PLAN,
+        )
+        image = upload.images.first()
+        self.assertEqual(image.record_type, ReportImage.RecordType.CHECKUP)
+        self.assertIsNone(image.checkup_item)
 
     def test_create_upload_rejects_checkup_item_for_non_checkup(self):
         with self.assertRaises(ValidationError):
@@ -260,6 +278,42 @@ class ReportServiceTest(TestCase):
         event = ClinicalEvent.objects.get(id=images[0].clinical_event_id)
         self.assertEqual(event.archiver_name, self.doctor_profile.name)
 
+    def test_archive_images_creates_checkup_metric_and_matches_task(self):
+        upload = self._create_upload(images=["https://example.com/a.png"])
+        image = upload.images.first()
+        report_date = timezone.localdate()
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=report_date - timedelta(days=1),
+            task_type=PlanItemCategory.CHECKUP,
+            title="血常规",
+            status=TaskStatus.PENDING,
+            interaction_payload={"checkup_id": self.checkup_item.id},
+        )
+        updates = [
+            {
+                "image_id": image.id,
+                "record_type": ReportImage.RecordType.CHECKUP,
+                "report_date": report_date,
+                "checkup_item_id": self.checkup_item.id,
+            }
+        ]
+        updated = ReportArchiveService.archive_images(self.doctor_profile, updates)
+        self.assertEqual(updated, 1)
+
+        metric = HealthMetric.objects.filter(
+            patient=self.patient, metric_type=MetricType.CHECKUP
+        ).first()
+        self.assertIsNotNone(metric)
+        self.assertEqual(metric.task_id, task.id)
+
+        image.refresh_from_db()
+        self.assertEqual(image.health_metric_id, metric.id)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.COMPLETED)
+        self.assertEqual(task.interaction_payload.get("health_metric_id"), metric.id)
+
     def test_archive_images_sets_archiver_name(self):
         upload = self._create_upload(images=["https://example.com/a.png"])
         image = upload.images.first()
@@ -346,6 +400,44 @@ class ReportServiceTest(TestCase):
         upload = ReportUpload.objects.filter(images__in=images).first()
         self.assertEqual(upload.upload_source, UploadSource.DOCTOR_BACKEND)
         self.assertEqual(upload.uploader_role, UploaderRole.DOCTOR)
+        metric = HealthMetric.objects.filter(
+            patient=self.patient, metric_type=MetricType.CHECKUP
+        ).first()
+        self.assertIsNotNone(metric)
+        self.assertIsNone(metric.task_id)
+        self.assertTrue(images.filter(health_metric=metric).exists())
+
+    def test_create_record_with_images_matches_task(self):
+        report_date = timezone.localdate()
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=report_date,
+            task_type=PlanItemCategory.CHECKUP,
+            title="血常规",
+            status=TaskStatus.PENDING,
+            interaction_payload={"checkup_id": self.checkup_item.id},
+        )
+        event = ReportArchiveService.create_record_with_images(
+            patient=self.patient,
+            created_by_doctor=self.doctor_profile,
+            event_type=ReportImage.RecordType.CHECKUP,
+            event_date=report_date,
+            images=[
+                {"image_url": "https://example.com/a.png", "checkup_item_id": self.checkup_item.id},
+                {"image_url": "https://example.com/b.png", "checkup_item_id": self.checkup_item.id},
+            ],
+        )
+        images = ReportImage.objects.filter(clinical_event=event)
+        metric = HealthMetric.objects.filter(
+            patient=self.patient, metric_type=MetricType.CHECKUP
+        ).first()
+        self.assertIsNotNone(metric)
+        self.assertEqual(metric.task_id, task.id)
+        self.assertTrue(images.filter(health_metric=metric).exists())
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, TaskStatus.COMPLETED)
+        self.assertEqual(task.interaction_payload.get("health_metric_id"), metric.id)
 
     def test_create_record_with_images_requires_checkup_item(self):
         with self.assertRaises(ValidationError):
