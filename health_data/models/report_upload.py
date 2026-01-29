@@ -172,6 +172,10 @@ class ReportImage(models.Model):
         indexes = [
             models.Index(fields=["upload", "record_type"], name="idx_report_image_upload_type"),
             models.Index(fields=["report_date"], name="idx_report_image_date"),
+            models.Index(
+                fields=["record_type", "checkup_item", "report_date"],
+                name="idx_rptimg_type_item_date",
+            ),
         ]
 
     def __str__(self) -> str:  # pragma: no cover - 后台展示

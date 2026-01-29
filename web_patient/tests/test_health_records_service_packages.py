@@ -6,7 +6,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import CheckupLibrary
-from health_data.models import HealthMetric, MetricType
+from health_data.models import HealthMetric, MetricType, ReportImage, UploadSource
+from health_data.services.report_service import ReportUploadService
 from market.models import Product, Order
 from users.models import CustomUser, PatientProfile
 
@@ -160,6 +161,43 @@ class HealthRecordsServicePackageTests(TestCase):
                 tz,
             ),
             value_main=Decimal("1"),
+        )
+
+        ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/ct-1.png",
+                    "record_type": ReportImage.RecordType.CHECKUP,
+                    "checkup_item_id": ct.id,
+                    "report_date": latest_order.start_date + timedelta(days=1),
+                }
+            ],
+            upload_source=UploadSource.CHECKUP_PLAN,
+        )
+        ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/ct-2.png",
+                    "record_type": ReportImage.RecordType.CHECKUP,
+                    "checkup_item_id": ct.id,
+                    "report_date": latest_order.start_date + timedelta(days=2),
+                }
+            ],
+            upload_source=UploadSource.CHECKUP_PLAN,
+        )
+        ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/blood-1.png",
+                    "record_type": ReportImage.RecordType.CHECKUP,
+                    "checkup_item_id": blood.id,
+                    "report_date": latest_order.start_date + timedelta(days=1),
+                }
+            ],
+            upload_source=UploadSource.CHECKUP_PLAN,
         )
 
         response = self.client.get(self.url, {"package_id": str(latest_order.id)})

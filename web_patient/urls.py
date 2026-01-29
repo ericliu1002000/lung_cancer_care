@@ -14,6 +14,7 @@ urlpatterns = [
     path("medication/", views.my_medication, name="my_medication"),
     path("health/records/", views.health_records, name="health_records"),
     path("health/record/detail/", views.health_record_detail, name="health_record_detail"),
+    path("health/review/record/detail/", views.review_record_detail, name="review_record_detail"),
     path("record/temperature/", views.record_temperature, name="record_temperature"),
     path("record/bp/", views.record_bp, name="record_bp"),
     path("record/spo2/", views.record_spo2, name="record_spo2"),
@@ -65,6 +66,11 @@ urlpatterns = [
     # API endpoints
     path("api/health/metric/delete/", views.delete_health_metric, name="delete_health_metric"),
     path("api/health/metric/update/", views.update_health_metric, name="update_health_metric"),
+    path(
+        "api/health/review/record/images/",
+        views.review_record_detail_data,
+        name="review_record_detail_data",
+    ),
     path("api/medication/submit/", views.submit_medication, name="submit_medication"),
     # Chat API
     path("chat/api/messages/list/", chat_api.list_messages, name="chat_api_list_messages"),

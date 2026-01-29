@@ -575,6 +575,11 @@ def health_records(request: HttpRequest) -> HttpResponse:
     patient_id = patient.id or None
     is_member = _is_member(patient)
     selected_package_id = request.GET.get("package_id")
+    entry_source = request.GET.get("source")
+    entry_view = request.GET.get("view")
+    is_medication_detail_entry = bool(
+        entry_source == "medication" and (entry_view == "detail" or not entry_view)
+    )
 
     service_packages = []
     if is_member:
@@ -784,6 +789,8 @@ def health_records(request: HttpRequest) -> HttpResponse:
                     except Exception as e:
                         logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
 
+        from health_data.services.report_service import ReportUploadService
+
         checkup_library_items = get_active_checkup_library() 
         if patient_id and checkup_library_items:
             for chk in checkup_library_items:
@@ -796,16 +803,19 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 completed_count = 0
                 if code:
                     try:
-                        page_obj = HealthMetricService.query_metrics_by_type(
+                        # 查询每个复查分类的记录总数
+                        # 使用 list_report_images 替代 query_metrics_by_type
+                        # 统计口径：按分类聚合、去重（list_report_images 已按日期分组统计 total）
+                        payload = ReportUploadService.list_report_images(
                             patient_id=int(patient_id),
-                            metric_type=code,
-                            page=1,
+                            category_code=code,
+                            report_month="",
+                            page_num=1,
                             page_size=1,
-                            start_date=start_dt,
-                            end_date=end_dt,
+                            start_date=start_date,
+                            end_date=end_date,
                         )
-                        logging.info(f"查询复查档案统计成功 code={page_obj.paginator.count}")
-                        completed_count = page_obj.paginator.count
+                        completed_count = int(payload.get("total") or 0)
                     except Exception as e:
                         logging.error(f"查询复查档案统计失败 code={code}: {e}")
                 checkup_stats.append(
@@ -829,6 +839,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
         "selected_date_range": {"start_date": start_date, "end_date": end_date},
         "checkup_stats": checkup_stats,
         "buy_url": generate_menu_auth_url("market:product_buy"),
+        "entry_source": entry_source,
+        "entry_view": entry_view,
+        "is_medication_detail_entry": is_medication_detail_entry,
     }
 
     return render(request, "web_patient/health_records.html", context)
@@ -1043,6 +1056,8 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     title = request.GET.get("title", "历史记录")
     checkup_id = request.GET.get("checkup_id")
     source = request.GET.get("source")
+    view = request.GET.get("view")
+    is_medication_detail_view = bool(record_type == "medical" and view == "detail")
 
     patient = request.patient
     patient_id = patient.id or None
@@ -1063,6 +1078,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         source == "health_records" and record_type in general_record_types
     )
     show_add_button = bool(show_operation_controls and record_type in add_record_types)
+    if record_type == "medical" :
+        show_operation_controls = False
+        show_add_button = False
 
     member_only_types = {
         "review_record",
@@ -1181,6 +1199,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                                 "source_display": status_label,
                                 "is_manual": False,
                                 "can_edit": False,
+                                "can_operate": not is_medication_detail_view,
                                 "data": [
                                     {
                                         "label": "复查",
@@ -1347,6 +1366,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             "is_manual": metric.source == "manual",
                             "can_edit": metric.source == "manual"
                             and dt.date() == timezone.localdate(),
+                            "can_operate": not is_medication_detail_view,
                             "data": data_fields,
                         }
                     )
@@ -1385,3 +1405,59 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "web_patient/health_record_detail.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def review_record_detail(request: HttpRequest) -> HttpResponse:
+    category_code = request.GET.get("category_code") or ""
+    title = request.GET.get("title", "复查档案")
+    patient = request.patient
+    patient_id = patient.id or None
+    current_month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+
+    context = {
+        "patient_id": patient_id,
+        "title": title,
+        "category_code": category_code,
+        "current_month": current_month,
+    }
+    return render(request, "web_patient/review_record_detail.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def review_record_detail_data(request: HttpRequest) -> JsonResponse:
+    from django.core.exceptions import ValidationError
+    from health_data.services.report_service import ReportUploadService
+
+    patient = request.patient
+    patient_id = patient.id or None
+
+    requested_patient_id = request.GET.get("patient_id")
+    if requested_patient_id and patient_id and str(patient_id) != str(requested_patient_id):
+        return JsonResponse({"success": False, "message": "无权访问该患者数据"}, status=403)
+
+    category_code = request.GET.get("category_code") or ""
+    report_month = request.GET.get("report_month") or timezone.localdate().strftime("%Y-%m")
+    page_num = request.GET.get("page_num", 1)
+    page_size = request.GET.get("page_size", 10)
+
+    try:
+        payload = ReportUploadService.list_report_images(
+            patient_id=int(patient_id) if patient_id else 0,
+            category_code=category_code,
+            report_month=report_month,
+            page_num=page_num,
+            page_size=page_size,
+        )
+    except ValidationError as e:
+        message = "参数错误"
+        if getattr(e, "messages", None):
+            message = e.messages[0]
+        return JsonResponse({"success": False, "message": message}, status=400)
+    except Exception:
+        logging.exception("查询复查详情失败")
+        return JsonResponse({"success": False, "message": "数据加载失败，请重试"}, status=500)
+
+    return JsonResponse({"success": True, **payload})
