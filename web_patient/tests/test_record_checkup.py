@@ -40,7 +40,7 @@ class RecordCheckupTests(TestCase):
         )
         
         # 创建今日复查任务
-        self.today = timezone.now().date()
+        self.today = timezone.localdate()
         self.task = DailyTask.objects.create(
             patient=self.patient,
             task_date=self.today,

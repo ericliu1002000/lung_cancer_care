@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -18,7 +18,6 @@ from health_data.models import (
 from health_data.services.report_service import (
     ReportArchiveService,
     ReportUploadService,
-    list_report_images as list_report_images_grouped,
 )
 from users import choices as user_choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
@@ -142,7 +141,11 @@ class ReportServiceTest(TestCase):
         upload1 = self._create_upload()
         upload2 = self._create_upload(upload_source=UploadSource.CHECKUP_PLAN)
 
-        base_time = timezone.now() - timedelta(days=2)
+        # 使用本地日期计算以避免跨时区导致 created_at__date 偏移
+        today_local = timezone.localdate()
+        base_date = today_local - timedelta(days=2)
+        base_time = timezone.make_aware(datetime.combine(base_date, datetime.min.time()))
+
         ReportUpload.objects.filter(id=upload1.id).update(created_at=base_time)
         ReportUpload.objects.filter(id=upload2.id).update(created_at=base_time + timedelta(days=1))
 
@@ -151,8 +154,8 @@ class ReportServiceTest(TestCase):
 
         qs = ReportUploadService.list_uploads(
             self.patient,
-            start_date=base_time.date(),
-            end_date=base_time.date(),
+            start_date=base_date,
+            end_date=base_date,
         )
         self.assertEqual(list(qs), [upload1])
 
@@ -178,8 +181,9 @@ class ReportServiceTest(TestCase):
             images=[
                 {
                     "image_url": "https://example.com/newer.png",
-                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "record_type": ReportImage.RecordType.CHECKUP,
                     "report_date": base_date + timedelta(days=1),
+                    "checkup_item_id": self.checkup_item.id,
                 }
             ],
         )
@@ -188,8 +192,9 @@ class ReportServiceTest(TestCase):
             images=[
                 {
                     "image_url": "https://example.com/middle.png",
-                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "record_type": ReportImage.RecordType.CHECKUP,
                     "report_date": base_date,
+                    "checkup_item_id": self.checkup_item.id,
                 }
             ],
         )
@@ -198,8 +203,9 @@ class ReportServiceTest(TestCase):
             images=[
                 {
                     "image_url": "https://example.com/older.png",
-                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "record_type": ReportImage.RecordType.CHECKUP,
                     "report_date": base_date - timedelta(days=1),
+                    "checkup_item_id": self.checkup_item.id,
                 }
             ],
         )
@@ -210,24 +216,38 @@ class ReportServiceTest(TestCase):
             images=["https://example.com/no-date.png"],
         )
 
-        page = ReportUploadService.list_report_images(
-            self.patient,
+        payload = ReportUploadService.list_report_images(
+            patient_id=self.patient.id,
+            category_code=self.checkup_item.code,
+            report_month="",
             start_date=base_date - timedelta(days=1),
             end_date=base_date + timedelta(days=1),
         )
-        report_dates = [img.report_date for img in page]
-        self.assertEqual(report_dates, [base_date + timedelta(days=1), base_date])
+        report_dates = [item["report_date"] for item in payload["list"]]
+        self.assertEqual(
+            report_dates,
+            [
+                (base_date + timedelta(days=1)).strftime("%Y-%m-%d"),
+                base_date.strftime("%Y-%m-%d"),
+            ],
+        )
 
-        page_with_deleted = ReportUploadService.list_report_images(
-            self.patient,
+        payload_with_deleted = ReportUploadService.list_report_images(
+            patient_id=self.patient.id,
+            category_code=self.checkup_item.code,
+            report_month="",
             start_date=base_date - timedelta(days=1),
             end_date=base_date + timedelta(days=1),
             include_deleted=True,
         )
-        report_dates_with_deleted = [img.report_date for img in page_with_deleted]
+        report_dates_with_deleted = [item["report_date"] for item in payload_with_deleted["list"]]
         self.assertEqual(
             report_dates_with_deleted,
-            [base_date + timedelta(days=1), base_date, base_date - timedelta(days=1)],
+            [
+                (base_date + timedelta(days=1)).strftime("%Y-%m-%d"),
+                base_date.strftime("%Y-%m-%d"),
+                (base_date - timedelta(days=1)).strftime("%Y-%m-%d"),
+            ],
         )
 
     def test_list_report_images_pagination(self):
@@ -237,8 +257,9 @@ class ReportServiceTest(TestCase):
             images=[
                 {
                     "image_url": "https://example.com/newer.png",
-                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "record_type": ReportImage.RecordType.CHECKUP,
                     "report_date": base_date + timedelta(days=1),
+                    "checkup_item_id": self.checkup_item.id,
                 }
             ],
         )
@@ -247,18 +268,31 @@ class ReportServiceTest(TestCase):
             images=[
                 {
                     "image_url": "https://example.com/older.png",
-                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "record_type": ReportImage.RecordType.CHECKUP,
                     "report_date": base_date,
+                    "checkup_item_id": self.checkup_item.id,
                 }
             ],
         )
 
-        page1 = ReportUploadService.list_report_images(self.patient, page=1, page_size=1)
-        page2 = ReportUploadService.list_report_images(self.patient, page=2, page_size=1)
+        payload1 = ReportUploadService.list_report_images(
+            patient_id=self.patient.id,
+            category_code=self.checkup_item.code,
+            report_month="",
+            page_num=1,
+            page_size=1,
+        )
+        payload2 = ReportUploadService.list_report_images(
+            patient_id=self.patient.id,
+            category_code=self.checkup_item.code,
+            report_month="",
+            page_num=2,
+            page_size=1,
+        )
 
-        self.assertEqual(page1.paginator.count, 2)
-        self.assertEqual(page1.object_list[0].report_date, base_date + timedelta(days=1))
-        self.assertEqual(page2.object_list[0].report_date, base_date)
+        self.assertEqual(payload1["total"], 2)
+        self.assertEqual(payload1["list"][0]["report_date"], (base_date + timedelta(days=1)).strftime("%Y-%m-%d"))
+        self.assertEqual(payload2["list"][0]["report_date"], base_date.strftime("%Y-%m-%d"))
 
     def test_list_report_images_grouped_filters_month_and_category(self):
         upload = ReportUploadService.create_upload(
@@ -306,7 +340,7 @@ class ReportServiceTest(TestCase):
             upload_source=UploadSource.CHECKUP_PLAN,
         )
 
-        payload = list_report_images_grouped(
+        payload = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
             report_month="2025-11",
@@ -345,14 +379,14 @@ class ReportServiceTest(TestCase):
             upload_source=UploadSource.CHECKUP_PLAN,
         )
 
-        page1 = list_report_images_grouped(
+        page1 = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
             report_month="2025-11",
             page_num=1,
             page_size=1,
         )
-        page2 = list_report_images_grouped(
+        page2 = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
             report_month="2025-11",

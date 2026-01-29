@@ -191,7 +191,11 @@ class ReportServiceTest(TestCase):
         upload1 = self._create_upload()
         upload2 = self._create_upload(upload_source=UploadSource.CHECKUP_PLAN)
 
-        base_time = timezone.now() - timedelta(days=2)
+        # 使用本地日期计算以避免跨时区导致 created_at__date 偏移
+        today_local = timezone.localdate()
+        base_date = today_local - timedelta(days=2)
+        base_time = timezone.make_aware(datetime.combine(base_date, datetime.min.time()))
+
         ReportUpload.objects.filter(id=upload1.id).update(created_at=base_time)
         ReportUpload.objects.filter(id=upload2.id).update(created_at=base_time + timedelta(days=1))
 
@@ -200,8 +204,8 @@ class ReportServiceTest(TestCase):
 
         qs = ReportUploadService.list_uploads(
             self.patient,
-            start_date=base_time.date(),
-            end_date=base_time.date(),
+            start_date=base_date,
+            end_date=base_date,
         )
         self.assertEqual(list(qs), [upload1])
 
