@@ -1,7 +1,14 @@
 
+from datetime import timedelta
+
 from django.test import TestCase, Client
 from django.urls import reverse
-from users.models import CustomUser, DoctorProfile, SalesProfile
+from django.utils import timezone
+
+from chat.models import Conversation, Message
+from chat.models.choices import ConversationType, MessageContentType
+from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
+from users.models import CustomUser, DoctorProfile, DoctorStudio, PatientProfile, SalesProfile
 from users import choices
 from users.services.auth import AuthService
 
@@ -19,15 +26,22 @@ class MobileAuthTests(TestCase):
             phone="13800000001",
             password=self.password,
             user_type=choices.UserType.DOCTOR,
-            wx_nickname="梅周芳"
+            wx_nickname="昵称医生"
         )
-        DoctorProfile.objects.create(
+        self.doctor_profile = DoctorProfile.objects.create(
             user=self.doctor,
-            name="梅周芳",
+            name="真实医生",
             title="主任医师",
-            hospital="上海第五人民医院",
-            department="呼吸与重症科"
+            hospital="测试医院",
+            department="测试科室"
         )
+        self.studio = DoctorStudio.objects.create(
+            name="真实工作室",
+            code="STUDIO_TEST_001",
+            owner_doctor=self.doctor_profile,
+        )
+        self.doctor_profile.studio = self.studio
+        self.doctor_profile.save(update_fields=["studio"])
         
         # Create a sales user
         self.sales = CustomUser.objects.create_user(
@@ -95,15 +109,73 @@ class MobileAuthTests(TestCase):
         self.assertRedirects(response, reverse("web_sales:sales_dashboard"))
 
     def test_mobile_home_view_renders_correctly(self):
-        """测试移动端首页视图渲染及数据包含"""
+        """测试移动端首页视图渲染及真实数据包含"""
+        patient_user_1 = CustomUser.objects.create_user(
+            username="patient_user_1",
+            wx_openid="openid_patient_1",
+            user_type=choices.UserType.PATIENT,
+        )
+        patient_1 = PatientProfile.objects.create(
+            user=patient_user_1,
+            phone="13911110001",
+            name="患者甲",
+            doctor=self.doctor_profile,
+            is_active=True,
+            last_active_at=timezone.now(),
+        )
+        PatientProfile.objects.create(
+            phone="13911110002",
+            name="患者乙",
+            doctor=self.doctor_profile,
+            is_active=True,
+            last_active_at=timezone.now() - timedelta(days=1),
+        )
+
+        PatientAlert.objects.create(
+            patient=patient_1,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="体征异常",
+            event_time=timezone.now(),
+            status=AlertStatus.PENDING,
+        )
+
+        conversation = Conversation.objects.create(
+            patient=patient_1,
+            studio=self.studio,
+            type=ConversationType.PATIENT_STUDIO,
+            created_by=self.doctor,
+            last_message_at=timezone.now(),
+        )
+        Message.objects.create(
+            conversation=conversation,
+            sender=patient_user_1,
+            sender_display_name_snapshot=patient_1.name,
+            studio_name_snapshot=self.studio.name,
+            content_type=MessageContentType.TEXT,
+            text_content="已经连续3天发烧......",
+        )
+
         self.client.force_login(self.doctor)
         response = self.client.get(self.mobile_home_url)
         
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "web_doctor/mobile/index.html")
         
-        # 验证模拟数据
-        self.assertContains(response, "梅周芳")
-        self.assertContains(response, "主任医师")
-        self.assertContains(response, "管理患者")
-        self.assertContains(response, "120") # managed_patients
+        ctx = response.context
+        self.assertEqual(ctx["doctor"]["name"], "真实医生")
+        self.assertEqual(ctx["doctor"]["hospital"], "测试医院")
+        self.assertEqual(ctx["doctor"]["department"], "测试科室")
+        self.assertEqual(ctx["doctor"]["phone"], "13800000001")
+        self.assertEqual(ctx["doctor"]["studio_name"], "真实工作室")
+
+        self.assertEqual(ctx["stats"]["managed_patients"], 2)
+        self.assertEqual(ctx["stats"]["today_active"], 1)
+        self.assertEqual(ctx["stats"]["alerts_count"], 1)
+        self.assertEqual(ctx["stats"]["consultations_count"], 1)
+
+        self.assertEqual(ctx["alerts"][0]["patient_name"], "患者甲")
+        self.assertEqual(ctx["alerts"][0]["type"], "体征异常")
+        self.assertEqual(ctx["consultations"][0]["patient_name"], "患者甲")
+        self.assertIn("已经连续3天发烧", ctx["consultations"][0]["content"])

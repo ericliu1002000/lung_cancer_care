@@ -103,9 +103,9 @@
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         
         <!-- Modal Content -->
-        <div class="relative bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in-up max-h-[60vh] flex flex-col">
+        <div class="relative bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in-up max-h-[60vh] flex flex-col min-h-0">
             <!-- 滚动容器：添加ID用于监听 -->
-            <div id="modal-content" class="p-6 overflow-y-auto">
+            <div id="modal-content" class="p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain" style="-webkit-overflow-scrolling: touch;">
                 <h3 class="text-lg font-bold text-center text-gray-800 mb-5">图片上传示例</h3>
                 
                 <!-- Example Area -->
@@ -164,6 +164,78 @@ const modalContent = document.getElementById('modal-content');
 const btnTextEl = document.getElementById('btn-text');
 const confirmBtn = document.getElementById('modal-confirm-btn');
 const confirmBtnContainer = document.getElementById('instructions-modal'); 
+
+const bodyScrollLockState = {
+  locked: false,
+  scrollY: 0
+};
+
+function lockBodyScroll() {
+  if (bodyScrollLockState.locked) return;
+  bodyScrollLockState.scrollY = window.scrollY || window.pageYOffset || 0;
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${bodyScrollLockState.scrollY}px`;
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+  document.body.style.overflow = 'hidden';
+  bodyScrollLockState.locked = true;
+}
+
+function unlockBodyScroll() {
+  if (!bodyScrollLockState.locked) return;
+  const scrollY = bodyScrollLockState.scrollY;
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  document.body.style.overflow = '';
+  bodyScrollLockState.locked = false;
+  window.scrollTo(0, scrollY);
+}
+
+function isElementVisible(el) {
+  if (!el) return false;
+  if (el.style.display === 'none') return false;
+  return window.getComputedStyle(el).display !== 'none';
+}
+
+function setupModalTouchScrollGuard(modalEl, scrollEl) {
+  if (!modalEl || !scrollEl) return;
+
+  modalEl.addEventListener('touchmove', (e) => {
+    if (!scrollEl.contains(e.target)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  let startY = 0;
+  scrollEl.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 0) {
+      startY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  scrollEl.addEventListener('touchmove', (e) => {
+    if (!e.touches || e.touches.length === 0) return;
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - startY;
+
+    const atTop = scrollEl.scrollTop <= 0;
+    const atBottom = (scrollEl.scrollTop + scrollEl.clientHeight) >= (scrollEl.scrollHeight - 1);
+
+    if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+      e.preventDefault();
+    }
+    e.stopPropagation();
+  }, { passive: false });
+}
+
+if (isElementVisible(confirmBtnContainer)) {
+  lockBodyScroll();
+  setupModalTouchScrollGuard(confirmBtnContainer, modalContent);
+}
 
 // 监听模态框内容滚动事件
 if (modalContent) {
@@ -401,6 +473,7 @@ function deleteExistingImage(imageId, itemId) {
 function closeModal() {
     const modal = document.getElementById('instructions-modal');
     modal.style.display = 'none';
+    unlockBodyScroll();
 }
 
 function submitCheckup() {
