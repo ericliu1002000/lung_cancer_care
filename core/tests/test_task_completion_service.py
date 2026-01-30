@@ -25,7 +25,7 @@ class TaskCompletionServiceTest(TestCase):
             cycle_days=21,
             status=choices.TreatmentCycleStatus.IN_PROGRESS,
         )
-        self.occurred_at = timezone.now()
+        self.occurred_at = timezone.localtime()
         self.task_date = self.occurred_at.date()
 
     def test_complete_daily_medication_tasks_updates_all(self):

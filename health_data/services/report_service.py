@@ -8,7 +8,7 @@ from typing import Iterable, List, Dict, Optional
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Max
 from django.utils import timezone
 
 from core.models import CheckupLibrary
@@ -242,47 +242,123 @@ class ReportUploadService:
 
     @staticmethod
     def list_report_images(
-        patient: PatientProfile,
+        patient_id: int,
+        category_code: str,
+        report_month: str,
+        page_num: int = 1,
+        page_size: int = 10,
+        include_deleted: bool = False,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-        page: int = 1,
-        page_size: int = 20,
-        include_deleted: bool = False,
     ):
         """
         【功能说明】
-        - 按报告日期倒序返回指定患者的报告图片明细（ReportImage）。
+        - 按月份 + 复查二级分类分页返回图片列表，按报告日期倒序分组。
 
         【参数说明】
-        - patient: PatientProfile。
-        - start_date/end_date: report_date 日期范围（含边界）。
-        - page/page_size: 分页参数。
+        - patient_id: 患者 ID。
+        - category_code: 复查二级分类 code（CheckupLibrary.code）。
+        - report_month: 月份（YYYY-MM）。
+        - page_num/page_size: 分页参数（以“日期分组条目”为单位）。
         - include_deleted: 是否包含已删除的上传批次图片。
+        - start_date/end_date: 报告日期范围（闭区间），仅当两者同时传入时生效。
 
         【返回值说明】
-        - Django Page 对象，page.object_list 为 ReportImage 列表。
+        - dict：{total, list[{report_date, image_urls[]}]}。
         """
-        queryset = (
-            ReportImage.objects.select_related(
-                "upload",
-                "checkup_item",
-                "clinical_event",
-                "health_metric",
-            )
-            .filter(upload__patient=patient)
+        if not patient_id:
+            raise ValidationError("patient_id 不能为空。")
+        if not category_code:
+            raise ValidationError("category_code 不能为空。")
+        report_month = (report_month or "").strip()
+        month_start_date: Optional[date] = None
+        month_end_date: Optional[date] = None
+        if report_month:
+            try:
+                month_dt = datetime.strptime(report_month, "%Y-%m")
+            except (TypeError, ValueError):
+                raise ValidationError("report_month 格式无效，需为 YYYY-MM。")
+
+            month_start_date = month_dt.date().replace(day=1)
+            if month_start_date.month == 12:
+                next_month = month_start_date.replace(
+                    year=month_start_date.year + 1, month=1, day=1
+                )
+            else:
+                next_month = month_start_date.replace(month=month_start_date.month + 1, day=1)
+            month_end_date = next_month - timedelta(days=1)
+
+        if start_date is not None and not isinstance(start_date, date):
+            raise ValidationError("start_date 必须为日期类型。")
+        if end_date is not None and not isinstance(end_date, date):
+            raise ValidationError("end_date 必须为日期类型。")
+
+        try:
+            page_num = int(page_num)
+        except (TypeError, ValueError):
+            raise ValidationError("page_num 必须为整数。")
+        if page_num < 1:
+            raise ValidationError("page_num 必须从 1 开始。")
+
+        try:
+            page_size = int(page_size)
+        except (TypeError, ValueError):
+            raise ValidationError("page_size 必须为整数。")
+        if page_size < 1:
+            raise ValidationError("page_size 必须大于 0。")
+
+        patient = PatientProfile.objects.filter(id=int(patient_id)).first()
+        if patient is None:
+            raise ValidationError("患者不存在。")
+
+        base_qs = (
+            ReportImage.objects.filter(upload__patient=patient)
+            .filter(record_type=ReportImage.RecordType.CHECKUP)
+            .filter(checkup_item__code=str(category_code))
             .exclude(report_date__isnull=True)
         )
+        if start_date is not None and end_date is not None:
+            # 闭区间 [start_date, end_date]
+            base_qs = base_qs.filter(
+                report_date__range=(start_date, end_date)
+            )
+        elif month_start_date is not None and month_end_date is not None:
+            # 原有月份过滤逻辑
+            base_qs = base_qs.filter(
+                report_date__range=(month_start_date, month_end_date)
+            )
 
         if not include_deleted:
-            queryset = queryset.filter(upload__deleted_at__isnull=True)
+            base_qs = base_qs.filter(upload__deleted_at__isnull=True)
 
-        if start_date is not None:
-            queryset = queryset.filter(report_date__gte=start_date)
-        if end_date is not None:
-            queryset = queryset.filter(report_date__lte=end_date)
+        date_qs = (
+            base_qs.values("report_date")
+            .annotate(max_id=Max("id"))
+            .order_by("-report_date", "-max_id")
+        )
+        paginator = Paginator(date_qs, page_size)
+        page_obj = paginator.get_page(page_num)
+        date_list = [row["report_date"] for row in page_obj.object_list]
+        if not date_list:
+            return {"total": paginator.count, "list": []}
 
-        paginator = Paginator(queryset.order_by("-report_date", "-id"), page_size)
-        return paginator.get_page(page)
+        images_qs = (
+            base_qs.filter(report_date__in=date_list)
+            .values("report_date", "image_url")
+            .order_by("-report_date", "-id")
+        )
+        images_by_date = {d: [] for d in date_list}
+        for row in images_qs:
+            images_by_date.setdefault(row["report_date"], []).append(row["image_url"])
+
+        grouped = [
+            {
+                "report_date": d.strftime("%Y-%m-%d"),
+                "image_urls": images_by_date.get(d, []),
+            }
+            for d in date_list
+        ]
+        return {"total": paginator.count, "list": grouped}
 
     @staticmethod
     def delete_upload(upload: ReportUpload) -> bool:

@@ -200,7 +200,7 @@
                     </div>
                 </div>
 
-                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}&source=health_records'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}{% if stat.type == 'medical' and is_medication_detail_entry %}&source=medication&view=detail{% else %}&source=health_records{% endif %}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
                     查看详情
                 </button>
             </div>
@@ -230,7 +230,7 @@
                               </div>
                           </div>
                       </div>
-                      <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type=review_record&title={{ stat.title }}&checkup_id={{ stat.lib_id }}&patient_id={{ patient_id|default:'' }}&source=checkup_list'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                      <button onclick="window.location.href='{% url 'web_patient:review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
                           查看详情
                       </button>
                   </div>

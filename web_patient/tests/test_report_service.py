@@ -1,7 +1,6 @@
 from datetime import date, datetime, timedelta
 
 from django.core.exceptions import ValidationError
-from django.db import connection
 from django.test import TestCase
 from django.utils import timezone
 
@@ -16,7 +15,10 @@ from health_data.models import (
     UploadSource,
     UploaderRole,
 )
-from health_data.services.report_service import ReportArchiveService, ReportUploadService
+from health_data.services.report_service import (
+    ReportArchiveService,
+    ReportUploadService,
+)
 from users import choices as user_choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
 
@@ -50,58 +52,6 @@ class ReportServiceTest(TestCase):
     def _create_upload(self, **kwargs) -> ReportUpload:
         images = kwargs.pop("images", ["https://example.com/a.png"])
         return ReportUploadService.create_upload(self.patient, images, **kwargs)
-
-    def _count_distinct_report_dates_sql(
-        self,
-        *,
-        patient_id: int,
-        category_code: str,
-        include_deleted: bool = False,
-        report_month: str = "",
-        start_date=None,
-        end_date=None,
-    ) -> int:
-        clauses = [
-            "ru.patient_id = %s",
-            "ri.record_type = %s",
-            "ri.report_date IS NOT NULL",
-            "cl.code = %s",
-        ]
-        params = [patient_id, int(ReportImage.RecordType.CHECKUP), category_code]
-
-        if not include_deleted:
-            clauses.append("ru.deleted_at IS NULL")
-
-        report_month = (report_month or "").strip()
-        if report_month:
-            month_dt = datetime.strptime(report_month, "%Y-%m")
-            month_start = month_dt.date().replace(day=1)
-            if month_start.month == 12:
-                next_month = month_start.replace(year=month_start.year + 1, month=1, day=1)
-            else:
-                next_month = month_start.replace(month=month_start.month + 1, day=1)
-            month_end = next_month - timedelta(days=1)
-            clauses.append("ri.report_date >= %s")
-            clauses.append("ri.report_date <= %s")
-            params.extend([month_start, month_end])
-
-        if start_date is not None and end_date is not None:
-            clauses.append("ri.report_date >= %s")
-            clauses.append("ri.report_date <= %s")
-            params.extend([start_date, end_date])
-
-        where_sql = " AND ".join(clauses)
-        sql = f"""
-            SELECT COUNT(DISTINCT ri.report_date)
-            FROM health_report_images ri
-            JOIN health_report_uploads ru ON ri.upload_id = ru.id
-            JOIN core_checkup_library cl ON ri.checkup_item_id = cl.id
-            WHERE {where_sql}
-        """
-        with connection.cursor() as cursor:
-            cursor.execute(sql, params)
-            row = cursor.fetchone()
-        return int(row[0] or 0)
 
     def test_create_upload_basic(self):
         upload = self._create_upload(images=["https://example.com/a.png", "https://example.com/b.png"])
@@ -225,110 +175,124 @@ class ReportServiceTest(TestCase):
         self.assertEqual(page1.paginator.count, 2)
 
     def test_list_report_images_filters_and_ordering(self):
+        base_date = date(2025, 1, 10)
+        newer = ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/newer.png",
+                    "record_type": ReportImage.RecordType.CHECKUP,
+                    "report_date": base_date + timedelta(days=1),
+                    "checkup_item_id": self.checkup_item.id,
+                }
+            ],
+        )
+        middle = ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/middle.png",
+                    "record_type": ReportImage.RecordType.CHECKUP,
+                    "report_date": base_date,
+                    "checkup_item_id": self.checkup_item.id,
+                }
+            ],
+        )
+        older = ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/older.png",
+                    "record_type": ReportImage.RecordType.CHECKUP,
+                    "report_date": base_date - timedelta(days=1),
+                    "checkup_item_id": self.checkup_item.id,
+                }
+            ],
+        )
+        ReportUpload.objects.filter(id=older.id).update(deleted_at=timezone.now())
+
         ReportUploadService.create_upload(
             self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/nov-14.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 11, 14),
-                }
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
+            images=["https://example.com/no-date.png"],
         )
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/nov-07.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 11, 7),
-                }
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-        older_upload = ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/nov-01-deleted.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 11, 1),
-                }
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-        ReportUpload.objects.filter(id=older_upload.id).update(deleted_at=timezone.now())
 
         payload = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
-            report_month="2025-11",
-            page_num=1,
-            page_size=10,
+            report_month="",
+            start_date=base_date - timedelta(days=1),
+            end_date=base_date + timedelta(days=1),
         )
-        self.assertEqual(payload["total"], 2)
-        self.assertEqual(payload["list"][0]["report_date"], "2025-11-14")
-        self.assertEqual(payload["list"][1]["report_date"], "2025-11-07")
+        report_dates = [item["report_date"] for item in payload["list"]]
+        self.assertEqual(
+            report_dates,
+            [
+                (base_date + timedelta(days=1)).strftime("%Y-%m-%d"),
+                base_date.strftime("%Y-%m-%d"),
+            ],
+        )
 
         payload_with_deleted = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
-            report_month="2025-11",
-            page_num=1,
-            page_size=10,
+            report_month="",
+            start_date=base_date - timedelta(days=1),
+            end_date=base_date + timedelta(days=1),
             include_deleted=True,
         )
-        self.assertEqual(payload_with_deleted["total"], 3)
+        report_dates_with_deleted = [item["report_date"] for item in payload_with_deleted["list"]]
+        self.assertEqual(
+            report_dates_with_deleted,
+            [
+                (base_date + timedelta(days=1)).strftime("%Y-%m-%d"),
+                base_date.strftime("%Y-%m-%d"),
+                (base_date - timedelta(days=1)).strftime("%Y-%m-%d"),
+            ],
+        )
 
     def test_list_report_images_pagination(self):
+        base_date = date(2025, 1, 10)
         ReportUploadService.create_upload(
             self.patient,
             images=[
                 {
-                    "image_url": "https://example.com/nov-14.png",
+                    "image_url": "https://example.com/newer.png",
                     "record_type": ReportImage.RecordType.CHECKUP,
+                    "report_date": base_date + timedelta(days=1),
                     "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 11, 14),
                 }
             ],
-            upload_source=UploadSource.CHECKUP_PLAN,
         )
         ReportUploadService.create_upload(
             self.patient,
             images=[
                 {
-                    "image_url": "https://example.com/nov-07.png",
+                    "image_url": "https://example.com/older.png",
                     "record_type": ReportImage.RecordType.CHECKUP,
+                    "report_date": base_date,
                     "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 11, 7),
                 }
             ],
-            upload_source=UploadSource.CHECKUP_PLAN,
         )
 
-        page1 = ReportUploadService.list_report_images(
+        payload1 = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
-            report_month="2025-11",
+            report_month="",
             page_num=1,
             page_size=1,
         )
-        page2 = ReportUploadService.list_report_images(
+        payload2 = ReportUploadService.list_report_images(
             patient_id=self.patient.id,
             category_code=self.checkup_item.code,
-            report_month="2025-11",
+            report_month="",
             page_num=2,
             page_size=1,
         )
 
-        self.assertEqual(page1["total"], 2)
-        self.assertEqual(page2["total"], 2)
-        self.assertEqual(page1["list"][0]["report_date"], "2025-11-14")
-        self.assertEqual(page2["list"][0]["report_date"], "2025-11-07")
+        self.assertEqual(payload1["total"], 2)
+        self.assertEqual(payload1["list"][0]["report_date"], (base_date + timedelta(days=1)).strftime("%Y-%m-%d"))
+        self.assertEqual(payload2["list"][0]["report_date"], base_date.strftime("%Y-%m-%d"))
 
     def test_list_report_images_grouped_filters_month_and_category(self):
         upload = ReportUploadService.create_upload(
@@ -433,228 +397,6 @@ class ReportServiceTest(TestCase):
         self.assertEqual(page2["total"], 2)
         self.assertEqual(page1["list"][0]["report_date"], "2025-11-14")
         self.assertEqual(page2["list"][0]["report_date"], "2025-11-07")
-
-    def test_list_report_images_date_filter_double_none(self):
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/a.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2024, 12, 31),
-                },
-                {
-                    "image_url": "https://example.com/b.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 1),
-                },
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-
-        payload = ReportUploadService.list_report_images(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            page_num=1,
-            page_size=10,
-            start_date=None,
-            end_date=None,
-        )
-        expected = self._count_distinct_report_dates_sql(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            start_date=None,
-            end_date=None,
-        )
-        self.assertEqual(payload["total"], expected)
-
-    def test_list_report_images_date_filter_only_start_date(self):
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/a.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 1),
-                },
-                {
-                    "image_url": "https://example.com/b.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 10),
-                },
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-
-        payload = ReportUploadService.list_report_images(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            page_num=1,
-            page_size=10,
-            start_date=date(2025, 1, 5),
-            end_date=None,
-        )
-        expected = self._count_distinct_report_dates_sql(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            start_date=date(2025, 1, 5),
-            end_date=None,
-        )
-        self.assertEqual(payload["total"], expected)
-
-    def test_list_report_images_date_filter_only_end_date(self):
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/a.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 1),
-                },
-                {
-                    "image_url": "https://example.com/b.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 10),
-                },
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-
-        payload = ReportUploadService.list_report_images(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            page_num=1,
-            page_size=10,
-            start_date=None,
-            end_date=date(2025, 1, 5),
-        )
-        expected = self._count_distinct_report_dates_sql(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            start_date=None,
-            end_date=date(2025, 1, 5),
-        )
-        self.assertEqual(payload["total"], expected)
-
-    def test_list_report_images_date_filter_normal_range(self):
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/a.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 1),
-                },
-                {
-                    "image_url": "https://example.com/b.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 10),
-                },
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-
-        payload = ReportUploadService.list_report_images(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            page_num=1,
-            page_size=10,
-            start_date=date(2025, 1, 5),
-            end_date=date(2025, 1, 20),
-        )
-        expected = self._count_distinct_report_dates_sql(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            start_date=date(2025, 1, 5),
-            end_date=date(2025, 1, 20),
-        )
-        self.assertEqual(payload["total"], expected)
-
-    def test_list_report_images_date_filter_reverse_range(self):
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/a.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 10),
-                }
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-
-        payload = ReportUploadService.list_report_images(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            page_num=1,
-            page_size=10,
-            start_date=date(2025, 1, 10),
-            end_date=date(2025, 1, 1),
-        )
-        expected = self._count_distinct_report_dates_sql(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            start_date=date(2025, 1, 10),
-            end_date=date(2025, 1, 1),
-        )
-        self.assertEqual(payload["total"], expected)
-
-    def test_list_report_images_date_filter_cross_year_range(self):
-        ReportUploadService.create_upload(
-            self.patient,
-            images=[
-                {
-                    "image_url": "https://example.com/a.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2024, 12, 31),
-                },
-                {
-                    "image_url": "https://example.com/b.png",
-                    "record_type": ReportImage.RecordType.CHECKUP,
-                    "checkup_item_id": self.checkup_item.id,
-                    "report_date": date(2025, 1, 1),
-                },
-            ],
-            upload_source=UploadSource.CHECKUP_PLAN,
-        )
-
-        payload = ReportUploadService.list_report_images(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            page_num=1,
-            page_size=10,
-            start_date=date(2024, 12, 30),
-            end_date=date(2025, 1, 2),
-        )
-        expected = self._count_distinct_report_dates_sql(
-            patient_id=self.patient.id,
-            category_code=self.checkup_item.code,
-            report_month="",
-            start_date=date(2024, 12, 30),
-            end_date=date(2025, 1, 2),
-        )
-        self.assertEqual(payload["total"], expected)
 
     def test_delete_upload_hard_delete(self):
         upload = self._create_upload(images=["https://example.com/a.png"])

@@ -26,6 +26,8 @@ from .record import (
     query_last_metric,
     membership_status,
     delete_report_image,
+    review_record_detail,
+    review_record_detail_data,
 )
 from .followup import daily_survey, get_survey_detail, submit_surveys
 from .api import delete_health_metric, update_health_metric, submit_medication
@@ -78,4 +80,6 @@ __all__ = [
     "query_last_metric",
     "membership_status",
     "delete_report_image",
+    "review_record_detail",
+    "review_record_detail_data",
 ]

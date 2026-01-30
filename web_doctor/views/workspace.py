@@ -37,8 +37,47 @@ from web_doctor.views.home import build_home_context
 from patient_alerts.services.todo_list import TodoListService
 from django.template.loader import render_to_string
 from chat.services.chat import ChatService
+from market.models import Order
 
 logger = logging.getLogger(__name__)
+
+_CYCLE_STATE_RANK = {
+    "in_progress": 0,
+    "not_started": 1,
+    "completed": 2,
+    "terminated": 3,
+}
+
+
+def _resolve_cycle_runtime_state(cycle: TreatmentCycle, today: date | None = None) -> str:
+    if today is None:
+        today = date.today()
+    if cycle.status == core_choices.TreatmentCycleStatus.TERMINATED:
+        return "terminated"
+    if today < cycle.start_date:
+        return "not_started"
+    if cycle.end_date and today > cycle.end_date:
+        return "completed"
+    if cycle.status == core_choices.TreatmentCycleStatus.COMPLETED:
+        return "completed"
+    return "in_progress"
+
+
+def _sort_cycles_for_settings(cycles: list[TreatmentCycle], today: date | None = None) -> list[TreatmentCycle]:
+    if today is None:
+        today = date.today()
+    states = [_resolve_cycle_runtime_state(c, today=today) for c in cycles]
+    if "in_progress" not in states:
+        return cycles
+
+    indexed = list(enumerate(cycles))
+    indexed.sort(
+        key=lambda item: (
+            _CYCLE_STATE_RANK[_resolve_cycle_runtime_state(item[1], today=today)],
+            item[0],
+        )
+    )
+    return [cycle for _, cycle in indexed]
 
 
 def _get_workspace_identities(user):
@@ -84,6 +123,7 @@ def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientPr
     为患者列表附加待办事项和咨询消息计数
     """
     patients = list(patients_qs)
+    _attach_patients_service_status_codes(patients)
     chat_service = ChatService()
     
     for patient in patients:
@@ -114,6 +154,62 @@ def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientPr
     return patients
 
 
+def _attach_patients_service_status_codes(patients: list[PatientProfile]) -> None:
+    if not patients:
+        return
+
+    patient_ids = [patient.id for patient in patients]
+    paid_orders = (
+        Order.objects.select_related("product")
+        .filter(
+            patient_id__in=patient_ids,
+            status=Order.Status.PAID,
+            paid_at__isnull=False,
+        )
+        .order_by("-paid_at")
+    )
+    orders_by_patient: dict[int, list[Order]] = {}
+    for order in paid_orders:
+        orders_by_patient.setdefault(order.patient_id, []).append(order)
+
+    today = timezone.localdate()
+    for patient in patients:
+        patient_orders = orders_by_patient.get(patient.id, [])
+        state = "none"
+        last_end_date: date | None = None
+        for order in patient_orders:
+            end_date = order.end_date
+            if not end_date:
+                continue
+            if today <= end_date:
+                state = "active"
+                last_end_date = None
+                break
+            if not last_end_date or end_date > last_end_date:
+                last_end_date = end_date
+        if state != "active" and last_end_date:
+            state = "expired"
+        patient.service_status_code = state
+
+
+def _split_patients_by_service_status(patients: list[PatientProfile]) -> tuple[list[PatientProfile], list[PatientProfile], list[PatientProfile]]:
+    managed: list[PatientProfile] = []
+    stopped: list[PatientProfile] = []
+    unpaid: list[PatientProfile] = []
+
+    for patient in patients:
+        state = getattr(patient, "service_status_code", None) or patient.service_status
+        if state == "active":
+            managed.append(patient)
+            continue
+        if state == "expired":
+            stopped.append(patient)
+            continue
+        unpaid.append(patient)
+
+    return managed, stopped, unpaid
+
+
 @login_required
 @check_doctor_or_assistant
 def doctor_workspace(request: HttpRequest) -> HttpResponse:
@@ -125,6 +221,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
+    managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
     
     display_name = get_user_display_name(request.user)
     
@@ -144,7 +241,9 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
             "doctor": doctor_profile,
             "assistant": assistant_profile,
             "workspace_display_name": display_name,
-            "patients": patients,
+            "managed_patients": managed_patients,
+            "stopped_patients": stopped_patients,
+            "unpaid_patients": unpaid_patients,
             "todo_list": [], # 首页初始状态为空，点击患者后加载
         },
     )
@@ -159,11 +258,14 @@ def doctor_workspace_patient_list(request: HttpRequest) -> HttpResponse:
     """
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
+    managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
     return render(
         request,
         "web_doctor/partials/patient_list.html",
         {
-            "patients": patients,
+            "managed_patients": managed_patients,
+            "stopped_patients": stopped_patients,
+            "unpaid_patients": unpaid_patients,
         },
     )
 
@@ -347,10 +449,9 @@ def _build_settings_context(
 
     active_cycle = get_active_treatment_cycle(patient)
 
-    # 患者全部疗程列表，改为正序排列（最早的在前）
-    # 之前是 order_by("-end_date", "-start_date")
-    cycles_qs = patient.treatment_cycles.all().order_by("start_date")
-    paginator = Paginator(cycles_qs, 5)
+    cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
+    cycles = _sort_cycles_for_settings(list(cycles_qs))
+    paginator = Paginator(cycles, 5)
     try:
         page_number = int(tc_page) if tc_page else 1
     except (TypeError, ValueError):
@@ -380,9 +481,12 @@ def _build_settings_context(
     # 判断当前选中的疗程是否可以终止（必须是进行中状态）
     can_terminate_selected_cycle = False
     is_cycle_editable = False
-    if selected_cycle and selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS:
-        can_terminate_selected_cycle = True
-        is_cycle_editable = True
+    if selected_cycle:
+        runtime_state = _resolve_cycle_runtime_state(selected_cycle)
+        if runtime_state == "in_progress":
+            can_terminate_selected_cycle = True
+        if runtime_state in ("in_progress", "not_started"):
+            is_cycle_editable = True
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
@@ -617,9 +721,8 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
             "cycle_days": cycle_days_raw or "",
         },
     }
-    selected_cycle_id = new_cycle.id if new_cycle else None
     context.update(
-        _build_settings_context(patient, tc_page=request.GET.get("tc_page"), selected_cycle_id=selected_cycle_id)
+        _build_settings_context(patient, tc_page=request.GET.get("tc_page"), selected_cycle_id=None)
     )
 
     return render(
@@ -669,12 +772,11 @@ def patient_treatment_cycle_terminate(request: HttpRequest, patient_id: int, cyc
     }
     # 终止后，通常不再有选中的 active cycle，或者 selected_cycle 变为已终止状态
     # 这里我们让 _build_settings_context 自动决定 active_cycle（此时应该为 None 或下一个 active）
-    # 但我们仍保持当前 cycle 为 selected，以便用户看到状态变更
     context.update(
         _build_settings_context(
             patient,
             tc_page=request.GET.get("tc_page"),
-            selected_cycle_id=cycle.id,
+            selected_cycle_id=None,
         )
     )
 
