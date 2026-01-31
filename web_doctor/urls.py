@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from web_doctor.views import home
+from web_doctor.views import mobile as views_mobile
 from web_doctor.views import todo_workspace
 from web_doctor.views import chat_api
 
@@ -27,6 +28,11 @@ urlpatterns = [
         "doctor/mobile/patient/<int:patient_id>/<str:section>/",
         views.mobile_patient_section,
         name="mobile_patient_section",
+    ),
+    path(
+        "mobile/patient/<int:patient_id>/chat_list",
+        views_mobile.patient_chat_list,
+        name="mobile_patient_chat_list",
     ),
     path("logout/", views.logout_view, name="logout"),
     # path("doctor/dashboard/", views.doctor_dashboard, name="doctor_dashboard"), # 已删除

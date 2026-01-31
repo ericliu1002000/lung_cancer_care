@@ -63,7 +63,7 @@
         </div>
       </a>
 
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'chat' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+      <a id="mobile-patient-chat-entry" href="{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H7l-5 5V6c0-1.1.9-2 2-2zm2 6h12v2H6v-2zm0-3h12v2H6V7zm0 6h8v2H6v-2z"/>
@@ -97,6 +97,13 @@
         return;
       }
       window.location.href = "{% url 'web_doctor:mobile_patient_list' %}";
+    });
+
+    document.addEventListener("click", function (event) {
+      const entry = event.target.closest("#mobile-patient-chat-entry");
+      if (!entry) return;
+      event.preventDefault();
+      window.location.href = "{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}";
     });
   })();
 </script>
