@@ -16,7 +16,7 @@
       </button>
       <div class="text-white  min-w-0 px-2  flex  flex-col">
         <div class="text-base font-bold truncate">患者：{{ patient.name }}</div>
-        <div class="text-xs ">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
+        <div class="text-xs ">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁 · {{ patient_no }}</div>
       </div>
       
     </div>
@@ -39,7 +39,7 @@
         </div>
       </a>
 
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'records' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+      <a href="{% url 'web_doctor:mobile_patient_records' patient.id %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/>
