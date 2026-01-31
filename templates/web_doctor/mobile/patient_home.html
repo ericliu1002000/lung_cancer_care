@@ -17,7 +17,6 @@
       <div class="text-white  min-w-0 px-2  flex  flex-col">
         <div class="text-base font-bold truncate">患者：{{ patient.name }}</div>
         <div class="text-xs ">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁 </div>
-        <div class="text-xs opacity-90">{{ patient_no }}</div>
       </div>
       
     </div>
@@ -73,6 +72,18 @@
         <div>
           <div class="text-sm font-bold text-slate-800">患者咨询</div>
           <div class="text-xs text-slate-500 mt-0.5">医患沟通入口</div>
+        </div>
+      </a>
+
+      <a href="{% url 'web_doctor:mobile_patient_basic_info' %}?patient_id={{ patient.id }}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+        <div class="w-11 h-11 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="text-sm font-bold text-slate-800">基本信息</div>
+          <div class="text-xs text-slate-500 mt-0.5">查看患者档案</div>
         </div>
       </a>
     </div>

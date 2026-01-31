@@ -163,11 +163,7 @@
 
         const backBtn = event.target.closest("#mobile-back-btn");
         if (backBtn) {
-          {% if patient %}
-            window.location.href = "{% url 'web_doctor:mobile_patient_home' patient.id %}";
-          {% else %}
-            window.location.href = "{% url 'web_doctor:mobile_home' %}";
-          {% endif %}
+          window.history.back(); 
           return;
         }
 

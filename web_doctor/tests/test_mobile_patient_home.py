@@ -97,7 +97,7 @@ class MobilePatientHomeTests(TestCase):
         self.assertTemplateUsed(response, "web_doctor/mobile/patient_home.html")
         content = response.content.decode("utf-8")
         self.assertIn(self.patient_active.name, content)
-        self.assertIn(f"P{self.patient_active.id:06d}", content)
+        self.assertNotIn(f"P{self.patient_active.id:06d}", content)
 
     def test_mobile_patient_home_denies_unrelated_patient(self):
         self.client.force_login(self.user)
