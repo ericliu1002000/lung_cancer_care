@@ -63,20 +63,25 @@ def api_bind_device(request: HttpRequest) -> JsonResponse:
     patient = request.patient
     payload = _parse_json_body(request)
     if payload is None:
+        logger.warning("device_bind invalid_json body=%s", request.body)
         return JsonResponse({"success": False, "message": "请求体格式错误"}, status=400)
 
     scan_data = payload.get("scan_data")
     if not scan_data:
+        logger.warning("device_bind missing_scan_data payload=%s", payload)
         return JsonResponse({"success": False, "message": "缺少扫码数据"}, status=400)
 
     try:
         imei = _extract_imei(scan_data)
     except ValueError as exc:
+        logger.warning("device_bind invalid_scan_data scan_data=%s error=%s", scan_data, exc)
         return JsonResponse({"success": False, "message": str(exc) or "无法解析设备信息"}, status=400)
+    logger.info("device_bind parsed scan_data=%s imei=%s", scan_data, imei)
 
     try:
         result = bind_device(imei, patient.id)
     except DeviceServiceError as exc:
+        logger.warning("device_bind failed imei=%s patient_id=%s error=%s", imei, patient.id, exc)
         return JsonResponse({"success": False, "message": str(exc)}, status=400)
 
     if result.status == DeviceActionStatus.ALREADY_BOUND:
