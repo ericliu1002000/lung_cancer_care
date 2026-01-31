@@ -17,6 +17,7 @@
       <div class="text-white  min-w-0 px-2  flex  flex-col">
         <div class="text-base font-bold truncate">患者：{{ patient.name }}</div>
         <div class="text-xs ">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁 </div>
+        <div class="text-xs opacity-90">{{ patient_no }}</div>
       </div>
       
     </div>
@@ -27,7 +28,7 @@
   </div>
   <div class="px-4 py-5 space-y-4 opacity-0 translate-y-1 " id="mobile-patient-home-content">
     <div class="grid grid-cols-2 gap-3">
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'indicators' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+      <a id="mobile-manage-metrics-entry" href="{% url 'web_doctor:mobile_health_records' %}?patient_id={{ patient.id }}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M3 3h2v18H3V3zm16 0h2v18h-2V3zM7 13h2v8H7v-8zm4-6h2v14h-2V7zm4 4h2v10h-2V11z"/>
@@ -104,6 +105,13 @@
       if (!entry) return;
       event.preventDefault();
       window.location.href = "{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}";
+    });
+
+    document.addEventListener("click", function (event) {
+      const entry = event.target.closest("#mobile-manage-metrics-entry");
+      if (!entry) return;
+      event.preventDefault();
+      window.location.href = "{% url 'web_doctor:mobile_health_records' %}?patient_id={{ patient.id }}";
     });
   })();
 </script>
