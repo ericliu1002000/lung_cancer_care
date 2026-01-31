@@ -1504,6 +1504,10 @@ video {
   width: 650px;
 }
 
+.w-\[92vw\] {
+  width: 92vw;
+}
+
 .w-fit {
   width: -moz-fit-content;
   width: fit-content;
@@ -1519,10 +1523,6 @@ video {
 
 .w-screen {
   width: 100vw;
-}
-
-.w-\[92vw\] {
-  width: 92vw;
 }
 
 .min-w-0 {
