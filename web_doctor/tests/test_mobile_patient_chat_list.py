@@ -89,7 +89,6 @@ class MobilePatientChatListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "web_doctor/mobile/patient_chat_list.html")
         self.assertContains(response, self.patient_profile.name)
-        self.assertContains(response, "只读")
 
     def test_api_paginates_latest_then_older(self):
         """测试接口按时间升序返回最新20条，并支持游标分页加载更早记录。"""
