@@ -10,6 +10,7 @@ from .task_notifications import (
     send_daily_task_creation_messages,
     send_daily_task_reminder_messages,
 )
+from .chat_notifications import send_chat_unread_notifications
 
 __all__ = [
     "wechat_client",
@@ -20,4 +21,5 @@ __all__ = [
     "send_template_message",
     "send_daily_task_creation_messages",
     "send_daily_task_reminder_messages",
+    "send_chat_unread_notifications",
 ]

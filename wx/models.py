@@ -50,6 +50,7 @@ class SendMessageLog(TimeStampedModel):
     class Scene(models.TextChoices):
         DAILY_TASK_CREATED = "daily_task_created", "每日任务生成"
         DAILY_TASK_REMINDER = "daily_task_reminder", "每日任务提醒"
+        CHAT_UNREAD = "chat_unread", "聊天未读提醒"
 
     patient = models.ForeignKey(
         "users.PatientProfile",

@@ -5,6 +5,7 @@ from unittest import mock
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from django.test.utils import capture_on_commit_callbacks
 from django.utils import timezone
 
 from chat.models import (
@@ -212,6 +213,30 @@ class ChatServiceTests(TestCase):
 
         conversation.refresh_from_db()
         self.assertIsNotNone(conversation.last_message_at)
+
+    def test_create_text_message_enqueues_unread_notification(self):
+        conversation = self.service.get_or_create_patient_conversation(
+            self.patient_profile
+        )
+        with mock.patch(
+            "wx.services.chat_notifications.schedule_chat_unread_notification"
+        ) as mock_schedule:
+            with capture_on_commit_callbacks(execute=True):
+                message = self.service.create_text_message(
+                    conversation, self.platform_user, "hello"
+                )
+        mock_schedule.assert_called_once_with(message.id)
+
+    def test_create_text_message_no_notification_for_patient_sender(self):
+        conversation = self.service.get_or_create_patient_conversation(
+            self.patient_profile
+        )
+        with mock.patch(
+            "wx.services.chat_notifications.schedule_chat_unread_notification"
+        ) as mock_schedule:
+            with capture_on_commit_callbacks(execute=True):
+                self.service.create_text_message(conversation, self.patient_user, "ok")
+        mock_schedule.assert_not_called()
 
     def test_create_text_message_rejects_director(self):
         conversation = self.service.get_or_create_patient_conversation(
