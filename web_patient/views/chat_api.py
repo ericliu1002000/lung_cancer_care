@@ -48,8 +48,11 @@ def list_messages(request: HttpRequest):
                 'id': msg.id,
                 'sender_id': msg.sender_id,
                 'sender_role': msg.sender_role_snapshot,
-                'sender_name': get_patient_chat_title(patient),
+                # 修复：患者端应显示真实发送者名称（本人/家属/医生等），而非工作室名称
+                'sender_name': msg.sender_display_name_snapshot,
                 'studio_name': msg.studio_name_snapshot,
+                # 新增：标记患者侧（本人/家属）用于前端正确判断左右气泡
+                'is_patient_side': msg.sender_role_snapshot in (1, 2),
                 'content_type': content_type_str,
                 'text_content': msg.text_content or "",
                 'image_url': msg.image.url if msg.image else '',

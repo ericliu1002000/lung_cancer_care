@@ -57,22 +57,22 @@
         </template>
         
         <template x-for="msg in messages" :key="msg.id">
-            <div class="flex gap-3" :class="msg.sender_id == currentUserId ? 'flex-row-reverse' : 'flex-row'">
+            <div class="flex gap-3" :class="isSelf(msg) ? 'flex-row-reverse' : 'flex-row'">
                 <!-- Avatar -->
                 <div class="w-10 h-10 shrink-0 rounded-full bg-slate-200 overflow-hidden shadow-sm">
-                    <img :src="msg.sender_id == currentUserId ? currentUserAvatar : getDoctorAvatar(msg)" class="w-full h-full object-cover">
+                    <img :src="isSelf(msg) ? currentUserAvatar : getDoctorAvatar(msg)" class="w-full h-full object-cover">
                 </div>
                 
                 <!-- Content Bubble -->
-                <div class="flex flex-col max-w-[75%]" :class="msg.sender_id == currentUserId ? 'items-end' : 'items-start'">
+                <div class="flex flex-col max-w-[75%]" :class="isSelf(msg) ? 'items-end' : 'items-start'">
                     <!-- Sender Name (Optional, for doctor side) -->
-                    <template x-if="msg.sender_id != currentUserId">
+                    <template x-if="!isSelf(msg)">
                         <span class="text-[10px] text-slate-500 mb-1 ml-1" x-text="msg.sender_name || '医生'"></span>
                     </template>
 
-                    <div class="flex items-end gap-2" :class="msg.sender_id == currentUserId ? 'flex-row-reverse' : 'flex-row'">
+                    <div class="flex items-end gap-2" :class="isSelf(msg) ? 'flex-row-reverse' : 'flex-row'">
                         <div class="px-4 py-2.5 rounded-2xl shadow-sm border border-black/5"
-                             :class="msg.sender_id == currentUserId ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none'">
+                             :class="isSelf(msg) ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none'">
                              
                              <!-- Text Content -->
                              <template x-if="msg.content_type === 'text'">
@@ -173,6 +173,11 @@
                 this.pollInterval = setInterval(() => this.loadMessages(true), 5000);
                 this.$watch('messages', () => this.scrollToBottom());
             },
+
+                    // 判断是否为“患者侧”（本人或家属消息）
+                    isSelf(msg) {
+                        return !!(msg && msg.is_patient_side);
+                    },
 
             getDoctorAvatar(msg) {
                 // Future: Use real doctor avatar if available in message payload
