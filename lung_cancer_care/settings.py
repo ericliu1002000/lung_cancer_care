@@ -30,6 +30,10 @@ if DJANGO_ENV != "production" and not ALLOWED_HOSTS:
 
 WEB_BASE_URL = os.getenv("WEB_BASE_URL", "http://localhost:8001").rstrip("/")
 TEST_PATIENT_ID = os.getenv("TEST_PATIENT_ID") or None
+WECHAT_DAILY_TASK_TEMPLATE_ID = os.getenv(
+    "WECHAT_DAILY_TASK_TEMPLATE_ID",
+    "aNWInDmh-VbJsLXqxF2Msf7uLbFROre76xw_951y2V0",
+)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/

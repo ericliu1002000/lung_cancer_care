@@ -1,10 +1,12 @@
-"""每日任务相关的模板消息（模拟发送）。"""
+"""每日任务相关的模板消息（公众号 + 手表）。"""
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import Any, Dict, Iterable, List, Set
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
@@ -16,6 +18,10 @@ from core.service.tasks import refresh_task_statuses
 from users import choices as user_choices
 from users.models import PatientProfile, PatientRelation
 from wx.models import SendMessageLog
+from wx.services.oauth import generate_menu_auth_url
+from wx.services.templates import send_template_message
+
+logger = logging.getLogger(__name__)
 
 _TASK_TYPES = (
     core_choices.PlanItemCategory.MEDICATION,
@@ -47,6 +53,8 @@ _WATCH_TITLE_BY_TYPE = {
     core_choices.PlanItemCategory.QUESTIONNAIRE: "随访提醒",
 }
 _WATCH_MULTI_TITLE = "今日任务"
+_DASHBOARD_VIEW_NAME = "web_patient:patient_home"
+_TEMPLATE_TIME_FORMAT = "%Y-%m-%d %H:%M"
 
 
 def send_daily_task_creation_messages(task_date: date | None = None) -> int:
@@ -101,6 +109,9 @@ def _send_task_messages(
         scene=scene,
         task_date=task_date,
     )
+    template_id = _get_wechat_template_id()
+    dashboard_url = _get_dashboard_url()
+    send_time = timezone.localtime()
 
     logs_to_create: List[SendMessageLog] = []
     for patient in patients:
@@ -134,6 +145,21 @@ def _send_task_messages(
             pair = (patient.id, user.id)
             if pair in existing_pairs:
                 continue
+            template_data = _build_template_data(content=content, send_time=send_time)
+            ok, error = _send_wechat_template_message(
+                openid=user.wx_openid or "",
+                template_id=template_id,
+                data=template_data,
+                url=dashboard_url,
+            )
+            wechat_payload = dict(payload)
+            wechat_payload.update(
+                {
+                    "template_id": template_id,
+                    "template_data": template_data,
+                    "url": dashboard_url,
+                }
+            )
             logs_to_create.append(
                 SendMessageLog(
                     patient=patient,
@@ -143,9 +169,9 @@ def _send_task_messages(
                     scene=scene,
                     biz_date=task_date,
                     content=content,
-                    payload=payload,
-                    is_success=True,
-                    error_message="",
+                    payload=wechat_payload,
+                    is_success=ok,
+                    error_message="" if ok else str(error or ""),
                 )
             )
 
@@ -316,6 +342,50 @@ def _resolve_watch_title(*, task_types: Set[int]) -> str:
         return _WATCH_MULTI_TITLE
     task_type = next(iter(task_types))
     return _WATCH_TITLE_BY_TYPE.get(task_type, _WATCH_MULTI_TITLE)
+
+
+def _get_wechat_template_id() -> str:
+    return (getattr(settings, "WECHAT_DAILY_TASK_TEMPLATE_ID", "") or "").strip()
+
+
+def _get_dashboard_url() -> str | None:
+    try:
+        return generate_menu_auth_url(_DASHBOARD_VIEW_NAME)
+    except Exception as exc:  # pragma: no cover - 依赖配置
+        logger.error("Generate dashboard auth url failed: %s", exc)
+        return None
+
+
+def _build_template_data(*, content: str, send_time) -> Dict[str, Dict[str, str]]:
+    time_value = send_time.strftime(_TEMPLATE_TIME_FORMAT)
+    return {
+        "time4": {"value": time_value},
+        "thing59": {"value": content},
+    }
+
+
+def _send_wechat_template_message(
+    *,
+    openid: str,
+    template_id: str,
+    data: Dict[str, Dict[str, str]],
+    url: str | None,
+) -> tuple[bool, str | None]:
+    if not openid:
+        return False, "缺少 openid"
+    if not template_id:
+        return False, "缺少模板ID"
+    if not url:
+        return False, "缺少跳转链接"
+    try:
+        result = send_template_message(openid, template_id, data, url=url)
+        if isinstance(result, dict):
+            errcode = result.get("errcode")
+            if errcode not in (None, 0):
+                return False, result.get("errmsg") or f"errcode={errcode}"
+        return True, None
+    except Exception as exc:  # pragma: no cover - 网络/配置异常
+        return False, str(exc)
 
 
 def _maybe_send_watch_message(

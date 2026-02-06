@@ -16,6 +16,14 @@ from wx.services.task_notifications import (
 
 
 class TaskNotificationTests(TestCase):
+    def setUp(self):
+        self._wechat_patcher = patch(
+            "wx.services.task_notifications._send_wechat_template_message",
+            return_value=(True, None),
+        )
+        self._wechat_patcher.start()
+        self.addCleanup(self._wechat_patcher.stop)
+
     def _create_patient(
         self,
         *,

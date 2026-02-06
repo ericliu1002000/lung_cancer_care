@@ -12,4 +12,10 @@ def send_template_message(openid, template_id, data, url=None, mini_program=None
     /wx/auth/redirect?target=REAL_URL，这样后端可静默换取 openid 并识别用户。
     """
 
-    return wechat_client.message.send_template(openid, template_id, data, url=url, miniprogram=mini_program)
+    return wechat_client.message.send_template(
+        openid,
+        template_id,
+        data,
+        url=url,
+        mini_program=mini_program,
+    )
