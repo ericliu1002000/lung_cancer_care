@@ -22,7 +22,7 @@ from wx.models import SendMessageLog
 _DEFAULT_DELAY_SECONDS = 30
 _DEFAULT_LIMIT = 200
 _UNREAD_CONTENT = "您有新的医生消息，请及时查看。"
-_WATCH_TITLE = "消息"
+_WATCH_TITLE = "未读消息"
 
 
 def schedule_chat_unread_notification(
