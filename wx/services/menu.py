@@ -1,32 +1,21 @@
-from .client import WX_APPID, WX_APPSECRET, wechat_client
+from .client import wechat_client
+from .oauth import generate_menu_auth_url
 
 def create_menu():
     wechat_client.menu.delete()
+    home_url = generate_menu_auth_url("web_patient:patient_home")
+    dashboard_url = generate_menu_auth_url("web_patient:patient_dashboard")
     MENU = {
         "button": [
             {
                 "type": "view",
                 "name": "管理计划",  # 按钮显示名称，自定义
-                "url": (
-                    "https://open.weixin.qq.com/connect/oauth2/authorize"
-                    "?appid=wx3a562cd7118f6fd5"
-                    "&redirect_uri=http%3A%2F%2Feric.dagimed.com%2Fp%2Fhome%2F"
-                    "&response_type=code"
-                    "&scope=snsapi_base"
-                    "&state=STATE#wechat_redirect"
-                    ),
+                "url": home_url,
                 },
             {
                 "type": "view",
                 "name": "个人中心",  # 按钮显示名称，自定义
-                "url": (
-                    "https://open.weixin.qq.com/connect/oauth2/authorize"
-                    "?appid=wx3a562cd7118f6fd5"
-                    "&redirect_uri=http%3A%2F%2Feric.dagimed.com%2Fp%2Fdashboard%2F"
-                    "&response_type=code"
-                    "&scope=snsapi_base"
-                    "&state=STATE#wechat_redirect"
-                    ),
+                "url": dashboard_url,
                 }
             ]
         }

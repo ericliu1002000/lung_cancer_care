@@ -1,6 +1,7 @@
 import json
 import logging
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import (
     Http404,
@@ -46,11 +47,17 @@ def product_buy_page(request: HttpRequest) -> HttpResponse:
 
     service_html = render_service_content_markdown(product.service_content)
 
+    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
+    def _full_url(path: str) -> str:
+        if not base_url:
+            return path
+        return f"{base_url}{path}"
+
     urls = {
-        "member_agreement": "http://eric.dagimed.com/p/docs/Member_Agreement/",
-        "privacy_policy": "http://eric.dagimed.com/p/docs/Privacy_Policy/",
-        "user_policy": "http://eric.dagimed.com/p/docs/User_Policy/",
-        "consent": "http://eric.dagimed.com/p/docs/Consent/",
+        "member_agreement": _full_url("/p/docs/Member_Agreement/"),
+        "privacy_policy": _full_url("/p/docs/Privacy_Policy/"),
+        "user_policy": _full_url("/p/docs/User_Policy/"),
+        "consent": _full_url("/p/docs/Consent/"),
     }
 
     return render(

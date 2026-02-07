@@ -190,6 +190,21 @@ class SmartWatchService:
             text_or_bytes = text_or_bytes.encode("utf-8")
         return hashlib.md5(text_or_bytes).hexdigest()
 
+    @staticmethod
+    def _truncate_by_bytes(text: str, max_bytes: int) -> str:
+        if not text or max_bytes <= 0:
+            return ""
+        encoded = text.encode("utf-8")
+        if len(encoded) <= max_bytes:
+            return text
+        out = ""
+        for ch in text:
+            candidate = (out + ch).encode("utf-8")
+            if len(candidate) > max_bytes:
+                break
+            out += ch
+        return out
+
     # ============================
     # 功能 1: 给患者发消息 (API调用)
     # ============================
@@ -203,46 +218,52 @@ class SmartWatchService:
         app_key = config["APP_KEY"]
         app_secret = config["APP_SECRET"]
 
-        # 1. 校验长度限制
-        if len(title) > 8:
-            return False, "标题不能超过8个字符"
-        if len(content) > 80:
-            return False, "内容不能超过80个字符"
+        # 1. 校验长度限制（按字节长度）
+        title = cls._truncate_by_bytes(str(title or "").strip(), 8)
+        content = cls._truncate_by_bytes(str(content or "").strip(), 80)
+        if not title:
+            return False, "标题不能为空"
+        if not content:
+            return False, "内容不能为空"
 
-        # 2. 准备公共参数
-        nonce = str(uuid.uuid4()).replace("-", "")  # 随机数
-        cur_time = str(int(time.time()))  # 当前时间戳(秒)
+        def _send_request(cur_time_value: str):
+            nonce = str(uuid.uuid4()).replace("-", "")  # 随机数
+            raw_str = app_secret + nonce + cur_time_value
+            check_sum = cls._get_sha1(raw_str)
+            headers = {
+                "AppKey": app_key,
+                "Nonce": nonce,
+                "CurTime": cur_time_value,
+                "CheckSum": check_sum,
+                "Content-Type": "application/json; charset=utf-8",
+            }
+            payload = {
+                "appKey": app_key,
+                "deviceNo": device_no,
+                "messageTitle": title,
+                "messageContent": content,
+                "messageCont": content,  # 部分文档排版成 messageCont+ent，兼容处理
+            }
+            url = f"{config['API_BASE_URL']}/api/hrt/app/device/watch/message"
+            response = requests.post(url, headers=headers, json=payload, timeout=5)
+            return response.json()
 
-        # 3. 计算 CheckSum (API调用模式)
-        # 算法: SHA1(AppSecret + Nonce + CurTime)
-        raw_str = app_secret + nonce + cur_time
-        check_sum = cls._get_sha1(raw_str)
-
-        # 4. 构造 Header
-        headers = {
-            "AppKey": app_key,
-            "Nonce": nonce,
-            "CurTime": cur_time,
-            "CheckSum": check_sum,
-            "Content-Type": "application/json; charset=utf-8",
-        }
-
-        # 5. 构造 Body
-        payload = {
-            "appKey": app_key,
-            "deviceNo": device_no,
-            "messageTitle": title,
-            "messageContent": content,
-        }
-
-        # 6. 发送请求
-        url = f"{config['API_BASE_URL']}/api/hrt/app/device/watch/message"
+        def _curtime_candidates() -> list[str]:
+            try:
+                now = timezone.localtime()
+                base = now.timestamp()
+            except Exception:
+                base = time.time()
+            return [str(int(base)), str(int(base * 1000))]
 
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=5)
-            res_json = response.json()
+            # 按文档用 UTC 秒级时间戳；如验证异常则兜底用毫秒级
+            res_json = None
+            for cur_time_value in _curtime_candidates():
+                res_json = _send_request(cur_time_value)
+                if res_json.get("code") not in ("E020204", "E020206"):
+                    break
 
-            # 判断业务成功码 E000000
             if res_json.get("code") == "E000000":
                 return True, res_json.get("data", {}).get("msgId")
             logger.error("手表消息发送失败: %s", res_json)

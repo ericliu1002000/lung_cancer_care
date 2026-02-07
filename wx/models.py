@@ -38,3 +38,76 @@ class MessageTemplate(TimeStampedModel):
 
     def __str__(self):
         return f"{self.title} ({self.code})"
+
+
+class SendMessageLog(TimeStampedModel):
+    """微信模板消息发送日志。"""
+
+    class Channel(models.TextChoices):
+        WECHAT = "wechat", "微信"
+        WATCH = "watch", "手表"
+
+    class Scene(models.TextChoices):
+        DAILY_TASK_CREATED = "daily_task_created", "每日任务生成"
+        DAILY_TASK_REMINDER = "daily_task_reminder", "每日任务提醒"
+        CHAT_UNREAD = "chat_unread", "聊天未读提醒"
+
+    patient = models.ForeignKey(
+        "users.PatientProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="wx_message_logs",
+        verbose_name="患者",
+    )
+    user = models.ForeignKey(
+        "users.CustomUser",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="wx_message_logs",
+        verbose_name="接收用户",
+    )
+    openid = models.CharField(
+        "OpenID",
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="发送时使用的 OpenID 快照。",
+    )
+    channel = models.CharField(
+        "发送渠道",
+        max_length=20,
+        choices=Channel.choices,
+        default=Channel.WECHAT,
+        db_index=True,
+    )
+    scene = models.CharField(
+        "消息场景",
+        max_length=50,
+        choices=Scene.choices,
+        db_index=True,
+    )
+    biz_date = models.DateField(
+        "业务日期",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="关联的业务日期，例如任务日期。",
+    )
+    content = models.TextField("消息内容")
+    payload = models.JSONField("发送载荷", default=dict, blank=True)
+    is_success = models.BooleanField("是否成功", default=True)
+    error_message = models.CharField("错误信息", max_length=255, blank=True)
+
+    class Meta:
+        db_table = "wx_send_message_logs"
+        verbose_name = "微信消息发送日志"
+        verbose_name_plural = "微信消息发送日志"
+        indexes = [
+            models.Index(fields=["scene", "biz_date"], name="idx_wx_msg_scene_date"),
+            models.Index(fields=["patient", "biz_date"], name="idx_wx_msg_patient_date"),
+        ]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.scene}({self.biz_date}) -> {self.openid}"

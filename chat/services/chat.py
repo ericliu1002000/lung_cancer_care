@@ -186,6 +186,17 @@ class ChatService:
             )
             self._touch_last_message(conversation, message.created_at)
             self._record_session_for_message(conversation, message.created_at)
+            if (
+                conversation.type == ConversationType.PATIENT_STUDIO
+                and sender_role
+                not in (
+                    MessageSenderRole.PATIENT,
+                    MessageSenderRole.FAMILY,
+                )
+            ):
+                transaction.on_commit(
+                    lambda: _schedule_chat_unread_notification(message.id)
+                )
         return message
 
     def create_image_message(
@@ -233,6 +244,17 @@ class ChatService:
             )
             self._touch_last_message(conversation, message.created_at)
             self._record_session_for_message(conversation, message.created_at)
+            if (
+                conversation.type == ConversationType.PATIENT_STUDIO
+                and sender_role
+                not in (
+                    MessageSenderRole.PATIENT,
+                    MessageSenderRole.FAMILY,
+                )
+            ):
+                transaction.on_commit(
+                    lambda: _schedule_chat_unread_notification(message.id)
+                )
         return message
 
     def forward_to_director(
@@ -855,3 +877,12 @@ class ChatService:
         if conversation.studio and conversation.studio.name:
             return conversation.studio.name
         return "Studio"
+
+
+def _schedule_chat_unread_notification(message_id: int) -> None:
+    try:
+        from wx.services.chat_notifications import schedule_chat_unread_notification
+
+        schedule_chat_unread_notification(message_id)
+    except Exception:  # pragma: no cover - 任务系统不可用时容错
+        return

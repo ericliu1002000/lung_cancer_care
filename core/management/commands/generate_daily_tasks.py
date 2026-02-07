@@ -13,6 +13,7 @@ from core.service.task_scheduler import generate_daily_tasks_for_date
 from core.service.tasks import refresh_task_statuses
 from patient_alerts.services.behavior_alerts import BehaviorAlertService
 from users.services.patient import PatientService
+from wx.services import send_daily_task_creation_messages
 
 
 class Command(BaseCommand):
@@ -50,6 +51,13 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Refreshed {refreshed_count} daily task status(es)."
+            )
+        )
+
+        sent_count = send_daily_task_creation_messages(task_date)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Sent {sent_count} daily task creation message(s)."
             )
         )
 
