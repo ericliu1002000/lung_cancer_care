@@ -51,6 +51,19 @@ def submit_medication(request: HttpRequest) -> JsonResponse:
             measured_at=measured_at,
             value_main=Decimal("1")
         )
+        try:
+            date_key = selected_date_str or timezone.localdate().strftime("%Y-%m-%d")
+            metric_plan_cache = request.session.get("metric_plan_cache") or {}
+            day_cache = metric_plan_cache.get(date_key) or {}
+            day_cache["medication"] = {
+                "status": "completed",
+                "subtitle": "已服药"
+            }
+            metric_plan_cache[date_key] = day_cache
+            request.session["metric_plan_cache"] = metric_plan_cache
+            request.session.modified = True
+        except Exception:
+            pass
         return JsonResponse({'success': True, 'message': '提交成功'})
     except Exception as e:
         logger.error(f"提交用药记录失败: {e}")
