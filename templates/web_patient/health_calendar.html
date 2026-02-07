@@ -349,7 +349,26 @@
       .then(r => r.json())
       .then(data => {
           if (data.success) {
-            // Refresh current date view
+            // Optimistic UI update
+            try {
+              const actionEl = document.getElementById('plan-action-medication');
+              if (actionEl) {
+                actionEl.innerHTML = `
+                  <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                `;
+              }
+              const subtitleEl = document.getElementById('plan-subtitle-medication');
+              if (subtitleEl) {
+                subtitleEl.textContent = '已服药';
+                subtitleEl.classList.add('text-emerald-600','font-medium');
+                subtitleEl.classList.remove('text-slate-500');
+              }
+            } catch(e) {}
+            // Refresh current date view (server-side align)
             fetchTasks(resolveActiveDateStr());
             closeMedicationModal();
           }
