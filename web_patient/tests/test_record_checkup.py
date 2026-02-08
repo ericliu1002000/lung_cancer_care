@@ -285,8 +285,8 @@ class RecordCheckupTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         items = response.context['checkup_items']
-        # 仅展示2条：今日最早 + 非今日最早
-        self.assertEqual(len(items), 2)
+        # 展示近7天全部 pending（含今日两条与昨日两条）
+        self.assertEqual(len(items), 4)
 
     def test_delete_report_image(self):
         """测试删除已上传图片"""

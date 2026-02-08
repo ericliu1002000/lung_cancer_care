@@ -1050,8 +1050,6 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
             messages.error(request, "上传失败，请重试")
             return redirect(request.path)
 
-    # 构造前端所需的数据结构（筛选两条：今日最早 + 非今日最早，按 (plan_date, checkup_item_id) 去重）
-    # 解析 pending 任务，提取 checkup_item_id
     def _resolve_checkup_id(task_obj):
         if getattr(task_obj, "plan_item_id", None):
             try:
@@ -1062,33 +1060,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
             return int((task_obj.interaction_payload or {}).get("checkup_id")) if (task_obj.interaction_payload or {}).get("checkup_id") else None
         except Exception:
             return None
- 
-    # 去重集合
-    seen_keys = set()
-    selected_tasks = []
-    # 今日最早
-    for t in pending_qs:
-        if t.task_date != today:
-            continue
-        cid = _resolve_checkup_id(t)
-        key = (t.task_date, cid)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        selected_tasks.append(t)
-        break
-    # 非今日最早（7 天内）
-    for t in pending_qs:
-        if t.task_date >= today:
-            continue
-        cid = _resolve_checkup_id(t)
-        key = (t.task_date, cid)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        selected_tasks.append(t)
-        break
- 
+    selected_tasks = list(pending_qs)
     checkup_items = []
     for task in selected_tasks:
         # 获取该任务已上传的图片
