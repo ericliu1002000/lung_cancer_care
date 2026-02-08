@@ -125,6 +125,9 @@ class QuestionnaireSubmissionServiceTest(TestCase):
             ).count(),
             1,
         )
+        metric = HealthMetric.objects.get(questionnaire_submission=submission)
+        self.assertIsNotNone(submission.task_id)
+        self.assertEqual(metric.task_id, submission.task_id)
 
     def test_submit_questionnaire_missing_question_raises_validation_error(self):
         """

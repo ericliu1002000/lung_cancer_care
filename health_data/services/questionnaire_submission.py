@@ -237,6 +237,7 @@ class QuestionnaireSubmissionService:
                 measured_at=submission.created_at,
                 value_main=total_score,
                 questionnaire_submission_id=submission.id,
+                task_id=submission.task_id,
             )
         except Exception:
             logger.exception(

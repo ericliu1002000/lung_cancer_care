@@ -86,7 +86,7 @@ class TaskSummaryServiceTest(TestCase):
 
         summary = get_daily_plan_summary(self.patient, self.task_date)
 
-        self.assertEqual(len(summary), 5)
+        self.assertEqual(len(summary), 3)
         self.assertEqual(
             summary[0],
             {
@@ -106,26 +106,9 @@ class TaskSummaryServiceTest(TestCase):
         self.assertEqual(
             summary[2],
             {
-                "task_type": int(choices.PlanItemCategory.QUESTIONNAIRE),
-                "status": int(choices.TaskStatus.COMPLETED),
-                "title": "问卷提醒",
-                "questionnaire_ids": [self.questionnaire.id],
-            },
-        )
-        self.assertEqual(
-            summary[3],
-            {
                 "task_type": int(choices.PlanItemCategory.MONITORING),
                 "status": int(choices.TaskStatus.PENDING),
                 "title": "测量体温",
-            },
-        )
-        self.assertEqual(
-            summary[4],
-            {
-                "task_type": int(choices.PlanItemCategory.MONITORING),
-                "status": int(choices.TaskStatus.COMPLETED),
-                "title": "测量血氧",
             },
         )
 

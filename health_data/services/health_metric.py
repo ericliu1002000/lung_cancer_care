@@ -823,6 +823,7 @@ class HealthMetricService:
         value_main: Optional[Decimal] = None,
         value_sub: Optional[Decimal] = None,
         questionnaire_submission_id: int | None = None,
+        task_id: int | None = None,
     ) -> HealthMetric:
         """
         手动录入健康指标数据的通用入口。
@@ -858,6 +859,9 @@ class HealthMetricService:
         :param questionnaire_submission_id: Optional[int]
             若该指标来源于某次问卷提交，可传入 QuestionnaireSubmission.id 以建立关联；
             默认为 None 表示无关联。
+        :param task_id: Optional[int]
+            若指标已在上层解析到关联任务 ID，可直接传入；
+            对监测/用药类型会优先使用该值，否则回退到自动匹配任务结果。
 
         【返回值】
         :return: HealthMetric
@@ -875,7 +879,9 @@ class HealthMetricService:
                 measured_at = timezone.now()
             if value_main is None:
                 value_main = Decimal("1")
-            task_id = task_service.complete_daily_medication_tasks(patient_id, measured_at)
+            resolved_task_id = task_service.complete_daily_medication_tasks(patient_id, measured_at)
+            if task_id is not None:
+                resolved_task_id = task_id
             metric = cls._persist_metric(
                 patient_id=patient_id,
                 metric_type=metric_type,
@@ -884,7 +890,7 @@ class HealthMetricService:
                 measured_at=measured_at,
                 source=MetricSource.MANUAL,
                 questionnaire_submission_id=questionnaire_submission_id,
-                task_id=task_id,
+                task_id=resolved_task_id,
             )
             MetricAlertService.process_metric(metric)
             return metric
@@ -892,13 +898,15 @@ class HealthMetricService:
         if measured_at is None:
             raise ValueError("measured_at 不能为空。")
 
-        task_id = None
+        resolved_task_id = task_id
         if metric_type in _MONITORING_TASK_TYPES:
-            _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
+            _, auto_task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
                 patient_id=patient_id,
                 metric_type=metric_type,
                 occurred_at=measured_at,
             )
+            if resolved_task_id is None:
+                resolved_task_id = auto_task_id
 
         metric = cls._persist_metric(
             patient_id=patient_id,
@@ -908,7 +916,7 @@ class HealthMetricService:
             measured_at=measured_at,
             source=MetricSource.MANUAL,
             questionnaire_submission_id=questionnaire_submission_id,
-            task_id=task_id,
+            task_id=resolved_task_id,
         )
         MetricAlertService.process_metric(metric)
         return metric
