@@ -108,7 +108,8 @@ class RecordCheckupTests(TestCase):
         # 3. ReportImage 创建
         images = ReportImage.objects.filter(upload=upload)
         self.assertEqual(images.count(), 1)
-        self.assertIsNone(images.first().checkup_item)
+        # 现在视图会在可识别时携带 checkup_item_id，期望不为空
+        self.assertIsNotNone(images.first().checkup_item)
 
     def test_record_checkup_post_no_files(self):
         """测试未上传文件提交"""
