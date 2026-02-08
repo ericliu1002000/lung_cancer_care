@@ -33,7 +33,7 @@ _TASK_MAX_OVERDUE_DAYS = {
     choices.PlanItemCategory.MEDICATION: 0,
     choices.PlanItemCategory.MONITORING: 0,
     choices.PlanItemCategory.CHECKUP: 7,
-    choices.PlanItemCategory.QUESTIONNAIRE: 7,
+    choices.PlanItemCategory.QUESTIONNAIRE: 6,
 }
 
 
@@ -44,7 +44,7 @@ _TASK_MAX_OVERDUE_DAYS = {
 
 def get_daily_plan_summary(
     patient: PatientProfile,
-    task_date: date = date.today(),
+    task_date: date | None = None,
 ) -> List[Dict[str, Any]]:
     """
     【功能说明】
@@ -65,6 +65,9 @@ def get_daily_plan_summary(
       [{"task_type": 1, "status": 0, "title": "用药提醒"}]
       问卷类型会额外返回 questionnaire_ids（具体问卷 ID 列表）。
     """
+
+    if task_date is None:
+        task_date = timezone.localdate()
 
     task_types = (
         choices.PlanItemCategory.MEDICATION,
@@ -90,12 +93,7 @@ def get_daily_plan_summary(
             patient=patient,
             task_date__range=(min_window_start, task_date),
             task_type__in=task_types,
-        )
-        .exclude(
-            status__in=[
-                choices.TaskStatus.NOT_STARTED,
-                choices.TaskStatus.TERMINATED,
-            ]
+            status=choices.TaskStatus.PENDING,
         )
         .select_related("plan_item")
         .order_by("task_date", "id")
