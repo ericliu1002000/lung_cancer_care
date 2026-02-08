@@ -68,6 +68,8 @@ class DailyTask(models.Model):
         default=dict,
         help_text="生成任务时保留的交互配置快照。",
     )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
 
     # 自定义查询集
     objects = DailyTaskQuerySet.as_manager()
