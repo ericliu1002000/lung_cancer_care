@@ -1565,6 +1565,10 @@ video {
   min-width: 100px;
 }
 
+.min-w-\[1056px\] {
+  min-width: 1056px;
+}
+
 .min-w-\[16px\] {
   min-width: 16px;
 }
@@ -1596,10 +1600,6 @@ video {
 .min-w-max {
   min-width: -moz-max-content;
   min-width: max-content;
-}
-
-.min-w-\[1056px\] {
-  min-width: 1056px;
 }
 
 .max-w-2xl {
@@ -3462,14 +3462,6 @@ video {
 
 .pt-8 {
   padding-top: 2rem;
-}
-
-.pl-6 {
-  padding-left: 1.5rem;
-}
-
-.pr-6 {
-  padding-right: 1.5rem;
 }
 
 .text-left {
