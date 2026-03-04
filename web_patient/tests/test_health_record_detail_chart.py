@@ -6,7 +6,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import DailyTask
+from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import HealthMetric, MetricType
 from users.models import CustomUser, PatientProfile
@@ -252,3 +252,67 @@ class HealthRecordDetailChartTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["chart_available"])
         self.assertContains(response, "切换图表")
+
+    def test_questionnaire_chart_marks_no_task_days_for_tooltip(self):
+        Questionnaire.objects.get_or_create(
+            code=QuestionnaireCode.Q_ANXIETY,
+            defaults={"name": "焦虑评估", "is_active": True},
+        )
+
+        self._create_metric(
+            metric_type=QuestionnaireCode.Q_ANXIETY,
+            year=2025,
+            month=3,
+            day=2,
+            hour=9,
+            value_main="0",
+        )
+        self._create_metric(
+            metric_type=QuestionnaireCode.Q_ANXIETY,
+            year=2025,
+            month=3,
+            day=3,
+            hour=10,
+            value_main="5",
+        )
+
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=datetime(2025, 3, 2).date(),
+            task_type=PlanItemCategory.QUESTIONNAIRE,
+            title="焦虑评估",
+            interaction_payload={"questionnaire_code": QuestionnaireCode.Q_ANXIETY},
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=datetime(2025, 3, 3).date(),
+            task_type=PlanItemCategory.QUESTIONNAIRE,
+            title="焦虑评估",
+            interaction_payload={"questionnaire_code": QuestionnaireCode.Q_ANXIETY},
+        )
+
+        with patch("web_patient.views.record._is_member", return_value=True):
+            response = self.client.get(
+                self.url,
+                {"type": "anxiety", "title": "焦虑评估", "month": "2025-03"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.context["chart_payload"]
+        series_data = payload["series"][0]["data"]
+
+        day_1_idx = payload["dates"].index("03-01")
+        day_2_idx = payload["dates"].index("03-02")
+        day_3_idx = payload["dates"].index("03-03")
+
+        self.assertEqual(series_data[day_1_idx]["value"], 0)
+        self.assertIsNone(series_data[day_1_idx]["raw_value"])
+        self.assertTrue(series_data[day_1_idx]["is_no_task"])
+
+        self.assertEqual(series_data[day_2_idx]["value"], 0.0)
+        self.assertEqual(series_data[day_2_idx]["raw_value"], 0.0)
+        self.assertFalse(series_data[day_2_idx]["is_no_task"])
+
+        self.assertEqual(series_data[day_3_idx]["value"], 5.0)
+        self.assertEqual(series_data[day_3_idx]["raw_value"], 5.0)
+        self.assertFalse(series_data[day_3_idx]["is_no_task"])

@@ -23,7 +23,13 @@
 
             const numericValues = normalizedSeries
                 .flatMap(item => item.data || [])
-                .map(value => Number(value))
+                .map(value => {
+                    if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const raw = Array.isArray(value.value) ? value.value[0] : value.value;
+                        return Number(raw);
+                    }
+                    return Number(value);
+                })
                 .filter(value => Number.isFinite(value));
 
             let xMax = 100;
@@ -47,9 +53,31 @@
                 const orderedValues = item.data || [];
                 const points = dates.map((dateLabel, idx) => {
                     const value = orderedValues[idx];
-                    if (value === null || value === undefined || value === '-') return [0, dateLabel];
+                    if (value && typeof value === 'object' && !Array.isArray(value)) {
+                        const raw = Array.isArray(value.value) ? value.value[0] : value.value;
+                        const parsed = Number(raw);
+                        const normalizedValue = Number.isFinite(parsed) ? parsed : 0;
+                        const rawValue = value.raw_value;
+                        return {
+                            ...value,
+                            raw_value: rawValue === undefined ? normalizedValue : rawValue,
+                            value: [normalizedValue, dateLabel]
+                        };
+                    }
+                    if (value === null || value === undefined || value === '-') {
+                        return {
+                            value: [0, dateLabel],
+                            raw_value: 0,
+                            is_no_task: false
+                        };
+                    }
                     const parsed = Number(value);
-                    return [Number.isFinite(parsed) ? parsed : 0, dateLabel];
+                    const normalizedValue = Number.isFinite(parsed) ? parsed : 0;
+                    return {
+                        value: [normalizedValue, dateLabel],
+                        raw_value: normalizedValue,
+                        is_no_task: false
+                    };
                 });
 
                 return {
@@ -97,9 +125,19 @@
                         if (!Array.isArray(params) || params.length === 0) return '';
                         const dateLabel = params[0].axisValue || '';
                         const rows = params.map(function (item) {
-                            const rawValue = Array.isArray(item.data) ? item.data[0] : item.value;
-                            const numericValue = Number(rawValue);
-                            const displayValue = Number.isFinite(numericValue) ? numericValue : 0;
+                            const dataItem = item.data || {};
+                            let displayValue = '0';
+                            if (dataItem && typeof dataItem === 'object' && dataItem.is_no_task) {
+                                displayValue = '无';
+                            } else {
+                                const rawValue = (
+                                    dataItem && typeof dataItem === 'object' && dataItem.raw_value !== undefined
+                                )
+                                    ? dataItem.raw_value
+                                    : (Array.isArray(item.value) ? item.value[0] : item.value);
+                                const numericValue = Number(rawValue);
+                                displayValue = Number.isFinite(numericValue) ? String(numericValue) : '0';
+                            }
                             return item.marker + item.seriesName + ': ' + displayValue;
                         });
                         return [dateLabel].concat(rows).join('<br/>');

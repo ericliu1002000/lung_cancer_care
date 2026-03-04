@@ -3,10 +3,11 @@ from django.urls import reverse
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from django.utils import timezone
+from django.db.models import Q
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.models import MetricType, HealthMetric
-from core.models import QuestionnaireCode, DailyTask
+from core.models import QuestionnaireCode, DailyTask, Questionnaire
 from core.models.choices import PlanItemCategory, TaskStatus
 from patient_alerts.services.todo_list import TodoListService
 from core.service.tasks import get_daily_plan_summary
@@ -28,6 +29,31 @@ def _is_member(patient) -> bool:
         getattr(patient, "is_member", False)
         and getattr(patient, "membership_expire_date", None)
     )
+
+
+QUESTIONNAIRE_RECORD_TYPE_MAP = {
+    "physical": QuestionnaireCode.Q_PHYSICAL,
+    "breath": QuestionnaireCode.Q_BREATH,
+    "cough": QuestionnaireCode.Q_COUGH,
+    "appetite": QuestionnaireCode.Q_APPETITE,
+    "pain": QuestionnaireCode.Q_PAIN,
+    "sleep": QuestionnaireCode.Q_SLEEP,
+    "psych": QuestionnaireCode.Q_PSYCH,
+    "anxiety": QuestionnaireCode.Q_ANXIETY,
+}
+
+RECORD_TYPE_METRIC_MAP = {
+    "medical": MetricType.USE_MEDICATED,
+    "temperature": MetricType.BODY_TEMPERATURE,
+    "bp": MetricType.BLOOD_PRESSURE,
+    "spo2": MetricType.BLOOD_OXYGEN,
+    "weight": MetricType.WEIGHT,
+    "step": MetricType.STEPS,
+    "heart": MetricType.HEART_RATE,
+    **QUESTIONNAIRE_RECORD_TYPE_MAP,
+}
+
+QUESTIONNAIRE_RECORD_TYPES = set(QUESTIONNAIRE_RECORD_TYPE_MAP.keys())
 
 
 @auto_wechat_login
@@ -1258,6 +1284,29 @@ def _build_line_chart_payload(
     }
     day_set = set(month_days)
     latest_map = {}
+    questionnaire_task_dates = set()
+
+    if record_type in QUESTIONNAIRE_RECORD_TYPES and month_days:
+        questionnaire_code = QUESTIONNAIRE_RECORD_TYPE_MAP.get(record_type)
+        questionnaire_id = (
+            Questionnaire.objects.filter(code=questionnaire_code)
+            .values_list("id", flat=True)
+            .first()
+        )
+        task_filters = Q(interaction_payload__questionnaire_code=questionnaire_code)
+        if questionnaire_id:
+            task_filters = task_filters | Q(plan_item__template_id=questionnaire_id)
+
+        questionnaire_task_dates = set(
+            DailyTask.objects.filter(
+                patient_id=patient_id,
+                task_type=PlanItemCategory.QUESTIONNAIRE,
+                task_date__gte=month_days[0],
+                task_date__lt=end_date_exclusive.date(),
+            )
+            .filter(task_filters)
+            .values_list("task_date", flat=True)
+        )
 
     metrics = (
         HealthMetric.objects.filter(
@@ -1306,6 +1355,42 @@ def _build_line_chart_payload(
             "series": [
                 {"name": "收缩压", "data": ssy_data, "color": "#ef4444"},
                 {"name": "舒张压", "data": szy_data, "color": "#2563eb"},
+            ],
+        }
+
+    if record_type in QUESTIONNAIRE_RECORD_TYPES:
+        series_data = []
+        for day in month_days:
+            has_task = day in questionnaire_task_dates
+            day_score = latest_map.get(day)
+            if not has_task:
+                series_data.append(
+                    {
+                        "value": 0,
+                        "raw_value": None,
+                        "is_no_task": True,
+                    }
+                )
+                continue
+
+            normalized_score = day_score if day_score is not None else 0
+            series_data.append(
+                {
+                    "value": normalized_score,
+                    "raw_value": normalized_score,
+                    "is_no_task": False,
+                }
+            )
+
+        return {
+            "dates": dates,
+            "full_dates": full_dates,
+            "series": [
+                {
+                    "name": title,
+                    "data": series_data,
+                    "color": color_map.get(record_type, "#3b82f6"),
+                }
             ],
         }
 
@@ -1558,25 +1643,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                 return render(request, "web_patient/health_record_detail.html", context)
 
             # 映射前端 type 到后端 MetricType
-            metric_type_map = {
-                "medical": MetricType.USE_MEDICATED,
-                "temperature": MetricType.BODY_TEMPERATURE,
-                "bp": MetricType.BLOOD_PRESSURE,
-                "spo2": MetricType.BLOOD_OXYGEN,
-                "weight": MetricType.WEIGHT,
-                "step": MetricType.STEPS,
-                "heart": MetricType.HEART_RATE,
-                "physical": QuestionnaireCode.Q_PHYSICAL,
-                "breath": QuestionnaireCode.Q_BREATH,
-                "cough": QuestionnaireCode.Q_COUGH,
-                "appetite": QuestionnaireCode.Q_APPETITE,
-                "pain": QuestionnaireCode.Q_PAIN,
-                "sleep": QuestionnaireCode.Q_SLEEP,
-                "psych": QuestionnaireCode.Q_PSYCH,
-                "anxiety": QuestionnaireCode.Q_ANXIETY,
-            }
-
-            db_metric_type = metric_type_map.get(record_type)
+            db_metric_type = RECORD_TYPE_METRIC_MAP.get(record_type)
 
             if db_metric_type:
                 page_obj = HealthMetricService.query_metrics_by_type(
