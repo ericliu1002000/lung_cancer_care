@@ -1,0 +1,109 @@
+<div class="bg-[#F3F4F6] rounded-xl border border-slate-200 p-3">
+    <div id="health-record-line-chart" style="width: 100%; height: 320px;"></div>
+</div>
+
+<script>
+    (function () {
+        const payload = JSON.parse('{{ chart_payload_json|escapejs }}');
+
+        window.renderHealthRecordLineChart = function () {
+            const chartDom = document.getElementById('health-record-line-chart');
+            if (!chartDom || typeof echarts === 'undefined') return;
+
+            // 当前数据源是“月底 -> 月初”，这里倒序成“1号 -> 月底”
+            const dates = [...(payload.dates || [])].reverse();
+            const normalizedSeries = (payload.series || []).map(item => ({
+                ...item,
+                data: [...(item.data || [])].reverse()
+            }));
+
+            const dynamicHeight = Math.max(dates.length * 20, 320);
+            chartDom.style.height = dynamicHeight + 'px';
+
+            let chart = echarts.getInstanceByDom(chartDom);
+            if (!chart) {
+                chart = echarts.init(chartDom);
+            }
+
+            const series = normalizedSeries.map(item => {
+                const orderedValues = item.data || [];
+                const points = dates.map((dateLabel, idx) => [orderedValues[idx], dateLabel]);
+                return {
+                    name: item.name,
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: true,
+                    symbol: 'circle',
+                    symbolSize: 5,
+                    data: points,
+                    itemStyle: {
+                        color: '#ffffff',
+                        borderColor: item.color || '#4f86e8',
+                        borderWidth: 2
+                    },
+                    lineStyle: {
+                        color: item.color || '#4f86e8',
+                        width: 2
+                    }
+                };
+            });
+
+            chart.setOption({
+                backgroundColor: '#F3F4F6',
+                tooltip: { trigger: 'axis' },
+                legend: {
+                    show: series.length > 1,
+                    top: 0,
+                    right: 8,
+                    orient: 'horizontal'
+                },
+                grid: {
+                    left: 72,
+                    right: 20,
+                    top: series.length > 1 ? 34 : 22,
+                    bottom: 16
+                },
+                xAxis: {
+                    type: 'value',
+                    position: 'top',
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisTick: { show: true },
+                    axisLabel: {
+                        color: '#64748b',
+                        fontSize: 11
+                    },
+                    splitLine: {
+                        show: true,
+                        lineStyle: { color: '#d1d5db' }
+                    }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: dates,
+                    axisLine: { lineStyle: { color: '#cbd5e1' } },
+                    axisLabel: {
+                        color: '#475569',
+                        fontSize: 11,
+                        rotate: -90
+                    },
+                    splitLine: { show: false }
+                },
+                series: series
+            }, true);
+
+            setTimeout(function () {
+                chart.resize();
+            }, 0);
+        };
+
+        if (!window.__healthRecordChartResizeBound) {
+            window.__healthRecordChartResizeBound = true;
+            window.addEventListener('resize', function () {
+                const chartDom = document.getElementById('health-record-line-chart');
+                if (!chartDom || typeof echarts === 'undefined') return;
+                const chart = echarts.getInstanceByDom(chartDom);
+                if (chart) chart.resize();
+            });
+        }
+    })();
+</script>
