@@ -12,6 +12,7 @@ from .logging import build_logging_config
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CHANGELOG_PATH = BASE_DIR / "CHANGELOG.md"
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -78,6 +79,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_extensions",
+    "lung_cancer_care.app_configs.PatchedDjangoChangelogConfig",
     "users",
     "web_doctor",
     "web_sales",

@@ -12,3 +12,4 @@ xpinyin
 Pillow==10.4.0
 markdown==3.7
 concurrent-log-handler==0.9.28
+django-changelog==0.1.2

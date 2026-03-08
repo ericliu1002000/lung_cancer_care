@@ -1,0 +1,97 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .changelog-summary {
+    margin-bottom: 1.5rem;
+  }
+
+  .changelog-summary table {
+    width: 100%;
+  }
+
+  .changelog-content {
+    padding: 1rem 1.25rem;
+  }
+
+  .changelog-content h1,
+  .changelog-content h2,
+  .changelog-content h3 {
+    margin-top: 1.25rem;
+  }
+
+  .changelog-content h1:first-child,
+  .changelog-content h2:first-child,
+  .changelog-content h3:first-child {
+    margin-top: 0;
+  }
+
+  .changelog-content ul,
+  .changelog-content ol {
+    padding-left: 1.5rem;
+  }
+
+  .changelog-content code {
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: var(--darkened-bg, #f6f6f6);
+    font-family: var(--font-family-monospace, monospace);
+  }
+
+  .changelog-content pre {
+    overflow-x: auto;
+    padding: 1rem;
+    border-radius: 6px;
+    background: var(--darkened-bg, #f6f6f6);
+  }
+
+  .changelog-content blockquote {
+    margin: 1rem 0;
+    padding-left: 1rem;
+    border-left: 4px solid var(--hairline-color, #d0d0d0);
+    color: var(--body-quiet-color, #666);
+  }
+
+  .quiet-label {
+    color: var(--body-quiet-color, #666);
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; 更新日志
+</div>
+{% endblock %}
+
+{% block content_title %}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  {% if changelog_file_created %}
+  <ul class="messagelist">
+    <li class="warning">未找到 CHANGELOG.md，系统已自动创建一个初始模板文件。</li>
+  </ul>
+  {% endif %}
+
+  {% if changelog_is_empty %}
+  <ul class="messagelist">
+    <li class="warning">CHANGELOG.md 当前为空。编辑文件后刷新此页面即可看到最新内容。</li>
+  </ul>
+  {% endif %}
+
+  <div class="module">
+    {% if changelog_html %}
+    <div class="changelog-content">
+      {{ changelog_html|safe }}
+    </div>
+    {% else %}
+    <div class="changelog-content">
+      <p class="quiet-label">暂无可显示内容。</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

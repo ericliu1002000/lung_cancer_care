@@ -1,0 +1,18 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module">
+    <table>
+      <caption>站点信息</caption>
+      <tbody>
+        <tr class="model-changelog">
+          <th scope="row"><a href="{% url 'admin:changelog' %}">查看更新日志</a></th>
+          <td>查看最新功能、修复记录和版本变更说明。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+</div>
+{% endblock %}
