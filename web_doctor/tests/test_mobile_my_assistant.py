@@ -72,7 +72,7 @@ class MobileMyAssistantTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "web_doctor/mobile/my_assistant.html")
         self.assertEqual(list(response.context["assistants"]), [])
-        self.assertContains(response, "暂无数据")
+        self.assertContains(response, "暂无助理数据")
 
     def test_chief_doctor_sees_assistants(self):
         self.client.force_login(self.doctor)
@@ -105,7 +105,7 @@ class MobileMyAssistantTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "web_doctor/mobile/my_assistant.html")
         self.assertEqual(list(response.context["assistants"]), [])
-        self.assertContains(response, "暂无数据")
+        self.assertContains(response, "暂无助理数据")
 
     def test_sales_user_forbidden(self):
         self.client.force_login(self.sales_user)

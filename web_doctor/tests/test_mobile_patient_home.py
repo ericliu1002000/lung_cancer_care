@@ -105,12 +105,3 @@ class MobilePatientHomeTests(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
 
-    def test_mobile_patient_section_placeholder_renders(self):
-        self.client.force_login(self.user)
-        url = reverse("web_doctor:mobile_patient_section", args=[self.patient_active.id, "todo"])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "web_doctor/mobile/patient_section_placeholder.html")
-        content = response.content.decode("utf-8")
-        self.assertIn("患者待办", content)
-

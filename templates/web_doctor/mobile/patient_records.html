@@ -3,53 +3,84 @@
 {% block title %}诊疗记录{% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans">
-  <div class="bg-[#4DB6AC] pt-safe-top pb-5 px-4 shadow-md">
-    <div class="flex items-center gap-3 pt-4">
-      <div onclick="window.history.back()" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+<!-- Import Fonts -->
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+    .font-lexend { font-family: 'Lexend', sans-serif; }
+    .font-source { font-family: 'Source Sans 3', sans-serif; }
+</style>
+
+<div class="min-h-screen bg-slate-50 pb-safe-bottom font-source text-slate-900">
+  <div class="bg-blue-600 pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden rounded-b-3xl">
+    <!-- Abstract Background Pattern -->
+    <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
+
+    <div class="flex items-center gap-3 pt-4 relative z-10">
+      <div onclick="window.history.back()" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20">
         <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
       </div>
       <div class="text-white min-w-0">
-        <div class="text-base font-bold leading-tight truncate">诊疗记录</div>
+        <div class="text-xl font-lexend font-bold leading-tight truncate">诊疗记录</div>
       </div>
     </div>
   </div>
 
-  <div class="px-4 py-4 space-y-3">
+  <div class="px-4 py-5 space-y-4 -mt-2 relative z-20">
     {% for report in reports_page %}
-    <details class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden group">
-      <summary class="list-none px-4 py-3 flex items-start justify-between gap-3 active:bg-slate-50 transition cursor-pointer">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            <div class="text-sm font-bold text-slate-900">{{ report.date|date:"Y-m-d" }}</div>
-            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">{{ report.record_type|default:"-" }}</span>
+    <details class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 overflow-hidden group">
+      <summary class="list-none px-5 py-4 flex items-start justify-between gap-3 active:bg-slate-50 transition cursor-pointer">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-3 flex-wrap">
+            <div class="text-base font-lexend font-bold text-slate-900">{{ report.date|date:"Y-m-d" }}</div>
+            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 uppercase tracking-wide">{{ report.record_type|default:"-" }}</span>
           </div>
-          <div class="mt-1 text-xs text-slate-500 flex items-center gap-3">
-            <span>图片数量：{{ report.image_count|default:0 }}</span>
-            <span class="truncate">归档人：{{ report.archiver|default:"-" }}</span>
-            <span>归档日期：{{ report.archived_date|default:"-" }}</span>
+          <div class="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <div class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>{{ report.image_count|default:0 }} 张</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span class="truncate max-w-[80px]">{{ report.archiver|default:"-" }}</span>
+            </div>
+            <div class="flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>{{ report.archived_date|default:"-" }}</span>
+            </div>
           </div>
         </div>
         <div class="shrink-0 pt-0.5">
-          <svg class="w-5 h-5 text-slate-300 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-          </svg>
+          <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-open:bg-blue-50 transition-colors">
+              <svg class="w-4 h-4 text-slate-400 group-open:text-blue-500 group-open:rotate-180 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
+          </div>
         </div>
       </summary>
 
-      <div class="px-4 pb-4 pt-1 space-y-3">
-        {% if report.interpretation %}
-        <div class="text-sm text-slate-700 whitespace-pre-wrap">{{ report.interpretation }}</div>
-        {% else %}
-        <div class="text-sm text-slate-400">暂无备注</div>
-        {% endif %}
+      <div class="px-5 pb-5 pt-0 space-y-4">
+        <div class="bg-slate-50 rounded-xl p-3">
+            <div class="text-xs font-bold text-slate-400 mb-1 uppercase tracking-wide">备注信息</div>
+            {% if report.interpretation %}
+            <div class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{{ report.interpretation }}</div>
+            {% else %}
+            <div class="text-sm text-slate-400 italic">暂无备注</div>
+            {% endif %}
+        </div>
 
         {% if report.images %}
         <div class="grid grid-cols-3 gap-2">
           {% for img in report.images %}
-          <a href="{{ img.url }}" target="_blank" rel="noopener" class="block rounded-xl overflow-hidden bg-slate-100 aspect-square">
+          <a href="{{ img.url }}" target="_blank" rel="noopener" class="block rounded-xl overflow-hidden bg-slate-100 aspect-square ring-1 ring-slate-900/5 active:opacity-80 transition-opacity">
             <img src="{{ img.url }}" alt="{{ img.name|default:'图片' }}" class="w-full h-full object-cover" loading="lazy" />
           </a>
           {% endfor %}
@@ -58,27 +89,34 @@
       </div>
     </details>
     {% empty %}
-    <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">暂无诊疗记录</div>
+    <div class="py-12 text-center">
+        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        </div>
+        <p class="text-sm text-slate-400 font-medium">暂无诊疗记录</p>
+    </div>
     {% endfor %}
 
     {% if reports_page.paginator.num_pages > 1 %}
-    <div class="pt-2 flex items-center justify-between gap-3">
+    <div class="pt-4 flex items-center justify-between gap-4">
       {% if reports_page.has_previous %}
-      <a href="?records_page={{ reports_page.previous_page_number }}" class="flex-1 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 active:scale-[0.99] transition">
+      <a href="?records_page={{ reports_page.previous_page_number }}" class="flex-1 h-11 rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5 flex items-center justify-center text-sm font-bold text-slate-700 active:bg-slate-50 transition">
         上一页
       </a>
       {% else %}
-      <div class="flex-1 h-10 rounded-xl bg-slate-200/60 flex items-center justify-center text-sm font-bold text-slate-400">上一页</div>
+      <div class="flex-1 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-400 cursor-not-allowed">上一页</div>
       {% endif %}
 
-      <div class="text-xs text-slate-500 shrink-0">第 {{ reports_page.number }}/{{ reports_page.paginator.num_pages }} 页</div>
+      <div class="text-xs font-medium text-slate-400 shrink-0 font-mono">Page {{ reports_page.number }} / {{ reports_page.paginator.num_pages }}</div>
 
       {% if reports_page.has_next %}
-      <a href="?records_page={{ reports_page.next_page_number }}" class="flex-1 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 active:scale-[0.99] transition">
+      <a href="?records_page={{ reports_page.next_page_number }}" class="flex-1 h-11 rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5 flex items-center justify-center text-sm font-bold text-slate-700 active:bg-slate-50 transition">
         下一页
       </a>
       {% else %}
-      <div class="flex-1 h-10 rounded-xl bg-slate-200/60 flex items-center justify-center text-sm font-bold text-slate-400">下一页</div>
+      <div class="flex-1 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-400 cursor-not-allowed">下一页</div>
       {% endif %}
     </div>
     {% endif %}

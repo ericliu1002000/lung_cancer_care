@@ -31,7 +31,7 @@ from .reports_history_data import (
 
 from .mobile.views import mobile_home
 from .mobile.patient_list import mobile_patient_list
-from .mobile.patient_home import mobile_patient_home, mobile_patient_section
+from .mobile.patient_home import mobile_patient_home
 from .mobile.my_assistant import mobile_my_assistant
 from .mobile.patient_records import mobile_patient_records
 from .mobile.patient_todo import mobile_patient_todo_list
@@ -52,7 +52,6 @@ __all__ = [
     "mobile_home",
     "mobile_patient_list",
     "mobile_patient_home",
-    "mobile_patient_section",
     "mobile_patient_basic_info",
     "mobile_my_assistant",
     "mobile_patient_records",
