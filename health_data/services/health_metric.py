@@ -393,6 +393,7 @@ class HealthMetricService:
         - 按条件查询 HealthMetric 记录，并按时间排序后进行分页。
         - 返回 Django 的 Page 对象，page.object_list 中是当前页的 HealthMetric 实例列表。
         - 展示层可以使用 `metric.display_value` 获取前端友好的展示文案。
+        - 问卷类指标会保留 `questionnaire_submission_id`，便于展示层定位本次问卷提交详情。
 
         【参数说明】
         :param patient_id: 患者 ID。
@@ -425,6 +426,7 @@ class HealthMetricService:
         >>> for metric in page.object_list:
         ...     items.append({
         ...         "id": metric.id,
+        ...         "questionnaire_submission_id": metric.questionnaire_submission_id,
         ...         "type": metric.metric_type,
         ...         "value_main": metric.value_main,
         ...         "value_sub": metric.value_sub,
@@ -459,7 +461,7 @@ class HealthMetricService:
         # 3. 查询数据库
         qs = HealthMetric.objects.filter(
             patient_id=patient_id, metric_type=metric_type
-        )
+        ).select_related("questionnaire_submission")
 
         if start_date:
             qs = qs.filter(measured_at__gte=start_date)
