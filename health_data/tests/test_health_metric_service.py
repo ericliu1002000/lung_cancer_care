@@ -5,8 +5,10 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils import timezone
 
+from core.models import Questionnaire, QuestionnaireCode
 from core.service import tasks as task_service
 from health_data.models import HealthMetric, MetricSource, MetricType
+from health_data.models import QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
 from users.models import PatientProfile
 
@@ -239,12 +241,15 @@ class HealthMetricServiceTest(TestCase):
         2. page_size 限制逻辑 (最大 100)。
         3. 数据排序和分页。
         """
-        # 模拟 QuerySet 及其 order_by 返回值
+        # 模拟 QuerySet 及其 select_related / order_by 返回值
         mock_qs = MagicMock()
         mock_filter.return_value = mock_qs
 
+        mock_selected_qs = MagicMock()
+        mock_qs.select_related.return_value = mock_selected_qs
+
         mock_ordered_qs = MagicMock()
-        mock_qs.order_by.return_value = mock_ordered_qs
+        mock_selected_qs.order_by.return_value = mock_ordered_qs
 
         # 模拟 Paginator.page 返回的“分页对象”
         mock_page = MagicMock()
@@ -298,6 +303,7 @@ class HealthMetricServiceTest(TestCase):
         mock_filter.assert_called_with(
             patient_id=self.patient_id, metric_type=MetricType.WEIGHT
         )
+        mock_qs.select_related.assert_called_once_with("questionnaire_submission")
 
     def test_query_metrics_by_type_end_date_inclusive(self):
         patient = PatientProfile.objects.create(phone="13800138003")
@@ -329,6 +335,63 @@ class HealthMetricServiceTest(TestCase):
 
         ids = [item.id for item in page.object_list]
         self.assertEqual(ids, [in_range.id])
+
+    def test_query_metrics_by_type_returns_questionnaire_submission_id_for_questionnaire_metrics(self):
+        patient = PatientProfile.objects.create(phone="13800138004")
+        questionnaire, _ = Questionnaire.objects.get_or_create(
+            code=QuestionnaireCode.Q_SLEEP,
+            defaults={"name": "睡眠质量评估"},
+        )
+        submission = QuestionnaireSubmission.objects.create(
+            patient=patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("12.00"),
+        )
+        metric = HealthMetric.objects.create(
+            patient=patient,
+            metric_type=QuestionnaireCode.Q_SLEEP,
+            measured_at=submission.created_at,
+            source=MetricSource.MANUAL,
+            value_main=Decimal("12.00"),
+            questionnaire_submission=submission,
+        )
+
+        page = HealthMetricService.query_metrics_by_type(
+            patient_id=patient.id,
+            metric_type=QuestionnaireCode.Q_SLEEP,
+            page=1,
+            page_size=10,
+        )
+
+        self.assertEqual(len(page.object_list), 1)
+        result = page.object_list[0]
+        self.assertEqual(result.id, metric.id)
+        self.assertEqual(result.questionnaire_submission_id, submission.id)
+        self.assertEqual(result.measured_at, metric.measured_at)
+        self.assertEqual(result.display_value, "12.00")
+
+    def test_query_metrics_by_type_returns_none_submission_id_for_non_questionnaire_metrics(self):
+        patient = PatientProfile.objects.create(phone="13800138005")
+        metric = HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.WEIGHT,
+            measured_at=timezone.now(),
+            source=MetricSource.MANUAL,
+            value_main=Decimal("66.50"),
+        )
+
+        page = HealthMetricService.query_metrics_by_type(
+            patient_id=patient.id,
+            metric_type=MetricType.WEIGHT,
+            page=1,
+            page_size=10,
+        )
+
+        self.assertEqual(len(page.object_list), 1)
+        result = page.object_list[0]
+        self.assertEqual(result.id, metric.id)
+        self.assertIsNone(result.questionnaire_submission_id)
+        self.assertEqual(result.display_value, "66.5 kg")
 
     @patch("health_data.models.HealthMetric.objects.get")
     def test_update_manual_metric_success_partial_fields(self, mock_get):
