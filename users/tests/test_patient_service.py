@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -337,3 +338,26 @@ class PatientServiceTests(TestCase):
         self.assertEqual(self.patient_profile.baseline_blood_pressure_dbp, 80)
         self.assertEqual(self.patient_profile.baseline_heart_rate, 72)
         self.assertEqual(self.patient_profile.baseline_steps, 6000)
+
+    @patch("wx.services.client.wechat_client.qrcode.get_url")
+    @patch("wx.services.client.wechat_client.qrcode.create")
+    def test_generate_bind_qrcode_uses_family_scene_and_updates_cache(
+        self,
+        mock_create,
+        mock_get_url,
+    ):
+        mock_create.return_value = {"ticket": "ticket_family"}
+        mock_get_url.return_value = "https://wx.example.com/family-qr"
+
+        qrcode_url = self.service.generate_bind_qrcode(self.patient_profile.id)
+
+        self.assertEqual(qrcode_url, "https://wx.example.com/family-qr")
+        mock_create.assert_called_once()
+        payload = mock_create.call_args.args[0]
+        self.assertEqual(
+            payload["action_info"]["scene"]["scene_str"],
+            f"bind_family_{self.patient_profile.id}",
+        )
+
+        self.patient_profile.refresh_from_db()
+        self.assertEqual(self.patient_profile.qrcode_url, qrcode_url)

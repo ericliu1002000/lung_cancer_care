@@ -202,7 +202,7 @@ class PatientService:
     def generate_bind_qrcode(self, profile_id: int, expire_seconds: int = 604800) -> str:
         """
         【功能4】生成或复用带参二维码（临时二维码）。
-        参数值示例：bind_patient_1024
+        参数值示例：bind_family_1024
         """
         from django.utils import timezone
         from datetime import timedelta
@@ -227,7 +227,7 @@ class PatientService:
         # 避免循环引用，这里导入
         from wx.services.client import wechat_client
 
-        scene_str = f"bind_patient_{profile_id}"
+        scene_str = f"bind_family_{profile_id}"
         try:
             # 创建临时二维码
             res = wechat_client.qrcode.create(
