@@ -40,6 +40,10 @@
                                     性别：{{ patient.get_gender_display }} · 年龄：{{ patient.age|default:"-" }}
                                 </p>
                             </div>
+                            <div class="mt-1 text-xs leading-5 text-gray-500">
+                                <p>所属主任医生：{{ patient.director_doctor_name|default:"--" }}</p>
+                                <p>所属工作室：{{ patient.affiliated_studio_name|default:"--" }}</p>
+                            </div>
                             <div class="mt-2 mb-1 flex items-center text-sm text-gray-500">
                                 <span>待办</span>
                                 <span class="text-red-500 ml-1">
@@ -101,6 +105,10 @@
                                 <p class="text-sm text-gray-500">
                                     性别：{{ patient.get_gender_display }} · 年龄：{{ patient.age|default:"-" }}
                                 </p>
+                            </div>
+                            <div class="mt-1 text-xs leading-5 text-gray-500">
+                                <p>所属主任医生：{{ patient.director_doctor_name|default:"--" }}</p>
+                                <p>所属工作室：{{ patient.affiliated_studio_name|default:"--" }}</p>
                             </div>
                             <div class="mt-2 mb-1 flex items-center text-sm text-gray-500">
                                 <span>待办</span>
