@@ -1,12 +1,16 @@
 import logging
+from django.conf import settings
+from django.urls import reverse
+from django.db import transaction
 from wechatpy.replies import TextReply
 
 from .reply_rules import REPLY_RULES, DEFAULT_REPLY
-from .client import wechat_client
+from .client import wechat_client, WX_APPID
 from users.services.auth import AuthService
-from users.models import SalesProfile
+from users.models import SalesProfile, DoctorProfile, PatientProfile
+from users import choices
 from wx.services.reply_text_template import TextTemplateService
-from wx.services.oauth import generate_menu_auth_url
+from wx.services.oauth import get_oauth_url, generate_menu_auth_url
 
 logger = logging.getLogger(__name__)
 auth_service = AuthService()
@@ -68,12 +72,9 @@ def _handle_sales_scan(user, object_id):
 
 def _handle_patient_scan(user, object_id):
     """处理扫描患者档案码逻辑 (绑定家属/本人)"""
-    url = generate_menu_auth_url("web_patient:bind_landing", patient_id=object_id)
-    return TextTemplateService.get_render_content("scan_patient_code", {"url": url})
-
-
-def _handle_family_scan(user, object_id):
-    """处理扫描家属绑定码逻辑。"""
+    # 简单的生成链接逻辑
+    # full_redirect_uri = _get_full_url()
+    # url = get_oauth_url(redirect_uri=full_redirect_uri, state=str(object_id))
     url = generate_menu_auth_url("web_patient:bind_landing", patient_id=object_id)
     return TextTemplateService.get_render_content("scan_patient_code", {"url": url})
 
@@ -84,7 +85,6 @@ def _handle_family_scan(user, object_id):
 QR_HANDLERS = {
     'bind_sales': _handle_sales_scan,
     'bind_patient': _handle_patient_scan,
-    'bind_family': _handle_family_scan,
     # 'qrscene_bind_sales': ... 如果不想在提取时 replace，也可以在这里穷举
 }
 
@@ -93,20 +93,6 @@ QR_HANDLERS = {
 # ==========================================
 def handle_message(message):
     user_openid = message.source
-
-    if message.type == "event":
-        raw_event_key = (
-            getattr(message, "scene_id", None)
-            or getattr(message, "event_key", None)
-            or getattr(message, "key", None)
-        )
-        logger.info(
-            "[WX] received event=%s openid=%s raw_event_key=%s normalized_event_key=%s",
-            getattr(message, "event", ""),
-            user_openid,
-            raw_event_key,
-            _get_event_key(message),
-        )
     
     # 1. 统一处理关注/扫码事件
     if message.type == 'event':
@@ -161,13 +147,6 @@ def _dispatch_scan_logic(user, event_key):
         object_id = int(object_id_str)
         
         handler = QR_HANDLERS.get(prefix)
-        logger.info(
-            "[WX] dispatch scan event_key=%s prefix=%s object_id=%s matched=%s",
-            event_key,
-            prefix,
-            object_id,
-            bool(handler),
-        )
         if handler:
             return handler(user, object_id)
         
