@@ -12,6 +12,7 @@ urlpatterns = [
     path("doctor/mobile/home/", views.mobile_home, name="mobile_home"),
     path("doctor/mobile/patients/", views.mobile_patient_list, name="mobile_patient_list"),
     path("doctor/mobile/assistants/", views.mobile_my_assistant, name="mobile_my_assistant"),
+    path("doctor/mobile/related-doctors/", views.mobile_related_doctors, name="mobile_related_doctors"),
     path(
         "doctor/mobile/patient/todo/",
         views.mobile_patient_todo_list,
@@ -69,6 +70,11 @@ urlpatterns = [
         "mobile/patient/<int:patient_id>/chat_list",
         views_mobile.patient_chat_list,
         name="mobile_patient_chat_list",
+    ),
+    path(
+        "mobile/patient/<int:patient_id>/internal_chat",
+        views_mobile.patient_internal_chat,
+        name="mobile_patient_internal_chat",
     ),
     path("logout/", views.logout_view, name="logout"),
     # path("doctor/dashboard/", views.doctor_dashboard, name="doctor_dashboard"), # 已删除
