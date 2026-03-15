@@ -71,6 +71,11 @@ urlpatterns = [
         views_mobile.patient_chat_list,
         name="mobile_patient_chat_list",
     ),
+    path(
+        "mobile/patient/<int:patient_id>/internal_chat",
+        views_mobile.patient_internal_chat,
+        name="mobile_patient_internal_chat",
+    ),
     path("logout/", views.logout_view, name="logout"),
     # path("doctor/dashboard/", views.doctor_dashboard, name="doctor_dashboard"), # 已删除
     
