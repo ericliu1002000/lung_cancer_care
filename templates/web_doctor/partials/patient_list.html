@@ -241,6 +241,8 @@
   const SELECTED_KEY = "doctor_patient_list_selected_patient_id";
   const SECTIONS = ["managed", "stopped", "unpaid"];
   const DEFAULT_SECTION_STATE = { managed: true, stopped: false, unpaid: false };
+  let initialMainContent = "";
+  let initialTodoSidebarContent = "";
   let lastStableMainContent = "";
   let workspaceLoadSeq = 0;
   let pendingWorkspacePatient = null;
@@ -394,6 +396,18 @@
     return document.getElementById("main-content");
   };
 
+  const getTodoSidebar = function () {
+    return document.getElementById("patient-todo-list");
+  };
+
+  const snapshotInitialLayouts = function () {
+    const main = getMainContent();
+    if (main && !initialMainContent) initialMainContent = main.innerHTML;
+
+    const todoSidebar = getTodoSidebar();
+    if (todoSidebar && !initialTodoSidebarContent) initialTodoSidebarContent = todoSidebar.innerHTML;
+  };
+
   const snapshotMainContent = function () {
     const main = getMainContent();
     if (!main) return;
@@ -405,6 +419,20 @@
     if (!main) return;
     if (typeof lastStableMainContent !== "string") return;
     main.innerHTML = lastStableMainContent;
+  };
+
+  const restoreMainContentToInitial = function () {
+    const main = getMainContent();
+    if (!main) return;
+    if (!initialMainContent) return;
+    main.innerHTML = initialMainContent;
+  };
+
+  const restoreTodoSidebarToInitial = function () {
+    const todoSidebar = getTodoSidebar();
+    if (!todoSidebar) return;
+    if (!initialTodoSidebarContent) return;
+    todoSidebar.innerHTML = initialTodoSidebarContent;
   };
 
   const clearPendingWorkspaceRequest = function () {
@@ -582,6 +610,12 @@
 
   const runReset = function () {
     const input = document.getElementById("patient-search-input");
+    const inputValue = input && typeof input.value === "string" ? input.value.trim() : "";
+    if (!inputValue) {
+      showToast("请输入患者姓名或手机号");
+      return;
+    }
+
     if (input) input.value = "";
     setFilterTerm("");
     applyFilter();
@@ -589,6 +623,9 @@
     clearSelectedState();
     nextWorkspaceLoadSeq();
     clearPendingWorkspaceRequest();
+    restoreMainContentToInitial();
+    restoreTodoSidebarToInitial();
+    window.dispatchEvent(new CustomEvent("update-chat-patient", { detail: { id: null, name: "" } }));
 
     const state = { managed: true, stopped: false, unpaid: false };
     writeJson(SECTION_STATE_KEY, state);
@@ -733,6 +770,11 @@
     const legacyReload = performance && performance.navigation && performance.navigation.type === 1;
     if (navType === "reload" || legacyReload) clearSelectedState();
   } catch (e) {}
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", snapshotInitialLayouts, { once: true });
+  } else {
+    snapshotInitialLayouts();
+  }
   snapshotMainContent();
   applyAllUIState(false);
 })();
