@@ -239,7 +239,6 @@ def management_plan(request: HttpRequest) -> HttpResponse:
 
 @auto_wechat_login
 @check_patient
-@require_membership
 def my_medication(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】我的用药页面 `/p/medication/`
