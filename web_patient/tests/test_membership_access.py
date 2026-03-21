@@ -54,6 +54,7 @@ class MembershipAccessTests(TestCase):
         self.assertFalse(response.context["is_member"])
         self.assertEqual(response.context["service_days"], "0")
         self.assertEqual(response.context["daily_plans"], [])
+        self.assertIn(reverse("web_patient:my_medication"), response.content.decode())
 
     def test_patient_home_member_flag_true(self):
         self._create_paid_membership_order()
@@ -65,9 +66,10 @@ class MembershipAccessTests(TestCase):
         response = self.client.get(reverse("web_patient:management_plan"))
         self._assert_redirect_contains_buy_path(response)
 
-    def test_non_member_cannot_access_my_medication(self):
+    def test_non_member_can_access_my_medication(self):
         response = self.client.get(reverse("web_patient:my_medication"))
-        self._assert_redirect_contains_buy_path(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "我的用药")
 
     def test_query_last_metric_non_member_returns_empty(self):
         response = self.client.get(reverse("web_patient:query_last_metric"))

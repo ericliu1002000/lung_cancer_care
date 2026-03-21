@@ -56,7 +56,7 @@ class DashboardMembershipGatingTests(TestCase):
 
         self.assertNotIn(reverse("web_patient:my_followup"), content)
         self.assertNotIn(reverse("web_patient:my_examination"), content)
-        self.assertNotIn(reverse("web_patient:my_medication"), content)
+        self.assertIn(reverse("web_patient:my_medication"), content)
         self.assertNotIn(reverse("web_patient:orders"), content)
         self.assertNotIn(reverse("web_patient:device_list"), content)
         self.assertNotIn(reverse("web_patient:my_studio"), content)

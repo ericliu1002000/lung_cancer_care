@@ -152,8 +152,7 @@
 
       <!-- Medication -->
       <a
-        href="{% if is_member %}{% url 'web_patient:my_medication' %}{% else %}{{ buy_url }}{% endif %}"
-        onclick="return handleMemberOnlyNavigation(event);"
+        href="{% url 'web_patient:my_medication' %}"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#5E9EFF] to-[#4364F7] shadow-md shadow-blue-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
