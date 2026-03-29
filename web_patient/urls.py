@@ -32,7 +32,6 @@ urlpatterns = [
     path("followup/daily/", views.daily_survey, name="daily_survey"),
     path("followup/my/", views.my_followup, name="my_followup"),
     path("examination/my/", views.my_examination, name="my_examination"),
-    path("examination/detail/<int:task_id>/", views.examination_detail, name="examination_detail"),
     path("examination/reports/", my_report.my_examination, name="report_list"),
     path("examination/reports/upload/", my_report.upload_report, name="report_upload"),
     path("examination/reports/delete/", my_report.delete_report, name="report_delete"),

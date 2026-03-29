@@ -1,14 +1,14 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.test import Client, TestCase
 from django.urls import reverse
-
-from market.models import Product, Order
-from users.models import CustomUser, PatientProfile
-from decimal import Decimal
 from django.utils import timezone
-from datetime import timedelta
 
 from core.models import DailyTask, TreatmentCycle
 from core.models.choices import PlanItemCategory, TaskStatus
+from market.models import Order, Product
+from users.models import CustomUser, PatientProfile
 
 
 class MyExaminationPageTests(TestCase):
@@ -54,4 +54,3 @@ class MyExaminationPageTests(TestCase):
         self.assertContains(resp, "我的复查")
         self.assertContains(resp, cycle.name)
         self.assertContains(resp, "复查")
-

@@ -1,56 +1,12 @@
-import logging
-
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.utils import timezone
 
-from core.models import DailyTask, TreatmentCycle
+from core.models import DailyTask
 from core.models.choices import PlanItemCategory, TaskStatus
 from core.service import tasks as task_service
 from core.service.treatment_cycle import get_active_treatment_cycle, get_treatment_cycles
-from health_data.models.test_report import TestReport
 from users.decorators import auto_wechat_login, check_patient, require_membership
-
-logger = logging.getLogger(__name__)
-
-
-def _resolve_cycle_for_task(task: DailyTask, cycles):
-    if task.plan_item and task.plan_item.cycle:
-        return task.plan_item.cycle
-
-    for cycle in cycles:
-        end_date = cycle.end_date or timezone.localdate()
-        if cycle.start_date <= task.task_date <= end_date:
-            return cycle
-
-    return None
-
-
-def _build_task_payload(task: DailyTask, today):
-    status = "not_started"
-    status_label = "未开始"
-
-    if task.status == TaskStatus.COMPLETED:
-        status = "completed"
-        status_label = "已完成"
-    elif task.status == TaskStatus.TERMINATED:
-        status = "terminated"
-        status_label = "已中止"
-    elif task.status == TaskStatus.PENDING:
-        if task.task_date > today:
-            status = "not_started"
-            status_label = "未开始"
-        else:
-            status = "active"
-            status_label = "未完成"
-
-    return {
-        "id": task.id,
-        "title": task.title,
-        "date": task.task_date.strftime("%Y-%m-%d"),
-        "status": status,
-        "status_label": status_label,
-    }
 
 
 def _resolve_grouped_status(statuses: list[int]) -> int | None:
@@ -83,16 +39,11 @@ def _get_treatment_courses_checkup_like_my_followup(*, patient, today) -> list[d
         if not start_date or not end_date:
             continue
 
-        tasks = (
-            DailyTask.objects.filter(
-                patient=patient,
-                task_type__in=[
-                    PlanItemCategory.CHECKUP,
-                ],
-                task_date__range=(start_date, end_date),
-            )
-            .order_by("-task_date", "task_type", "id")
-        )
+        tasks = DailyTask.objects.filter(
+            patient=patient,
+            task_type__in=[PlanItemCategory.CHECKUP],
+            task_date__range=(start_date, end_date),
+        ).order_by("-task_date", "task_type", "id")
 
         grouped: dict[tuple[timezone.datetime.date, int], dict] = {}
         for task in tasks:
@@ -157,10 +108,6 @@ def _get_treatment_courses_checkup_like_my_followup(*, patient, today) -> list[d
 @check_patient
 @require_membership
 def my_examination(request: HttpRequest) -> HttpResponse:
-    """
-    我的复查页面
-    展示按疗程分组的复查任务列表
-    """
     patient = request.patient
     today = timezone.localdate()
 
@@ -187,22 +134,3 @@ def my_examination(request: HttpRequest) -> HttpResponse:
         "page_title": "我的复查",
     }
     return render(request, "web_patient/my_examination.html", context)
-
-
-@auto_wechat_login
-@check_patient
-@require_membership
-def examination_detail(request: HttpRequest, task_id: int) -> HttpResponse:
-    """
-    复查报告详情页面
-    """
-    patient = request.patient
-    task = get_object_or_404(DailyTask, id=task_id, patient=patient)
-    reports = TestReport.objects.filter(patient=patient, report_date=task.task_date)
-
-    context = {
-        "task": task,
-        "reports": reports,
-        "page_title": "复查详情",
-    }
-    return render(request, "web_patient/examination_detail.html", context)

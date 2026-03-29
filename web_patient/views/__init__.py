@@ -34,7 +34,7 @@ from .followup import daily_survey, get_survey_detail, submit_surveys
 from .api import delete_health_metric, update_health_metric, submit_medication
 from .chat import consultation_chat
 from .my_followup import my_followup
-from .my_examination import my_examination, examination_detail
+from .my_examination import my_examination
 from .health_calendar import health_calendar
 
 __all__ = [
@@ -78,7 +78,6 @@ __all__ = [
     "consultation_chat",
     "my_followup",
     "my_examination",
-    "examination_detail",
     "health_calendar",
     "query_last_metric",
     "membership_status",

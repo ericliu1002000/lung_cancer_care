@@ -36,7 +36,7 @@
                         <p class="text-xs text-slate-500 mt-0.5">日期：{{ task.date }}</p>
                     </div>
                 </div>
-                
+
                 <div class="shrink-0">
                     {% if task.status == 'active' %}
                        <span class="text-sm font-bold text-blue-500">{{ task.status_label }}</span>
@@ -57,7 +57,7 @@
     {% endfor %}
   </div>
 
-  <div x-show="showSuccessModal" 
+  <div x-show="showSuccessModal"
        class="fixed inset-0 z-50 flex items-center justify-center px-4"
        x-transition:enter="transition ease-out duration-300"
        x-transition:enter-start="opacity-0"
@@ -66,7 +66,7 @@
        x-transition:leave-start="opacity-100"
        x-transition:leave-end="opacity-0"
        style="display: none;">
-      
+
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showSuccessModal = false"></div>
 
       <div class="relative bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
@@ -76,12 +76,12 @@
            x-transition:leave="transition ease-in duration-200"
            x-transition:leave-start="opacity-100 scale-100 translate-y-0"
            x-transition:leave-end="opacity-0 scale-95 translate-y-4">
-          
+
           <div class="p-8 pb-6 text-center">
             <h3 class="text-xl font-bold text-slate-900 mb-6">
                 您的复查已完成，<br>将同步给医生
             </h3>
-            
+
             <div class="text-left bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <p class="text-slate-600 text-sm leading-relaxed font-medium">
                     建议：继续按医嘱服药，密切关注相关指标，如有不适，请联系医生

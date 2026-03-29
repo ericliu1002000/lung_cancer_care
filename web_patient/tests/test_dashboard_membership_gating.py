@@ -110,3 +110,7 @@ class DashboardMembershipGatingTests(TestCase):
 
         resp = self.client.get(reverse("web_patient:my_examination"))
         self.assertEqual(resp.status_code, 200)
+
+    def test_removed_legacy_examination_detail_route_returns_404(self):
+        resp = self.client.get("/p/examination/detail/1/")
+        self.assertEqual(resp.status_code, 404)
