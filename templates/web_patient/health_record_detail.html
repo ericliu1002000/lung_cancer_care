@@ -99,7 +99,7 @@
                   <span class="text-lg font-bold text-slate-900">{{ item.value }}</span>
                 </div>
                 {% else %}
-                <div class="flex items-baseline gap-2">
+                <div class="flex items-center gap-2 rounded-xl bg-slate-100 p-2">
                   <span class="min-w-[3em] text-xs font-medium text-slate-500">{{ item.label }}{% if item.label|length > 0 %}:{% endif %}</span>
                   {% if record_type == 'medical' and item.key == 'medicated' %}
                   <span class="mt-0.5 text-base font-bold text-emerald-600" aria-label="已用药" data-testid="medicated-check">

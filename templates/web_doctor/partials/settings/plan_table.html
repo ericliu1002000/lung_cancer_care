@@ -15,38 +15,26 @@
           <col class="w-48">
           <col class="w-24">
           <col class="w-24">
-          {% for day_offset in cycle_days|day_offsets %}
+          {% for day_meta in plan_view.header_days %}
           <col class="w-8">
           {% endfor %}
         </colgroup>
         <thead>
           <tr class="bg-slate-50">
             <th colspan="3" class="px-0 py-2 border-b border-slate-200 bg-slate-50"></th>
-            {% for week_range in cycle_days|week_ranges %}
+            {% for week_range in plan_view.header_week_ranges %}
             <th
               colspan="{{ week_range.span }}"
               class="px-2 py-2 border-b border-slate-200 bg-slate-50 {% if not forloop.last %}border-r border-slate-300{% endif %}"
               data-plan-range="{{ week_range.start_day }}-{{ week_range.end_day }}"
               data-plan-range-start-day="{{ week_range.start_day }}"
               data-plan-range-end-day="{{ week_range.end_day }}"
-              title="{% if cycle and cycle.start_date %}{{ cycle.start_date|add_days:week_range.start_offset|date:'Y-n-j' }} 至 {{ cycle.start_date|add_days:week_range.end_offset|date:'Y-n-j' }}{% else %}D{{ week_range.start_day }} 至 D{{ week_range.end_day }}{% endif %}"
+              title="{{ week_range.title }}"
             >
               <div class="flex items-center gap-2 text-[11px] font-medium leading-none text-slate-500 tabular-nums">
-                <span class="whitespace-nowrap">
-                  {% if cycle and cycle.start_date %}
-                  {{ cycle.start_date|add_days:week_range.start_offset|date:'n-j' }}
-                  {% else %}
-                  D{{ week_range.start_day }}
-                  {% endif %}
-                </span>
+                <span class="whitespace-nowrap">{{ week_range.start_date_display }}</span>
                 <span class="h-px flex-1 bg-slate-300"></span>
-                <span class="whitespace-nowrap">
-                  {% if cycle and cycle.start_date %}
-                  {{ cycle.start_date|add_days:week_range.end_offset|date:'n-j' }}
-                  {% else %}
-                  D{{ week_range.end_day }}
-                  {% endif %}
-                </span>
+                <span class="whitespace-nowrap">{{ week_range.end_date_display }}</span>
               </div>
             </th>
             {% endfor %}
@@ -55,14 +43,16 @@
             <th class="px-4 py-3 font-semibold w-48">项目名称</th>
             <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
             <th class="px-2 py-3 font-semibold w-24">默认频次</th>
-            {% for day_offset in cycle_days|day_offsets %}
+            {% for day_meta in plan_view.header_days %}
             <th
-              class="cursor-pointer px-1 py-3 font-medium text-center w-8 {% if forloop.counter|add:'-1'|divisibleby:7 %}text-sm text-slate-800{% else %}text-[10px] text-slate-400{% endif %} {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}"
-              data-plan-day="{{ forloop.counter }}"
-              data-plan-label="D{{ forloop.counter }}"
-              data-plan-date="{% if cycle and cycle.start_date %}{{ cycle.start_date|add_days:day_offset|date:'m/d' }}{% endif %}"
+              class="cursor-pointer px-1 py-3 font-medium text-center w-8 {% if day_meta.day_index|add:'-1'|divisibleby:7 %}text-sm{% else %}text-[10px]{% endif %} {% if day_meta.should_highlight %}text-rose-500 font-semibold{% elif day_meta.day_index|add:'-1'|divisibleby:7 %}text-slate-800{% else %}text-slate-400{% endif %} {% if day_meta.day_index|divisibleby:7 %}border-r border-gray-200{% endif %}"
+              data-plan-day="{{ day_meta.day_index }}"
+              data-plan-label="D{{ day_meta.day_index }}"
+              data-plan-date="{{ day_meta.date_display_mmdd }}"
+              data-plan-day-note="{{ day_meta.highlight_reason }}"
+              title="{{ day_meta.date_display_full }}{% if day_meta.highlight_reason %} · {{ day_meta.highlight_reason }}{% endif %}"
             >
-              D{{ forloop.counter }}
+              D{{ day_meta.day_index }}
             </th>
             {% endfor %}
           </tr>
@@ -80,7 +70,7 @@
         <col class="w-48">
         <col class="w-24">
         <col class="w-24">
-        {% for day_offset in cycle_days|day_offsets %}
+        {% for day_meta in plan_view.header_days %}
         <col class="w-8">
         {% endfor %}
       </colgroup>
@@ -190,7 +180,7 @@
     role="tooltip"
     aria-hidden="true"
   >
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex items-center  gap-3">
       <div class="font-semibold text-slate-900" data-plan-tooltip-title></div>
       <div class="text-slate-500 font-medium tabular-nums" data-plan-tooltip-date></div>
     </div>
@@ -232,13 +222,18 @@
     function setTooltipContent(tooltipEl, targetEl) {
       var label = targetEl.getAttribute('data-plan-label') || '';
       var date = targetEl.getAttribute('data-plan-date') || '';
+      var note = targetEl.getAttribute('data-plan-day-note') || '';
       var titleEl = tooltipEl.querySelector('[data-plan-tooltip-title]');
       var dateEl = tooltipEl.querySelector('[data-plan-tooltip-date]');
       var descEl = tooltipEl.querySelector('[data-plan-tooltip-desc]');
 
       if (titleEl) titleEl.textContent = label;
       if (dateEl) dateEl.textContent = date ? date : '--/--';
-      if (descEl) descEl.textContent = '基于当前选中的疗程开始日期推算（按天序间隔至结束日期）';
+      if (descEl) {
+        descEl.textContent = note
+          ? '基于当前选中的疗程开始日期推算（按天序间隔至结束日期） · ' + note
+          : '基于当前选中的疗程开始日期推算（按天序间隔至结束日期）';
+      }
     }
 
     function positionTooltip(tooltipEl, targetEl) {
