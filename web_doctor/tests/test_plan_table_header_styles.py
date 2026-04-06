@@ -46,6 +46,12 @@ class PlanTableHeaderStylesTests(TestCase):
         self.assertIn('data-plan-date="01/01"', html)
         self.assertIn('data-plan-date="01/08"', html)
         self.assertIn('data-plan-date="01/15"', html)
+        self.assertIn('data-plan-range="1-7"', html)
+        self.assertIn('data-plan-range="8-14"', html)
+        self.assertIn('data-plan-range="15-21"', html)
+        self.assertIn('title="2026-1-1 至 2026-1-7"', html)
+        self.assertRegex(html, r">\s*1-1\s*<")
+        self.assertRegex(html, r">\s*1-7\s*<")
         self.assertNotIn(">01/01<", html)
         self.assertNotIn(">01/08<", html)
         self.assertNotIn(">01/15<", html)
@@ -135,6 +141,8 @@ class PlanTableHeaderStylesTests(TestCase):
         self.assertIn('data-plan-day="28"', html)
         self.assertIn('data-plan-date="01/22"', html)
         self.assertIn('data-plan-date="01/28"', html)
+        self.assertIn('data-plan-range="22-28"', html)
+        self.assertIn('title="2026-1-22 至 2026-1-28"', html)
         self.assertIn("D28", html)
         self.assertIn('colspan="31"', html)
         self.assertIn("min-width: 1280px;", html)
@@ -198,3 +206,33 @@ class PlanTableHeaderStylesTests(TestCase):
         )
 
         self.assertEqual(html.count("border-r border-gray-200"), 20)
+
+    def test_non_full_last_week_range_uses_cycle_end_day(self):
+        self.cycle.start_date = date(2026, 4, 6)
+        self.cycle.cycle_days = 10
+        self.cycle.save(update_fields=["start_date", "cycle_days"])
+
+        html = render_to_string(
+            "web_doctor/partials/settings/plan_table.html",
+            {
+                "patient": self.patient,
+                "cycle": self.cycle,
+                "is_cycle_editable": True,
+                "plan_view": {
+                    "current_day_index": 1,
+                    "monitorings": [],
+                    "medications": [],
+                    "checkups": [],
+                    "questionnaires": [],
+                    "med_library": [],
+                },
+            },
+        )
+
+        self.assertIn('data-plan-range="1-7"', html)
+        self.assertIn('data-plan-range="8-10"', html)
+        self.assertIn('data-plan-range-end-day="10"', html)
+        self.assertIn('title="2026-4-13 至 2026-4-15"', html)
+        self.assertRegex(html, r">\s*4-13\s*<")
+        self.assertRegex(html, r">\s*4-15\s*<")
+        self.assertIn('colspan="3"', html)
