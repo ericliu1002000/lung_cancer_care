@@ -3,7 +3,7 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-[#F5F5F5] font-sans flex flex-col">
+<div class="h-screen min-h-screen bg-[#F5F5F5] font-sans flex flex-col" style="height: 100dvh;">
   <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
     <div class="pt-safe-top">
       <div class="flex items-center h-12 px-4 relative">
@@ -47,8 +47,8 @@
     {% endif %}
   </div>
 
-  <div id="record-list-wrapper" class="flex-1 flex flex-col">
-    <div id="record-list" class="flex-1 overflow-y-auto p-3 space-y-2 pb-16" onscroll="handleScroll(this)">
+  <div id="record-list-wrapper" class="flex-1 min-h-0 flex flex-col">
+    <div id="record-list" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 pb-16" onscroll="handleScroll(this)">
       {% for record in records %}
       <div
         class="record-item bg-white rounded-2xl shadow-sm px-3 py-3 transition {% if is_questionnaire_type %}{% if record.questionnaire_submission_id %}cursor-pointer active:scale-[0.99] active:bg-slate-50{% else %}opacity-80{% endif %}{% endif %}"
@@ -168,7 +168,7 @@
   </div>
 
   {% if chart_available %}
-  <div id="record-chart-wrapper" class="flex-1 hidden">
+  <div id="record-chart-wrapper" class="flex-1 min-h-0 hidden">
     {% include "web_patient/partials/health_record_chart_container.html" %}
   </div>
   {% endif %}
@@ -397,6 +397,16 @@
     }
   }
 
+  function ensureScrollableContent() {
+    const container = document.getElementById('record-list');
+    if (!container || isChartMode || isLoading || !hasMore) {
+      return;
+    }
+    if (container.scrollHeight <= container.clientHeight + 20) {
+      loadMoreData();
+    }
+  }
+
   function handleAdd() {
     let typeKey = currentType;
     if (!(typeKey in recordUrls)) {
@@ -484,6 +494,7 @@
         isLoading = false;
         document.getElementById('loading-spinner').classList.add('hidden');
         syncListStates();
+        requestAnimationFrame(ensureScrollableContent);
       });
   }
 
@@ -513,7 +524,13 @@
       });
       container.insertBefore(div, spinner);
     });
+
+    requestAnimationFrame(ensureScrollableContent);
   }
+
+  window.addEventListener('load', function () {
+    requestAnimationFrame(ensureScrollableContent);
+  });
 
   function showToast(message, type = 'info') {
     const container = document.getElementById('device-toast');
