@@ -31,6 +31,7 @@ from health_data.services.medical_history_service import MedicalHistoryService
 from health_data.services.health_metric import HealthMetricService, MetricType
 
 from core.service.plan_item import PlanItemService
+from core.service.china_calendar import ChinaCalendarService
 from web_doctor.services.current_user import get_user_display_name
 from users.services.patient import PatientService
 from web_doctor.views.home import build_home_context
@@ -447,7 +448,8 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
                 cycle_id=request.GET.get("cycle_id"),
                 start_date_str=request.GET.get("start_date"),
                 end_date_str=request.GET.get("end_date"),
-                filter_type=request.GET.get("filter_type")
+                filter_type=request.GET.get("filter_type"),
+                review_subtypes=request.GET.getlist("review_subtypes"),
             ))
 
         elif section == "statistics":
@@ -545,11 +547,19 @@ def _build_settings_context(
     monitorings: list[dict] = []
     questionnaires: list[dict] = []
     active_questionnaire: dict | None = None
+    header_days: list[dict] = []
+    header_week_ranges: list[dict] = []
 
     if selected_cycle:
         # 计算当前日期在疗程中的 DayIndex（最小为 1）
         delta_days = (date.today() - selected_cycle.start_date).days + 1
         current_day_index = 1 if delta_days < 1 else delta_days
+        header_meta = ChinaCalendarService.build_cycle_header_meta(
+            start_date=selected_cycle.start_date,
+            cycle_days=selected_cycle.cycle_days,
+        )
+        header_days = header_meta.get("header_days") or []
+        header_week_ranges = header_meta.get("header_week_ranges") or []
 
         # cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
         cycle_plan = {}
@@ -639,6 +649,8 @@ def _build_settings_context(
         "active_questionnaire": active_questionnaire,
         "med_library": med_library,
         "current_day_index": current_day_index,
+        "header_days": header_days,
+        "header_week_ranges": header_week_ranges,
         # 问卷计划：当前仅展示问卷排期，不再保留旧随访模块配置
         "questionnaire_schedule": active_questionnaire["schedule"] if active_questionnaire else [],
     }
