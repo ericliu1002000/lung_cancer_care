@@ -136,3 +136,20 @@ class MobileHealthRecordDetailPaginationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "血压:")
         self.assertContains(response, "126 / 82")
+
+    def test_doctor_mobile_template_contains_scroll_container_fallback_logic(self):
+        response = self.client.get(
+            self.url,
+            {
+                "type": "temperature",
+                "title": "体温",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "height: 100dvh;")
+        self.assertContains(response, 'id="record-list-wrapper" class="flex-1 min-h-0 flex flex-col"')
+        self.assertContains(response, "function ensureScrollableContent()")
+        self.assertContains(response, "requestAnimationFrame(ensureScrollableContent);")

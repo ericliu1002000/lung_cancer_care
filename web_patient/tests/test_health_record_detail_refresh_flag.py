@@ -36,6 +36,24 @@ class HealthRecordDetailRefreshFlagTests(TestCase):
         self.assertContains(resp, "pageshow")
         self.assertContains(resp, "refreshRecordList")
 
+    def test_detail_template_contains_scroll_container_fallback_logic(self):
+        url = reverse("web_patient:health_record_detail")
+        month = timezone.localtime(timezone.now()).strftime("%Y-%m")
+        resp = self.client.get(
+            url,
+            {
+                "type": "temperature",
+                "title": "体温",
+                "month": month,
+                "source": "health_records",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "height: 100dvh;")
+        self.assertContains(resp, 'id="record-list-wrapper" class="flex-1 min-h-0 flex flex-col"')
+        self.assertContains(resp, "function ensureScrollableContent()")
+        self.assertContains(resp, "requestAnimationFrame(ensureScrollableContent);")
+
     def test_detail_ajax_returns_newest_metric_after_creation(self):
         url = reverse("web_patient:health_record_detail")
         month = timezone.localtime(timezone.now()).strftime("%Y-%m")
