@@ -22,7 +22,9 @@ from health_data.models import (
 )
 from health_data.services.checkup_results import (
     ingest_structured_checkup_rows,
+    ignore_ai_sync_warnings,
     reprocess_orphan_fields,
+    sync_lab_results_from_ai_json,
 )
 from users.models import PatientProfile
 
@@ -71,6 +73,7 @@ class CheckupResultServiceTests(TestCase):
                 {
                     "name": self.numeric_raw_name,
                     "value": "5.6",
+                    "item_code": "WBC-001",
                     "unit": "10^9/L",
                     "lower_bound": "3.5",
                     "upper_bound": "9.5",
@@ -85,6 +88,7 @@ class CheckupResultServiceTests(TestCase):
         )
         self.assertEqual(orphan.status, OrphanFieldStatus.PENDING)
         self.assertEqual(orphan.value_numeric, Decimal("5.6"))
+        self.assertEqual(orphan.item_code, "WBC-001")
         self.assertIn("未命中标准字段别名", orphan.notes)
         self.assertEqual(CheckupResultValue.objects.count(), 0)
 
@@ -124,6 +128,7 @@ class CheckupResultServiceTests(TestCase):
                 {
                     "name": self.numeric_raw_name,
                     "value": "5.6",
+                    "item_code": "WBC-001",
                     "unit": "10^9/L",
                     "lower_bound": "3.5",
                     "upper_bound": "9.5",
@@ -136,6 +141,7 @@ class CheckupResultServiceTests(TestCase):
         result = CheckupResultValue.objects.get(report_image=self.blood_image, standard_field=self.wbc_field)
         self.assertEqual(result.patient, self.patient)
         self.assertEqual(result.value_numeric, Decimal("5.6"))
+        self.assertEqual(result.item_code, "WBC-001")
         self.assertEqual(result.abnormal_flag, CheckupResultAbnormalFlag.NORMAL)
         self.assertEqual(result.source_type, CheckupResultSourceType.AI)
         self.assertEqual(result.range_text, "3.5-9.5")
@@ -180,6 +186,141 @@ class CheckupResultServiceTests(TestCase):
         self.assertEqual(result.value_text, "右肺上叶结节较前缩小。")
         self.assertIsNone(result.value_numeric)
         self.assertEqual(result.abnormal_flag, CheckupResultAbnormalFlag.UNKNOWN)
+
+    def test_sync_lab_results_from_ai_json_writes_result_and_item_code(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [
+                {
+                    "item_name": self.numeric_raw_name,
+                    "item_value": "5.6",
+                    "reference_low": "3.5",
+                    "reference_high": "9.5",
+                    "unit": "10^9/L",
+                    "item_code": "WBC-001",
+                }
+            ],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+
+        stats = sync_lab_results_from_ai_json(self.blood_image)
+
+        self.assertEqual(stats["status"], "synced")
+        result = CheckupResultValue.objects.get(report_image=self.blood_image, standard_field=self.wbc_field)
+        self.assertEqual(result.item_code, "WBC-001")
+
+    def test_sync_lab_results_from_ai_json_blocks_category_conflict(self):
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "5.6"}],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+
+        stats = sync_lab_results_from_ai_json(self.blood_image)
+
+        self.assertEqual(stats["status"], "warning_blocked")
+        self.blood_image.refresh_from_db()
+        self.assertEqual(
+            self.blood_image.ai_sync_warnings["report_category_conflict"]["status"],
+            "pending",
+        )
+        self.assertEqual(CheckupResultValue.objects.count(), 0)
+
+    def test_sync_lab_results_from_ai_json_blocks_report_date_conflict(self):
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-02 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "5.6"}],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+
+        stats = sync_lab_results_from_ai_json(self.blood_image)
+
+        self.assertEqual(stats["status"], "warning_blocked")
+        self.blood_image.refresh_from_db()
+        self.assertEqual(
+            self.blood_image.ai_sync_warnings["report_date_conflict"]["status"],
+            "pending",
+        )
+
+    def test_sync_lab_results_from_ai_json_allows_ignored_warning(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [
+                {
+                    "item_name": self.numeric_raw_name,
+                    "item_value": "5.6",
+                    "reference_low": "3.5",
+                    "reference_high": "9.5",
+                    "unit": "10^9/L",
+                    "item_code": "WBC-001",
+                }
+            ],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+
+        first_stats = sync_lab_results_from_ai_json(self.blood_image)
+        self.assertEqual(first_stats["status"], "warning_blocked")
+
+        ignore_ai_sync_warnings(self.blood_image, warning_keys=["report_category_conflict"])
+        second_stats = sync_lab_results_from_ai_json(self.blood_image)
+
+        self.assertEqual(second_stats["status"], "synced")
+        result = CheckupResultValue.objects.get(report_image=self.blood_image, standard_field=self.wbc_field)
+        self.assertEqual(result.item_code, "WBC-001")
+
+    def test_sync_lab_results_from_ai_json_marks_warning_resolved_after_fix(self):
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "5.6"}],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+
+        first_stats = sync_lab_results_from_ai_json(self.blood_image)
+        self.assertEqual(first_stats["status"], "warning_blocked")
+
+        self.blood_image.checkup_item = CheckupLibrary.objects.create(name="血生化", code="BIOCHEM_FIX")
+        self.blood_image.save(update_fields=["checkup_item"])
+        second_stats = sync_lab_results_from_ai_json(self.blood_image)
+
+        self.assertEqual(second_stats["status"], "synced")
+        self.blood_image.refresh_from_db()
+        self.assertEqual(
+            self.blood_image.ai_sync_warnings["report_category_conflict"]["status"],
+            "resolved",
+        )
 
     def test_reprocess_orphan_fields_resolves_pending_rows_idempotently(self):
         ingest_structured_checkup_rows(

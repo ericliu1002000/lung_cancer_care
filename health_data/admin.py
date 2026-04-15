@@ -3,7 +3,6 @@
 from django.contrib import admin, messages
 
 from health_data.models import CheckupOrphanField, CheckupResultValue, OrphanFieldStatus, ReportImage
-from health_data.services.checkup_results import reprocess_orphan_fields
 
 
 @admin.register(CheckupResultValue)
@@ -33,6 +32,7 @@ class CheckupResultValueAdmin(admin.ModelAdmin):
         "raw_name",
         "normalized_name",
         "raw_value",
+        "item_code",
         "value_numeric",
         "value_text",
         "unit",
@@ -70,6 +70,7 @@ class CheckupOrphanFieldAdmin(admin.ModelAdmin):
         "raw_name",
         "normalized_name",
         "raw_value",
+        "item_code",
         "value_numeric",
         "value_text",
         "unit",
@@ -87,17 +88,12 @@ class CheckupOrphanFieldAdmin(admin.ModelAdmin):
 
     @admin.action(description="重试匹配选中孤儿")
     def retry_matching(self, request, queryset):
-        stats = reprocess_orphan_fields(queryset=queryset)
-        self.message_user(
-            request,
-            (
-                "孤儿重跑完成："
-                f"已解决 {stats['resolved']} 条，"
-                f"缺少别名 {stats['missing_alias']} 条，"
-                f"缺少映射 {stats['missing_mapping']} 条。"
-            ),
-            messages.SUCCESS,
-        )
+        from health_data.tasks import reprocess_orphan_fields_task
+
+        orphan_ids = list(queryset.values_list("id", flat=True))
+        if orphan_ids:
+            reprocess_orphan_fields_task.delay(orphan_ids=orphan_ids)
+        self.message_user(request, f"已提交 {len(orphan_ids)} 条孤儿字段的异步重跑任务。", messages.SUCCESS)
 
     @admin.action(description="标记为忽略")
     def mark_ignored(self, request, queryset):
@@ -141,6 +137,7 @@ class ReportImageAdmin(admin.ModelAdmin):
         "ai_model_name",
         "ai_parsed_at",
         "ai_error_message",
+        "ai_sync_warnings",
     )
 
     @admin.action(description="提交 AI 解析任务")

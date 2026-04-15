@@ -202,6 +202,12 @@ class ReportImage(models.Model):
         blank=True,
         help_text="结构化识别失败时记录错误原因。",
     )
+    ai_sync_warnings = models.JSONField(
+        "AI同步告警",
+        default=dict,
+        blank=True,
+        help_text="AI 结果与归档信息冲突时的告警与处理状态。",
+    )
 
     class Meta:
         db_table = "health_report_images"

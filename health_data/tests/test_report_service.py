@@ -791,8 +791,9 @@ class ReportServiceTest(TestCase):
         self.assertEqual(image.ai_error_message, "")
         self.assertIsNone(image.ai_parsed_at)
 
+    @patch("health_data.services.report_service._sync_ai_results_after_archive")
     @patch("ai_vision.tasks.extract_report_image_task.delay")
-    def test_archive_images_does_not_reenqueue_successful_ai_parse(self, mock_delay):
+    def test_archive_images_does_not_reenqueue_successful_ai_parse(self, mock_delay, mock_sync):
         upload = self._create_upload(images=["https://example.com/a.png"])
         image = upload.images.first()
         image.ai_parse_status = AIParseStatus.SUCCESS
@@ -812,6 +813,7 @@ class ReportServiceTest(TestCase):
 
         self.assertEqual(updated, 1)
         mock_delay.assert_not_called()
+        mock_sync.assert_called_once_with([image.id])
         image.refresh_from_db()
         self.assertEqual(image.ai_parse_status, AIParseStatus.SUCCESS)
         self.assertEqual(image.ai_structured_json, {"is_medical_report": True, "items": []})

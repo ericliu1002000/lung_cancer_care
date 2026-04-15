@@ -77,6 +77,12 @@ class CheckupResultValue(models.Model):
         blank=True,
         help_text="OCR/AI 识别出的原始值文本。",
     )
+    item_code = models.CharField(
+        "原始项目编码",
+        max_length=64,
+        blank=True,
+        help_text="报告原文中的项目编码快照。",
+    )
     value_numeric = models.DecimalField(
         "数值结果",
         max_digits=14,
@@ -209,6 +215,12 @@ class CheckupOrphanField(models.Model):
         "原始值文本",
         blank=True,
         help_text="OCR/AI 识别出的原始值文本。",
+    )
+    item_code = models.CharField(
+        "原始项目编码",
+        max_length=64,
+        blank=True,
+        help_text="报告原文中的项目编码快照。",
     )
     value_numeric = models.DecimalField(
         "数值结果",

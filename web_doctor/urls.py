@@ -154,6 +154,11 @@ urlpatterns = [
         name="batch_archive_images",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/reports/image/<int:image_id>/ignore-ai-warning/",
+        views.ignore_ai_sync_warning,
+        name="ignore_ai_sync_warning",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/consultation/create/",
         views.create_consultation_record,
         name="create_consultation_record",

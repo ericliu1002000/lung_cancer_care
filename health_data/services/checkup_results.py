@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+import logging
+import re
 from typing import Iterable
 
 from django.db import transaction
@@ -21,6 +23,19 @@ from health_data.models import (
     ReportImage,
 )
 
+logger = logging.getLogger(__name__)
+
+WARNING_STATUS_PENDING = "pending"
+WARNING_STATUS_IGNORED = "ignored"
+WARNING_STATUS_RESOLVED = "resolved"
+
+REPORT_CATEGORY_CONFLICT = "report_category_conflict"
+REPORT_DATE_CONFLICT = "report_date_conflict"
+
+DATE_TEXT_PATTERN = re.compile(
+    r"(?P<year>\d{4})\s*[./\-年]\s*(?P<month>\d{1,2})\s*[./\-月]\s*(?P<day>\d{1,2})\s*日?"
+)
+
 
 @dataclass
 class StructuredRowPayload:
@@ -28,6 +43,7 @@ class StructuredRowPayload:
 
     raw_name: str
     raw_value: str
+    item_code: str = ""
     unit: str = ""
     lower_bound: Decimal | None = None
     upper_bound: Decimal | None = None
@@ -85,6 +101,7 @@ def _build_orphan_defaults(
         "report_date": report_date,
         "raw_name": row.raw_name,
         "raw_value": row.raw_value,
+        "item_code": row.item_code,
         "value_numeric": numeric_value,
         "value_text": row.raw_value if numeric_value is None else "",
         "unit": row.unit,
@@ -109,6 +126,7 @@ def _upsert_result_value(
     standard_field: StandardField,
     raw_name: str,
     raw_value: str,
+    item_code: str,
     unit: str,
     lower_bound: Decimal | None,
     upper_bound: Decimal | None,
@@ -123,6 +141,7 @@ def _upsert_result_value(
         "raw_name": raw_name,
         "normalized_name": normalized_name,
         "raw_value": raw_value,
+        "item_code": item_code,
         "unit": unit,
         "lower_bound": lower_bound,
         "upper_bound": upper_bound,
@@ -150,6 +169,204 @@ def _upsert_result_value(
         defaults=defaults,
     )
     return result_value
+
+
+def _parse_report_date_text(text: str | None) -> date | None:
+    if not text:
+        return None
+    match = DATE_TEXT_PATTERN.search(str(text).strip())
+    if not match:
+        return None
+    try:
+        return date(
+            int(match.group("year")),
+            int(match.group("month")),
+            int(match.group("day")),
+        )
+    except ValueError:
+        return None
+
+
+def _build_warning(message: str, *, details: dict, status: str = WARNING_STATUS_PENDING) -> dict:
+    return {
+        "status": status,
+        "message": message,
+        "details": details,
+    }
+
+
+def _normalize_warning_keys(keys: Iterable[str] | None) -> set[str]:
+    return {
+        str(key).strip()
+        for key in (keys or [])
+        if str(key).strip()
+    }
+
+
+def ignore_ai_sync_warnings(report_image: ReportImage, warning_keys: Iterable[str] | None = None) -> dict:
+    warnings = dict(report_image.ai_sync_warnings or {})
+    selected_keys = _normalize_warning_keys(warning_keys) or set(warnings.keys())
+    changed = False
+
+    for key in selected_keys:
+        warning = warnings.get(key)
+        if not isinstance(warning, dict):
+            continue
+        if warning.get("status") == WARNING_STATUS_IGNORED:
+            continue
+        warning["status"] = WARNING_STATUS_IGNORED
+        warnings[key] = warning
+        changed = True
+
+    if changed:
+        report_image.ai_sync_warnings = warnings
+        report_image.save(update_fields=["ai_sync_warnings"])
+    return warnings
+
+
+def sync_lab_results_from_ai_json(report_image: ReportImage) -> dict[str, object]:
+    payload = report_image.ai_structured_json if isinstance(report_image.ai_structured_json, dict) else {}
+    if report_image.ai_parse_status != "SUCCESS":
+        return {"status": "skipped", "reason": "ai_not_ready"}
+    if not payload:
+        return {"status": "skipped", "reason": "missing_payload"}
+    if not report_image.checkup_item_id:
+        return {"status": "skipped", "reason": "missing_checkup_item"}
+    if not payload.get("is_medical_report"):
+        if report_image.ai_sync_warnings:
+            report_image.ai_sync_warnings = {}
+            report_image.save(update_fields=["ai_sync_warnings"])
+        return {"status": "skipped", "reason": "non_medical"}
+
+    warnings = dict(report_image.ai_sync_warnings or {})
+    changed = False
+    blocking_keys: list[str] = []
+    current_category = (report_image.checkup_item.name or "").strip()
+    ai_category = str(payload.get("report_category") or "").strip()
+
+    if ai_category:
+        existing = warnings.get(REPORT_CATEGORY_CONFLICT)
+        if ai_category != current_category:
+            status = WARNING_STATUS_PENDING
+            if isinstance(existing, dict) and existing.get("status") == WARNING_STATUS_IGNORED:
+                status = WARNING_STATUS_IGNORED
+            warning = _build_warning(
+                "AI识别的报告分类与当前归档分类不一致。",
+                details={
+                    "image_checkup_item": current_category,
+                    "ai_report_category": ai_category,
+                },
+                status=status,
+            )
+            if warnings.get(REPORT_CATEGORY_CONFLICT) != warning:
+                warnings[REPORT_CATEGORY_CONFLICT] = warning
+                changed = True
+            if status == WARNING_STATUS_PENDING:
+                blocking_keys.append(REPORT_CATEGORY_CONFLICT)
+        elif isinstance(existing, dict) and existing.get("status") != WARNING_STATUS_RESOLVED:
+            resolved = _build_warning(
+                "AI识别的报告分类已与当前归档分类一致。",
+                details={
+                    "image_checkup_item": current_category,
+                    "ai_report_category": ai_category,
+                },
+                status=WARNING_STATUS_RESOLVED,
+            )
+            warnings[REPORT_CATEGORY_CONFLICT] = resolved
+            changed = True
+
+    ai_report_date = _parse_report_date_text(payload.get("report_time_raw"))
+    existing_date_warning = warnings.get(REPORT_DATE_CONFLICT)
+    if report_image.report_date and ai_report_date and ai_report_date != report_image.report_date:
+        status = WARNING_STATUS_PENDING
+        if isinstance(existing_date_warning, dict) and existing_date_warning.get("status") == WARNING_STATUS_IGNORED:
+            status = WARNING_STATUS_IGNORED
+        warning = _build_warning(
+            "AI识别的报告日期与当前归档日期不一致。",
+            details={
+                "image_report_date": report_image.report_date.isoformat(),
+                "ai_report_time_raw": payload.get("report_time_raw"),
+                "parsed_ai_report_date": ai_report_date.isoformat(),
+            },
+            status=status,
+        )
+        if warnings.get(REPORT_DATE_CONFLICT) != warning:
+            warnings[REPORT_DATE_CONFLICT] = warning
+            changed = True
+        if status == WARNING_STATUS_PENDING:
+            blocking_keys.append(REPORT_DATE_CONFLICT)
+    elif (
+        report_image.report_date
+        and ai_report_date
+        and isinstance(existing_date_warning, dict)
+        and existing_date_warning.get("status") != WARNING_STATUS_RESOLVED
+    ):
+        warnings[REPORT_DATE_CONFLICT] = _build_warning(
+            "AI识别的报告日期已与当前归档日期一致。",
+            details={
+                "image_report_date": report_image.report_date.isoformat(),
+                "ai_report_time_raw": payload.get("report_time_raw"),
+                "parsed_ai_report_date": ai_report_date.isoformat(),
+            },
+            status=WARNING_STATUS_RESOLVED,
+        )
+        changed = True
+
+    if changed:
+        report_image.ai_sync_warnings = warnings
+        report_image.save(update_fields=["ai_sync_warnings"])
+
+    if blocking_keys:
+        return {
+            "status": "warning_blocked",
+            "warnings": {key: warnings[key] for key in blocking_keys},
+        }
+
+    if not ai_category:
+        return {"status": "skipped", "reason": "missing_report_category", "warnings": warnings}
+
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        return {"status": "skipped", "reason": "missing_items", "warnings": warnings}
+
+    rows: list[dict] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        item_name = str(item.get("item_name") or "").strip()
+        if not item_name:
+            continue
+        low = item.get("reference_low")
+        high = item.get("reference_high")
+        range_text = ""
+        if low not in (None, "") and high not in (None, ""):
+            range_text = f"{str(low).strip()}-{str(high).strip()}"
+        rows.append(
+            {
+                "name": item_name,
+                "value": str(item.get("item_value") or "").strip(),
+                "item_code": str(item.get("item_code") or "").strip(),
+                "unit": str(item.get("unit") or "").strip(),
+                "lower_bound": low,
+                "upper_bound": high,
+                "range_text": range_text,
+            }
+        )
+
+    if not rows:
+        return {"status": "skipped", "reason": "missing_items", "warnings": warnings}
+
+    stats = ingest_structured_checkup_rows(
+        report_image=report_image,
+        rows=rows,
+        source_type=CheckupResultSourceType.AI,
+    )
+    return {
+        "status": "synced",
+        "created_or_updated": stats["created_or_updated"],
+        "orphans": stats["orphans"],
+        "warnings": warnings,
+    }
 
 
 @transaction.atomic
@@ -190,6 +407,7 @@ def ingest_structured_checkup_rows(
         payload = StructuredRowPayload(
             raw_name=raw_name,
             raw_value=str(item.get("raw_value") if item.get("raw_value") is not None else item.get("value") or "").strip(),
+            item_code=str(item.get("item_code") or "").strip(),
             unit=str(item.get("unit") or "").strip(),
             lower_bound=_coerce_decimal(item.get("lower_bound")),
             upper_bound=_coerce_decimal(item.get("upper_bound")),
@@ -279,6 +497,7 @@ def ingest_structured_checkup_rows(
             standard_field=standard_field,
             raw_name=row.raw_name,
             raw_value=row.raw_value,
+            item_code=row.item_code,
             unit=row.unit,
             lower_bound=row.lower_bound,
             upper_bound=row.upper_bound,
@@ -355,6 +574,7 @@ def reprocess_orphan_fields(
             standard_field=alias.standard_field,
             raw_name=orphan.raw_name,
             raw_value=orphan.raw_value,
+            item_code=orphan.item_code,
             unit=orphan.unit,
             lower_bound=orphan.lower_bound,
             upper_bound=orphan.upper_bound,

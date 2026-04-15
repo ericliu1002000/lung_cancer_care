@@ -20,6 +20,7 @@ from django.utils import timezone
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 from health_data.services.report_service import ReportUploadService, ReportArchiveService
+from health_data.services.checkup_results import ignore_ai_sync_warnings, sync_lab_results_from_ai_json
 from health_data.models import ReportImage, ClinicalEvent, ReportUpload
 from health_data.models.report_upload import UploadSource
 from core.service.checkup import get_active_checkup_library 
@@ -61,6 +62,40 @@ def get_report_image_categories():
     """获取所有可用的图片分类"""
     return REPORT_IMAGE_CATEGORIES
 
+
+def _build_ai_warning_payload(img: ReportImage) -> tuple[list[dict[str, Any]], list[str]]:
+    warning_map = img.ai_sync_warnings if isinstance(img.ai_sync_warnings, dict) else {}
+    pending_warnings: list[dict[str, Any]] = []
+    pending_keys: list[str] = []
+    for key, warning in warning_map.items():
+        if not isinstance(warning, dict):
+            continue
+        if warning.get("status") != "pending":
+            continue
+        pending_keys.append(str(key))
+        pending_warnings.append(
+            {
+                "key": str(key),
+                "message": str(warning.get("message") or "").strip(),
+                "details": warning.get("details") if isinstance(warning.get("details"), dict) else {},
+            }
+        )
+    return pending_warnings, pending_keys
+
+
+def _render_images_tab_response(request: HttpRequest, patient_id: int, message: str, toast_type: str = "success") -> HttpResponse:
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    context = {"patient": patient}
+
+    request.GET._mutable = True
+    request.GET["tab"] = "images"
+    request.GET._mutable = False
+
+    template_name = handle_reports_history_section(request, context)
+    response = render(request, template_name, context)
+    response["HX-Trigger"] = json.dumps({"show-toast": {"message": message, "type": toast_type}})
+    return response
+
 def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
     """
     将 ClinicalEvent 映射为前端模板所需的数据结构
@@ -93,6 +128,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         else:
             category_str = cat_name
             
+        pending_ai_warnings, pending_warning_keys = _build_ai_warning_payload(img)
         images.append({
             "id": img.id,
             "name": f"图片-{img.id}",
@@ -102,6 +138,8 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
             "ai_parse_status": img.ai_parse_status,
             "ai_error_message": img.ai_error_message,
             "ai_error_message_short": (img.ai_error_message or "")[:80],
+            "pending_ai_warnings": pending_ai_warnings,
+            "pending_ai_warning_keys": pending_warning_keys,
         })
         
     # 2. 处理归档人
@@ -316,6 +354,7 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
         current_group = grouped_archives[group_key]
         
         for img in upload_images:
+            pending_ai_warnings, pending_warning_keys = _build_ai_warning_payload(img)
             category_str = ""
             record_type_display = ""
             sub_category = ""
@@ -363,6 +402,8 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
                 "ai_parse_status": img.ai_parse_status,
                 "ai_error_message": img.ai_error_message,
                 "ai_error_message_short": (img.ai_error_message or "")[:80],
+                "pending_ai_warnings": pending_ai_warnings,
+                "pending_ai_warning_keys": pending_warning_keys,
             })
             
     for group in grouped_archives.values():
@@ -510,19 +551,6 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     """
     import json
 
-    def _render_images_tab_response(message: str, toast_type: str = "success") -> HttpResponse:
-        patient = get_object_or_404(PatientProfile, pk=patient_id)
-        context = {"patient": patient}
-
-        request.GET._mutable = True
-        request.GET["tab"] = "images"
-        request.GET._mutable = False
-
-        template_name = handle_reports_history_section(request, context)
-        response = render(request, template_name, context)
-        response["HX-Trigger"] = json.dumps({"show-toast": {"message": message, "type": toast_type}})
-        return response
-
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -577,7 +605,7 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
 
     updates = filtered_updates
     if not updates:
-        return _render_images_tab_response("无未归档图片需要归档", toast_type="info")
+        return _render_images_tab_response(request, patient_id, "无未归档图片需要归档", toast_type="info")
         
     service_updates = []
     checkup_libs = {lib.name: lib.id for lib in CheckupLibrary.objects.all()}
@@ -652,7 +680,35 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
         logger.exception("归档失败")
         return HttpResponse(f"归档失败: {str(e)}", status=400)
 
-    return _render_images_tab_response("归档保存成功", toast_type="success")
+    return _render_images_tab_response(request, patient_id, "归档保存成功", toast_type="success")
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def ignore_ai_sync_warning(request: HttpRequest, patient_id: int, image_id: int) -> HttpResponse:
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+
+    report_image = get_object_or_404(
+        ReportImage.objects.select_related("upload", "checkup_item"),
+        pk=image_id,
+        upload__patient_id=patient_id,
+    )
+    warning_keys = payload.get("warning_keys")
+    if not isinstance(warning_keys, list):
+        warning_keys = None
+
+    try:
+        ignore_ai_sync_warnings(report_image, warning_keys=warning_keys)
+        sync_lab_results_from_ai_json(report_image)
+    except Exception as exc:
+        logger.exception("ignore ai sync warning failed image_id=%s", image_id)
+        return HttpResponse(f"处理失败: {str(exc)}", status=400)
+
+    return _render_images_tab_response(request, patient_id, "已忽略告警并重新同步", toast_type="success")
 
 @login_required
 @check_doctor_or_assistant

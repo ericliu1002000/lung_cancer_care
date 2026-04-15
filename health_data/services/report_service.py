@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+import logging
 from typing import Iterable, List, Dict, Optional
 
 from django.core.exceptions import ValidationError
@@ -25,6 +26,8 @@ from health_data.models import (
 )
 from users import choices as user_choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_uploader_role(
@@ -97,6 +100,20 @@ def _submit_ai_parse_tasks(image_ids: list[int]) -> None:
                 ai_parsed_at=timezone.now(),
                 ai_error_message=f"AI任务提交失败: {str(exc).strip()}"[:1000],
             )
+
+
+def _sync_ai_results_after_archive(image_ids: list[int]) -> None:
+    if not image_ids:
+        return
+
+    from health_data.services.checkup_results import sync_lab_results_from_ai_json
+
+    images = ReportImage.objects.select_related("upload", "checkup_item").filter(id__in=image_ids)
+    for image in images:
+        try:
+            sync_lab_results_from_ai_json(image)
+        except Exception:
+            logger.exception("report_image sync after archive failed image_id=%s", image.id)
 
 
 class ReportUploadService:
@@ -601,6 +618,7 @@ class ReportArchiveService:
             event_cache: Dict[tuple, ClinicalEvent] = {}
             checkup_groups: Dict[tuple[int, date, int], List[ReportImage]] = {}
             ai_image_ids_to_enqueue: list[int] = []
+            ai_synced_image_ids: list[int] = []
 
             for payload in updates:
                 raw_image_id = payload.get("image_id")
@@ -656,6 +674,8 @@ class ReportArchiveService:
                     image.ai_error_message = ""
                     image.ai_parsed_at = None
                     ai_image_ids_to_enqueue.append(image.id)
+                elif image.ai_structured_json:
+                    ai_synced_image_ids.append(image.id)
 
                 images_to_update.append(image)
 
@@ -724,6 +744,10 @@ class ReportArchiveService:
             if ai_image_ids_to_enqueue:
                 transaction.on_commit(
                     lambda image_ids=sorted(set(ai_image_ids_to_enqueue)): _submit_ai_parse_tasks(image_ids)
+                )
+            if ai_synced_image_ids:
+                transaction.on_commit(
+                    lambda image_ids=sorted(set(ai_synced_image_ids)): _sync_ai_results_after_archive(image_ids)
                 )
 
             return len(images_to_update)

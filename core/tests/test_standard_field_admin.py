@@ -1,4 +1,5 @@
 from datetime import date
+from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.messages.storage.fallback import FallbackStorage
@@ -74,7 +75,8 @@ class StructuredCheckupAdminTests(TestCase):
         self.assertEqual(standard_admin.inlines, [StandardFieldAliasInline, CheckupFieldMappingInlineForField])
         self.assertEqual(checkup_admin.inlines, [CheckupFieldMappingInline])
 
-    def test_alias_admin_action_reprocesses_related_orphans(self):
+    @patch("health_data.tasks.reprocess_orphan_fields_task.delay")
+    def test_alias_admin_action_reprocesses_related_orphans(self, mock_delay):
         orphan = CheckupOrphanField.objects.create(
             patient=self.patient,
             report_image=self.report_image,
@@ -96,16 +98,10 @@ class StructuredCheckupAdminTests(TestCase):
             StandardFieldAlias.objects.filter(pk=alias.pk),
         )
 
-        orphan.refresh_from_db()
-        self.assertEqual(orphan.status, OrphanFieldStatus.RESOLVED)
-        self.assertTrue(
-            CheckupResultValue.objects.filter(
-                report_image=self.report_image,
-                standard_field=self.field,
-            ).exists()
-        )
+        mock_delay.assert_called_once_with(normalized_names=[alias.normalized_name])
 
-    def test_orphan_admin_actions_retry_and_ignore(self):
+    @patch("health_data.tasks.reprocess_orphan_fields_task.delay")
+    def test_orphan_admin_actions_retry_and_ignore(self, mock_delay):
         pending_orphan = CheckupOrphanField.objects.create(
             patient=self.patient,
             report_image=self.report_image,
@@ -136,8 +132,7 @@ class StructuredCheckupAdminTests(TestCase):
             self._build_request(),
             CheckupOrphanField.objects.filter(pk=pending_orphan.pk),
         )
-        pending_orphan.refresh_from_db()
-        self.assertEqual(pending_orphan.status, OrphanFieldStatus.RESOLVED)
+        mock_delay.assert_called_once_with(orphan_ids=[pending_orphan.pk])
 
         admin_obj.mark_ignored(
             self._build_request(),

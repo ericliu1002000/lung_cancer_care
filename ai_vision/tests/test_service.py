@@ -115,3 +115,31 @@ class ExtractReportImageServiceTests(TestCase):
         self.assertEqual(self.report_image.ai_structured_json, existing)
         self.assertIn("豆包失败", self.report_image.ai_error_message)
         self.assertLessEqual(self.report_image.ai_parsed_at, timezone.now())
+
+    @patch("ai_vision.services.extractor.sync_lab_results_from_ai_json")
+    @patch("ai_vision.services.extractor.request_doubao_report_json")
+    def test_extract_report_image_triggers_sync_after_success(self, mock_request, mock_sync):
+        mock_request.return_value = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "items": [],
+        }
+
+        extract_report_image(self.report_image.id)
+
+        mock_sync.assert_called_once()
+
+    @patch("ai_vision.services.extractor.sync_lab_results_from_ai_json", side_effect=RuntimeError("sync failed"))
+    @patch("ai_vision.services.extractor.request_doubao_report_json")
+    def test_extract_report_image_keeps_success_when_sync_fails(self, mock_request, _mock_sync):
+        mock_request.return_value = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "items": [],
+        }
+
+        payload = extract_report_image(self.report_image.id)
+
+        self.report_image.refresh_from_db()
+        self.assertEqual(self.report_image.ai_parse_status, AIParseStatus.SUCCESS)
+        self.assertEqual(payload["report_category"], "血生化")

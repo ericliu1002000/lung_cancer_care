@@ -10,7 +10,11 @@ from users.models import AssistantProfile, DoctorProfile, PatientProfile
 from users import choices
 from health_data.models import AIParseStatus, ReportUpload, ReportImage, ClinicalEvent, UploadSource
 from core.models import CheckupLibrary, DailyTask, choices as core_choices
-from web_doctor.views.reports_history_data import handle_reports_history_section, batch_archive_images
+from web_doctor.views.reports_history_data import (
+    batch_archive_images,
+    handle_reports_history_section,
+    ignore_ai_sync_warning,
+)
 
 from django.core.exceptions import PermissionDenied
 
@@ -112,6 +116,57 @@ class ImageArchiveIntegrationTest(TestCase):
         self.assertIn("解析中", rendered)
         self.assertIn("解析失败", rendered)
         self.assertIn("豆包接口调用失败", rendered)
+
+    def test_image_archives_template_displays_ai_sync_warning(self):
+        self.img1.ai_parse_status = AIParseStatus.SUCCESS
+        self.img1.ai_sync_warnings = {
+            "report_category_conflict": {
+                "status": "pending",
+                "message": "AI识别的报告分类与当前归档分类不一致。",
+                "details": {
+                    "image_checkup_item": "胸部CT",
+                    "ai_report_category": "血常规",
+                },
+            }
+        }
+        self.img1.save(update_fields=["ai_parse_status", "ai_sync_warnings"])
+
+        request = self.factory.get('/?tab=images')
+        request.user = self.doctor_user
+
+        context = {"patient": self.patient}
+        template_name = handle_reports_history_section(request, context)
+        rendered = render_to_string(template_name, context, request=request)
+
+        self.assertIn("AI识别的报告分类与当前归档分类不一致", rendered)
+        self.assertIn("忽略告警并同步", rendered)
+
+    def test_ignore_ai_sync_warning_view_triggers_resync(self):
+        self.img1.ai_parse_status = AIParseStatus.SUCCESS
+        self.img1.ai_sync_warnings = {
+            "report_category_conflict": {
+                "status": "pending",
+                "message": "AI识别的报告分类与当前归档分类不一致。",
+                "details": {},
+            }
+        }
+        self.img1.save(update_fields=["ai_parse_status", "ai_sync_warnings"])
+
+        request = self.factory.post(
+            f"/doctor/workspace/patient/{self.patient.id}/reports/image/{self.img1.id}/ignore-ai-warning/",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        request.user = self.doctor_user
+
+        response = ignore_ai_sync_warning(request, self.patient.id, self.img1.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.img1.refresh_from_db()
+        self.assertEqual(
+            self.img1.ai_sync_warnings["report_category_conflict"]["status"],
+            "ignored",
+        )
 
     def test_grouping_multiple_dates(self):
         """

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 from django.utils import timezone
 
@@ -7,7 +9,10 @@ from ai_vision.prompts.report_image import build_report_image_prompt
 from ai_vision.schemas.report_image import sanitize_report_image_json
 from ai_vision.services.client import request_doubao_report_json
 from core.models import CheckupLibrary
+from health_data.services.checkup_results import sync_lab_results_from_ai_json
 from health_data.models import AIParseStatus, ReportImage
+
+logger = logging.getLogger(__name__)
 
 
 def _allowed_report_categories() -> list[str]:
@@ -46,6 +51,10 @@ def extract_report_image(image_id: int) -> dict:
                 "ai_error_message",
             ]
         )
+        try:
+            sync_lab_results_from_ai_json(report_image)
+        except Exception:
+            logger.exception("AI structured payload synced failed report_image_id=%s", report_image.id)
         return cleaned_payload
     except Exception as exc:
         report_image.ai_parse_status = AIParseStatus.FAILED
