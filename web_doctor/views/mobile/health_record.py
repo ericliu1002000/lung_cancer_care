@@ -41,6 +41,7 @@ QUESTIONNAIRE_RECORD_TYPE_MAP = {
     "sleep": QuestionnaireCode.Q_SLEEP,
     "psych": QuestionnaireCode.Q_PSYCH,
     "anxiety": QuestionnaireCode.Q_ANXIETY,
+    "oral_mucosa": QuestionnaireCode.Q_KQNMLB,
 }
 
 RECORD_TYPE_METRIC_MAP = {
@@ -264,6 +265,13 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 "abnormal": 0,
                 "icon": "anxiety",
             },
+            {
+                "type": "oral_mucosa",
+                "title": "口腔黏膜损伤自评量表",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "oral_mucosa",
+            },
         ]
 
         metric_type_map = {
@@ -275,6 +283,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
             "sleep": QuestionnaireCode.Q_SLEEP,
             "psych": QuestionnaireCode.Q_PSYCH,
             "anxiety": QuestionnaireCode.Q_ANXIETY,
+            "oral_mucosa": QuestionnaireCode.Q_KQNMLB,
         }
 
         for item in health_survey_stats:
@@ -784,6 +793,7 @@ def _build_line_chart_payload(
         "heart": "#f97316",
         "step": "#22c55e",
         "bp": "#2563eb",
+        "oral_mucosa": "#ef4444",
     }
     day_set = set(month_days)
     latest_map = {}
@@ -967,6 +977,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "sleep",
         "psych",
         "anxiety",
+        "oral_mucosa",
     }
     if record_type in member_only_types and not is_member:
         buy_url = generate_menu_auth_url("market:product_buy")
@@ -994,6 +1005,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "sleep",
         "psych",
         "anxiety",
+        "oral_mucosa",
     }
 
     current_month = request.GET.get("month", datetime.now().strftime("%Y-%m"))
