@@ -21,8 +21,10 @@ from health_data.models import (
     ReportUpload,
 )
 from health_data.services.checkup_results import (
+    analyze_report_image_structured_items,
     ingest_structured_checkup_rows,
     ignore_ai_sync_warnings,
+    rebuild_report_image_structured_results,
     reprocess_orphan_fields,
     sync_lab_results_from_ai_json,
 )
@@ -322,6 +324,164 @@ class CheckupResultServiceTests(TestCase):
             "resolved",
         )
 
+    def test_rebuild_prefers_reviewed_payload_and_marks_result_manual(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name="人工白细胞",
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "5.6"}],
+        }
+        self.blood_image.reviewed_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": "人工白细胞", "item_value": "8.2", "item_code": "MANUAL-001"}],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json", "reviewed_structured_json"])
+
+        stats = rebuild_report_image_structured_results(self.blood_image)
+
+        self.assertEqual(stats["status"], "synced")
+        result = CheckupResultValue.objects.get(report_image=self.blood_image, standard_field=self.wbc_field)
+        self.assertEqual(result.value_numeric, Decimal("8.2"))
+        self.assertEqual(result.item_code, "MANUAL-001")
+        self.assertEqual(result.source_type, CheckupResultSourceType.MANUAL)
+
+    def test_rebuild_clears_stale_rows_when_effective_items_become_empty(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "5.6"}],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+        first_stats = rebuild_report_image_structured_results(self.blood_image)
+        self.assertEqual(first_stats["status"], "synced")
+        self.assertEqual(CheckupResultValue.objects.count(), 1)
+
+        self.blood_image.reviewed_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [],
+        }
+        self.blood_image.save(update_fields=["reviewed_structured_json"])
+
+        second_stats = rebuild_report_image_structured_results(self.blood_image)
+
+        self.assertEqual(second_stats["status"], "synced")
+        self.assertEqual(second_stats["created_or_updated"], 0)
+        self.assertEqual(CheckupResultValue.objects.count(), 0)
+        self.assertEqual(CheckupOrphanField.objects.count(), 0)
+
+    def test_rebuild_non_medical_payload_clears_existing_rows(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.ai_parse_status = "SUCCESS"
+        self.blood_image.ai_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "5.6"}],
+        }
+        self.blood_image.save(update_fields=["ai_parse_status", "ai_structured_json"])
+        rebuild_report_image_structured_results(self.blood_image)
+        self.assertEqual(CheckupResultValue.objects.count(), 1)
+
+        self.blood_image.reviewed_structured_json = {
+            "is_medical_report": False,
+            "report_category": None,
+            "report_time_raw": None,
+            "items": [],
+        }
+        self.blood_image.save(update_fields=["reviewed_structured_json"])
+
+        stats = rebuild_report_image_structured_results(self.blood_image)
+
+        self.assertEqual(stats["status"], "synced")
+        self.assertEqual(CheckupResultValue.objects.count(), 0)
+        self.assertEqual(CheckupOrphanField.objects.count(), 0)
+
+    def test_analyze_report_image_structured_items_marks_matched_and_orphan_rows(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.reviewed_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [
+                {"item_name": self.numeric_raw_name, "item_value": "5.6"},
+                {"item_name": "未知项目", "item_value": "1.0"},
+            ],
+        }
+        self.blood_image.save(update_fields=["reviewed_structured_json"])
+
+        result = analyze_report_image_structured_items(self.blood_image)
+
+        self.assertEqual(result[0]["status"], "matched")
+        self.assertFalse(result[0]["is_orphan"])
+        self.assertEqual(result[0]["standard_field_display"], self.wbc_field.chinese_name)
+        self.assertEqual(result[1]["status"], "orphan")
+        self.assertTrue(result[1]["is_orphan"])
+        self.assertEqual(result[1]["reason"], "未命中标准字段别名")
+
+    def test_analyze_report_image_structured_items_marks_decimal_parse_failure(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        self.blood_image.reviewed_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血常规",
+            "report_time_raw": "2026-04-01 08:00",
+            "items": [{"item_name": self.numeric_raw_name, "item_value": "未出结果"}],
+        }
+        self.blood_image.save(update_fields=["reviewed_structured_json"])
+
+        result = analyze_report_image_structured_items(self.blood_image)
+
+        self.assertEqual(result[0]["status"], "orphan")
+        self.assertEqual(result[0]["reason"], "数值解析失败")
+
     def test_reprocess_orphan_fields_resolves_pending_rows_idempotently(self):
         ingest_structured_checkup_rows(
             report_image=self.blood_image,
@@ -344,18 +504,45 @@ class CheckupResultServiceTests(TestCase):
         )
 
         first_stats = reprocess_orphan_fields(normalized_names=[self.numeric_normalized_name])
-        self.assertEqual(first_stats, {"resolved": 1, "missing_alias": 0, "missing_mapping": 0})
+        self.assertEqual(first_stats, {"resolved": 1, "missing_alias": 0, "missing_mapping": 0, "invalid_decimal": 0})
 
-        orphan.refresh_from_db()
         result = CheckupResultValue.objects.get(report_image=self.blood_image, standard_field=self.wbc_field)
-        self.assertEqual(orphan.status, OrphanFieldStatus.RESOLVED)
-        self.assertEqual(orphan.resolved_standard_field, self.wbc_field)
-        self.assertEqual(orphan.resolved_result_value, result)
+        self.assertFalse(
+            CheckupOrphanField.objects.filter(
+                report_image=self.blood_image,
+                normalized_name=self.numeric_normalized_name,
+            ).exists()
+        )
         self.assertEqual(result.source_type, CheckupResultSourceType.MIGRATED)
 
         second_stats = reprocess_orphan_fields(normalized_names=[self.numeric_normalized_name])
-        self.assertEqual(second_stats, {"resolved": 0, "missing_alias": 0, "missing_mapping": 0})
+        self.assertEqual(second_stats, {"resolved": 0, "missing_alias": 0, "missing_mapping": 0, "invalid_decimal": 0})
         self.assertEqual(CheckupResultValue.objects.count(), 1)
+
+    def test_reprocess_orphan_fields_keeps_decimal_parse_failures_pending(self):
+        StandardFieldAlias.objects.create(
+            standard_field=self.wbc_field,
+            alias_name=self.numeric_raw_name,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        ingest_structured_checkup_rows(
+            report_image=self.blood_image,
+            rows=[{"name": self.numeric_raw_name, "value": "未出结果"}],
+        )
+
+        stats = reprocess_orphan_fields(normalized_names=[self.numeric_normalized_name])
+
+        self.assertEqual(stats, {"resolved": 0, "missing_alias": 0, "missing_mapping": 0, "invalid_decimal": 1})
+        orphan = CheckupOrphanField.objects.get(
+            report_image=self.blood_image,
+            normalized_name=self.numeric_normalized_name,
+        )
+        self.assertEqual(orphan.status, OrphanFieldStatus.PENDING)
+        self.assertEqual(CheckupResultValue.objects.count(), 0)
 
     def test_ingest_creates_orphan_when_decimal_value_cannot_be_parsed(self):
         StandardFieldAlias.objects.create(

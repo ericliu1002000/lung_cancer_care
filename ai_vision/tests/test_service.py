@@ -116,6 +116,32 @@ class ExtractReportImageServiceTests(TestCase):
         self.assertIn("豆包失败", self.report_image.ai_error_message)
         self.assertLessEqual(self.report_image.ai_parsed_at, timezone.now())
 
+    @patch("ai_vision.services.extractor.request_doubao_report_json")
+    def test_extract_report_image_keeps_reviewed_payload_after_new_ai_parse(self, mock_request):
+        self.report_image.reviewed_structured_json = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "items": [{"item_name": "人工项目", "item_value": "1"}],
+        }
+        self.report_image.save(update_fields=["reviewed_structured_json"])
+        mock_request.return_value = {
+            "is_medical_report": True,
+            "report_category": "血生化",
+            "items": [{"item_name": "AI项目", "item_value": "2"}],
+        }
+
+        extract_report_image(self.report_image.id)
+
+        self.report_image.refresh_from_db()
+        self.assertEqual(
+            self.report_image.reviewed_structured_json,
+            {
+                "is_medical_report": True,
+                "report_category": "血生化",
+                "items": [{"item_name": "人工项目", "item_value": "1"}],
+            },
+        )
+
     @patch("ai_vision.services.extractor.sync_lab_results_from_ai_json")
     @patch("ai_vision.services.extractor.request_doubao_report_json")
     def test_extract_report_image_triggers_sync_after_success(self, mock_request, mock_sync):

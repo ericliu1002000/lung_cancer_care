@@ -1,0 +1,764 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+{{ block.super }}
+<script id="review-item-statuses" type="application/json">{{ review_item_statuses_json|safe }}</script>
+<style>
+  .report-review-layout {
+    display: grid;
+    grid-template-columns: minmax(360px, 2fr) minmax(420px, 3fr);
+    gap: 20px;
+    align-items: start;
+    margin-top: 18px;
+  }
+
+  .report-review-left {
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    height: calc(100vh - 32px);
+    min-height: 560px;
+  }
+
+  .report-review-right .module {
+    margin-bottom: 16px;
+  }
+
+  .report-review-right {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding-right: 8px;
+    scrollbar-gutter: stable;
+  }
+
+  .report-image-viewer-module h2 {
+    margin-bottom: 12px;
+  }
+
+  .report-image-viewer-module {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin-bottom: 0;
+  }
+
+  .report-image-viewer {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid #d0d7de;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+  }
+
+  .report-image-viewer__toolbar {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(10px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+
+  .report-image-viewer__toolbar button {
+    min-width: 44px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+    cursor: pointer;
+  }
+
+  .report-image-viewer__viewport {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background:
+      linear-gradient(135deg, rgba(148, 163, 184, 0.14), rgba(15, 23, 42, 0.1)),
+      repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.12),
+        rgba(255, 255, 255, 0.12) 10px,
+        rgba(255, 255, 255, 0.02) 10px,
+        rgba(255, 255, 255, 0.02) 20px
+      ),
+      #0f172a;
+    cursor: default;
+    touch-action: none;
+  }
+
+  .report-image-viewer__viewport.is-draggable {
+    cursor: grab;
+  }
+
+  .report-image-viewer__viewport.is-dragging {
+    cursor: grabbing;
+  }
+
+  .report-image-viewer__image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: block;
+    max-width: none;
+    max-height: none;
+    border-radius: 10px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.32);
+    transform-origin: center center;
+    user-select: none;
+    -webkit-user-drag: none;
+    will-change: transform;
+  }
+
+  .report-image-viewer__empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    color: #f8fafc;
+    text-align: center;
+    font-size: 15px;
+    background: rgba(15, 23, 42, 0.72);
+  }
+
+  .report-image-viewer__empty[hidden] {
+    display: none;
+  }
+
+  .report-image-viewer__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px 14px;
+    color: #334155;
+    font-size: 13px;
+  }
+
+  .report-image-viewer__state {
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  .report-image-viewer--chrome-hidden .report-image-viewer__toolbar,
+  .report-image-viewer--chrome-hidden .report-image-viewer__footer {
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+  }
+
+  .report-review-items-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .report-review-items-table th,
+  .report-review-items-table td {
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+  }
+
+  .report-review-items-table td input,
+  .report-review-items-table td select {
+    width: 100%;
+  }
+
+  .report-item-row--orphan {
+    background: #fff4c7;
+  }
+
+  .report-item-status {
+    font-weight: 600;
+  }
+
+  .report-item-status--orphan {
+    color: #9a6700;
+  }
+
+  .report-item-status--matched {
+    color: #1f2328;
+  }
+
+  .report-item-status--empty {
+    color: #57606a;
+  }
+
+  .report-item-reason {
+    color: #57606a;
+    line-height: 1.5;
+  }
+
+  .report-item-reason strong {
+    color: #24292f;
+  }
+
+  @media (max-width: 1080px) {
+    .report-review-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .report-review-left {
+      position: static;
+      height: auto;
+      min-height: 0;
+    }
+
+    .report-review-right {
+      max-height: none;
+      overflow: visible;
+      padding-right: 0;
+    }
+
+    .report-image-viewer-module,
+    .report-image-viewer {
+      height: auto;
+    }
+
+    .report-image-viewer__viewport {
+      min-height: 360px;
+      height: min(60vh, 560px);
+    }
+
+    .report-image-viewer__footer {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>
+<div id="report-review-layout" class="report-review-layout">
+  <div id="report-review-left" class="report-review-left">
+    {% if report_image_url %}
+    <section class="module report-image-viewer-module" id="report-image-viewer-module">
+      <h2>来源图片</h2>
+      <div
+        id="report-image-viewer"
+        class="report-image-viewer"
+        data-image-src="{{ report_image_url }}"
+      >
+        <div class="report-image-viewer__toolbar" id="report-image-viewer-toolbar">
+          <button type="button" id="report-image-viewer-fit">适应窗口</button>
+          <button type="button" id="report-image-viewer-actual">100%</button>
+          <button type="button" id="report-image-viewer-zoom-in">+</button>
+          <button type="button" id="report-image-viewer-zoom-out">-</button>
+          <button type="button" id="report-image-viewer-reset">重置</button>
+        </div>
+        <div class="report-image-viewer__viewport" id="report-image-viewer-viewport">
+          <img
+            id="report-image-viewer-image"
+            class="report-image-viewer__image"
+            src="{{ report_image_url }}"
+            alt="{{ report_image_alt|default:'报告图片' }}"
+            draggable="false"
+          >
+          <div
+            id="report-image-viewer-empty"
+            class="report-image-viewer__empty"
+            hidden
+          >
+            图片加载失败，请检查图片地址或稍后重试。
+          </div>
+        </div>
+        <div class="report-image-viewer__footer">
+          <span id="report-image-viewer-state" class="report-image-viewer__state">适应窗口</span>
+          <span>单击切换工具条，双击在适应窗口和 100% 间切换，滚轮缩放，拖动查看局部。</span>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+  <div id="report-review-right" class="report-review-right">
+    <div class="module aligned" id="report-review-items-module">
+      <h2>人工修订项目明细</h2>
+      {{ adminform.form.reviewed_items_json }}
+      {% if adminform.form.reviewed_items_json.errors %}
+        <ul class="errorlist">
+          {% for error in adminform.form.reviewed_items_json.errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <div id="review-items-editor"></div>
+      <p class="help">
+        黄底行表示按当前 alias、检查项映射和数值规则判断，保存后仍会进入孤儿字段；保存并刷新页面后会展示最新状态。
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+{{ block.super }}
+{% if show_review_clear_button %}
+<div class="submit-row">
+  <input type="submit" name="_clear_reviewed_json" value="清空人工修订并按原始 AI 重建" formnovalidate>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+<script>
+(function () {
+  const hiddenInput = document.getElementById("id_reviewed_items_json");
+  const editor = document.getElementById("review-items-editor");
+  const layout = document.getElementById("report-review-layout");
+  const leftColumn = document.getElementById("report-review-left");
+  const rightColumn = document.getElementById("report-review-right");
+  const statusesNode = document.getElementById("review-item-statuses");
+  if (!hiddenInput || !editor || !layout || !leftColumn || !rightColumn) {
+    return;
+  }
+
+  const statusMap = Array.isArray(JSON.parse(statusesNode ? statusesNode.textContent : "[]"))
+    ? JSON.parse(statusesNode ? statusesNode.textContent : "[]")
+    : [];
+  const abnormalChoices = [
+    { value: "", label: "未标注" },
+    { value: "high", label: "偏高" },
+    { value: "normal", label: "正常" },
+    { value: "low", label: "偏低" },
+    { value: "unknown", label: "未知" }
+  ];
+  const columns = [
+    { key: "item_code", label: "项目编码" },
+    { key: "item_name", label: "项目名" },
+    { key: "item_value", label: "结果值" },
+    { key: "unit", label: "单位" },
+    { key: "reference_low", label: "参考下限" },
+    { key: "reference_high", label: "参考上限" }
+  ];
+
+  function parseItems() {
+    try {
+      const parsed = JSON.parse(hiddenInput.value || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function createCellInput(value) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value || "";
+    return input;
+  }
+
+  function serializeRows() {
+    const rows = [];
+    editor.querySelectorAll("tbody tr").forEach((row) => {
+      const rowData = {};
+      columns.forEach((column) => {
+        rowData[column.key] = row.querySelector('[data-key="' + column.key + '"]').value.trim();
+      });
+      rowData.abnormal_flag = row.querySelector('[data-key="abnormal_flag"]').value;
+      rows.push(rowData);
+    });
+    hiddenInput.value = JSON.stringify(rows);
+  }
+
+  function buildReasonCell(statusInfo) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "report-item-reason";
+    if (!statusInfo) {
+      wrapper.textContent = "新增或修改后，保存并刷新页面查看最新状态。";
+      return wrapper;
+    }
+
+    if (statusInfo.standard_field_display && !statusInfo.is_orphan) {
+      const strong = document.createElement("strong");
+      strong.textContent = "标准字段：";
+      wrapper.appendChild(strong);
+      wrapper.appendChild(document.createTextNode(" " + statusInfo.standard_field_display));
+      return wrapper;
+    }
+
+    if (statusInfo.reason) {
+      const strong = document.createElement("strong");
+      strong.textContent = statusInfo.reason;
+      wrapper.appendChild(strong);
+    }
+    if (statusInfo.suggestion) {
+      const suggestion = document.createElement("div");
+      suggestion.textContent = statusInfo.suggestion;
+      wrapper.appendChild(suggestion);
+    }
+    return wrapper;
+  }
+
+  function addRow(item, statusInfo) {
+    const row = document.createElement("tr");
+    if (statusInfo && statusInfo.is_orphan) {
+      row.classList.add("report-item-row--orphan");
+    }
+
+    columns.forEach((column) => {
+      const cell = document.createElement("td");
+      const input = createCellInput(item[column.key]);
+      input.setAttribute("data-key", column.key);
+      input.addEventListener("input", serializeRows);
+      cell.appendChild(input);
+      row.appendChild(cell);
+    });
+
+    const abnormalCell = document.createElement("td");
+    const select = document.createElement("select");
+    select.setAttribute("data-key", "abnormal_flag");
+    abnormalChoices.forEach((choice) => {
+      const option = document.createElement("option");
+      option.value = choice.value;
+      option.textContent = choice.label;
+      if ((item.abnormal_flag || "") === choice.value) {
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
+    select.addEventListener("change", serializeRows);
+    abnormalCell.appendChild(select);
+    row.appendChild(abnormalCell);
+
+    const statusCell = document.createElement("td");
+    const statusLabel = document.createElement("div");
+    statusLabel.className = "report-item-status report-item-status--" + ((statusInfo && statusInfo.status) || "empty");
+    statusLabel.textContent = (statusInfo && statusInfo.status_label) || "待保存后判断";
+    statusCell.appendChild(statusLabel);
+    row.appendChild(statusCell);
+
+    const reasonCell = document.createElement("td");
+    reasonCell.appendChild(buildReasonCell(statusInfo));
+    row.appendChild(reasonCell);
+
+    const actionCell = document.createElement("td");
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "button";
+    deleteButton.textContent = "删除";
+    deleteButton.addEventListener("click", function () {
+      row.remove();
+      serializeRows();
+    });
+    actionCell.appendChild(deleteButton);
+    row.appendChild(actionCell);
+
+    editor.querySelector("tbody").appendChild(row);
+  }
+
+  function renderTable(items) {
+    editor.innerHTML = "";
+
+    const toolbar = document.createElement("div");
+    toolbar.style.marginBottom = "12px";
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "button";
+    addButton.textContent = "新增项目行";
+    addButton.addEventListener("click", function () {
+      addRow({}, null);
+      serializeRows();
+    });
+    toolbar.appendChild(addButton);
+    editor.appendChild(toolbar);
+
+    const table = document.createElement("table");
+    table.className = "report-review-items-table";
+
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    columns.forEach((column) => {
+      const th = document.createElement("th");
+      th.textContent = column.label;
+      headRow.appendChild(th);
+    });
+
+    [
+      "异常标记",
+      "当前状态",
+      "原因 / 建议",
+      "操作"
+    ].forEach((label) => {
+      const th = document.createElement("th");
+      th.textContent = label;
+      headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    table.appendChild(tbody);
+    editor.appendChild(table);
+
+    (items.length ? items : [{}]).forEach((item, index) => {
+      addRow(item, statusMap[index] || null);
+    });
+    serializeRows();
+  }
+
+  function initImageViewer() {
+    const viewer = document.getElementById("report-image-viewer");
+    const viewport = document.getElementById("report-image-viewer-viewport");
+    const image = document.getElementById("report-image-viewer-image");
+    const emptyState = document.getElementById("report-image-viewer-empty");
+    const stateNode = document.getElementById("report-image-viewer-state");
+    const fitButton = document.getElementById("report-image-viewer-fit");
+    const actualButton = document.getElementById("report-image-viewer-actual");
+    const zoomInButton = document.getElementById("report-image-viewer-zoom-in");
+    const zoomOutButton = document.getElementById("report-image-viewer-zoom-out");
+    const resetButton = document.getElementById("report-image-viewer-reset");
+    if (!viewer || !viewport || !image || !stateNode) {
+      return;
+    }
+
+    const SCALE_EPSILON = 0.01;
+    let baseScale = 1;
+    let scale = 1;
+    let translateX = 0;
+    let translateY = 0;
+    let naturalWidth = 0;
+    let naturalHeight = 0;
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let clickTimer = null;
+
+    function getMaxScale() {
+      return Math.max(baseScale, 4);
+    }
+
+    function getActualScale() {
+      return Math.min(getMaxScale(), Math.max(baseScale, 1));
+    }
+
+    function isFitScale(value) {
+      return Math.abs(value - baseScale) <= SCALE_EPSILON;
+    }
+
+    function clampScale(nextScale) {
+      return Math.min(getMaxScale(), Math.max(baseScale, nextScale));
+    }
+
+    function clampTranslations() {
+      if (!naturalWidth || !naturalHeight) {
+        translateX = 0;
+        translateY = 0;
+        return;
+      }
+
+      const horizontalLimit = Math.max(0, (naturalWidth * scale - viewport.clientWidth) / 2);
+      const verticalLimit = Math.max(0, (naturalHeight * scale - viewport.clientHeight) / 2);
+
+      translateX = Math.min(horizontalLimit, Math.max(-horizontalLimit, translateX));
+      translateY = Math.min(verticalLimit, Math.max(-verticalLimit, translateY));
+
+      if (isFitScale(scale)) {
+        translateX = 0;
+        translateY = 0;
+      }
+    }
+
+    function updateViewportState() {
+      viewport.classList.toggle("is-draggable", scale > baseScale + SCALE_EPSILON);
+      viewport.classList.toggle("is-dragging", isDragging);
+    }
+
+    function updateStatusLabel() {
+      if (isFitScale(scale)) {
+        stateNode.textContent = "适应窗口";
+        return;
+      }
+      if (Math.abs(scale - getActualScale()) <= SCALE_EPSILON) {
+        stateNode.textContent = "100%";
+        return;
+      }
+      stateNode.textContent = Math.round(scale * 100) + "%";
+    }
+
+    function applyTransform() {
+      clampTranslations();
+      image.style.transform =
+        "translate(calc(-50% + " + translateX + "px), calc(-50% + " + translateY + "px)) scale(" + scale + ")";
+      updateViewportState();
+      updateStatusLabel();
+    }
+
+    function fitToPanel() {
+      if (!naturalWidth || !naturalHeight) {
+        return;
+      }
+      const horizontalScale = viewport.clientWidth / naturalWidth;
+      const verticalScale = viewport.clientHeight / naturalHeight;
+      baseScale = Math.min(horizontalScale, verticalScale);
+      scale = baseScale;
+      translateX = 0;
+      translateY = 0;
+      applyTransform();
+    }
+
+    function setScale(nextScale) {
+      scale = clampScale(nextScale);
+      applyTransform();
+    }
+
+    function resetViewer() {
+      viewer.classList.remove("report-image-viewer--chrome-hidden");
+      fitToPanel();
+    }
+
+    function handleImageReady() {
+      naturalWidth = image.naturalWidth || 0;
+      naturalHeight = image.naturalHeight || 0;
+      if (!naturalWidth || !naturalHeight) {
+        return;
+      }
+      image.style.width = naturalWidth + "px";
+      image.style.height = naturalHeight + "px";
+      fitToPanel();
+    }
+
+    image.addEventListener("load", handleImageReady);
+    image.addEventListener("error", function () {
+      emptyState.hidden = false;
+      image.hidden = true;
+    });
+
+    if (image.complete && image.naturalWidth) {
+      handleImageReady();
+    }
+
+    fitButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      fitToPanel();
+    });
+
+    actualButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      setScale(getActualScale());
+    });
+
+    zoomInButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      setScale(scale * 1.2);
+    });
+
+    zoomOutButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      setScale(scale / 1.2);
+    });
+
+    resetButton.addEventListener("click", function (event) {
+      event.preventDefault();
+      resetViewer();
+    });
+
+    viewport.addEventListener("wheel", function (event) {
+      if (!naturalWidth || !naturalHeight) {
+        return;
+      }
+      event.preventDefault();
+      const ratio = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+      setScale(scale * ratio);
+    }, { passive: false });
+
+    viewport.addEventListener("mousedown", function (event) {
+      if (event.button !== 0 || scale <= baseScale + SCALE_EPSILON || !naturalWidth || !naturalHeight) {
+        return;
+      }
+      isDragging = true;
+      dragStartX = event.clientX - translateX;
+      dragStartY = event.clientY - translateY;
+      updateViewportState();
+      event.preventDefault();
+    });
+
+    document.addEventListener("mousemove", function (event) {
+      if (!isDragging) {
+        return;
+      }
+      translateX = event.clientX - dragStartX;
+      translateY = event.clientY - dragStartY;
+      applyTransform();
+    });
+
+    document.addEventListener("mouseup", function () {
+      if (!isDragging) {
+        return;
+      }
+      isDragging = false;
+      updateViewportState();
+    });
+
+    viewport.addEventListener("click", function (event) {
+      if (event.target.closest("button")) {
+        return;
+      }
+      if (clickTimer) {
+        window.clearTimeout(clickTimer);
+      }
+      clickTimer = window.setTimeout(function () {
+        viewer.classList.toggle("report-image-viewer--chrome-hidden");
+      }, 180);
+    });
+
+    viewport.addEventListener("dblclick", function (event) {
+      event.preventDefault();
+      if (clickTimer) {
+        window.clearTimeout(clickTimer);
+      }
+      if (Math.abs(scale - getActualScale()) <= SCALE_EPSILON) {
+        fitToPanel();
+      } else {
+        setScale(getActualScale());
+      }
+    });
+
+    window.addEventListener("resize", function () {
+      if (!naturalWidth || !naturalHeight) {
+        return;
+      }
+      const previousScale = scale;
+      const previousBaseScale = baseScale;
+      const previousX = translateX;
+      const previousY = translateY;
+      const wasFit = Math.abs(previousScale - previousBaseScale) <= SCALE_EPSILON;
+      const horizontalScale = viewport.clientWidth / naturalWidth;
+      const verticalScale = viewport.clientHeight / naturalHeight;
+      baseScale = Math.min(horizontalScale, verticalScale);
+      scale = wasFit ? baseScale : clampScale(previousScale);
+      translateX = wasFit ? 0 : previousX;
+      translateY = wasFit ? 0 : previousY;
+      applyTransform();
+    });
+  }
+
+  const imageFieldset = document.querySelector("fieldset.field-image-info");
+  const aiFieldset = document.querySelector("fieldset.field-ai-results");
+  const reviewFieldset = document.querySelector("fieldset.field-review-form");
+  if (reviewFieldset) {
+    rightColumn.insertBefore(reviewFieldset, rightColumn.firstChild);
+  }
+  if (imageFieldset) {
+    rightColumn.appendChild(imageFieldset);
+  }
+  if (aiFieldset) {
+    rightColumn.appendChild(aiFieldset);
+  }
+
+  renderTable(parseItems());
+  initImageViewer();
+})();
+</script>
+{% endblock %}

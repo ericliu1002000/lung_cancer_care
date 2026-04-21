@@ -1,3 +1,6 @@
+from typing import Any
+
+from django.conf import settings
 from django.db import models
 
 
@@ -208,6 +211,27 @@ class ReportImage(models.Model):
         blank=True,
         help_text="AI 结果与归档信息冲突时的告警与处理状态。",
     )
+    reviewed_structured_json = models.JSONField(
+        "人工修订结构化结果",
+        null=True,
+        blank=True,
+        help_text="后台人工修订后当前生效的结构化 JSON。",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_report_images",
+        verbose_name="最后修订人",
+        help_text="最后一次人工修订该图片结构化结果的后台账号。",
+    )
+    reviewed_at = models.DateTimeField(
+        "最后修订时间",
+        null=True,
+        blank=True,
+        help_text="最后一次人工修订保存时间。",
+    )
 
     class Meta:
         db_table = "health_report_images"
@@ -224,3 +248,17 @@ class ReportImage(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover - 后台展示
         return f"{self.upload_id} - {self.image_url}"
+
+    def get_effective_structured_json(self) -> dict[str, Any] | None:
+        if isinstance(self.reviewed_structured_json, dict):
+            return self.reviewed_structured_json
+        if isinstance(self.ai_structured_json, dict):
+            return self.ai_structured_json
+        return None
+
+    def get_effective_structured_json_source(self) -> str | None:
+        if isinstance(self.reviewed_structured_json, dict):
+            return "REVIEWED"
+        if isinstance(self.ai_structured_json, dict):
+            return "AI"
+        return None
