@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Iterable
+import logging
+import re
+from typing import Any, Iterable
 
 from django.db import transaction
 from django.utils import timezone
@@ -21,6 +23,27 @@ from health_data.models import (
     ReportImage,
 )
 
+logger = logging.getLogger(__name__)
+
+WARNING_STATUS_PENDING = "pending"
+WARNING_STATUS_IGNORED = "ignored"
+WARNING_STATUS_RESOLVED = "resolved"
+
+REPORT_CATEGORY_CONFLICT = "report_category_conflict"
+REPORT_DATE_CONFLICT = "report_date_conflict"
+MATCH_STATUS_MATCHED = "matched"
+MATCH_STATUS_ORPHAN = "orphan"
+MATCH_STATUS_EMPTY = "empty"
+
+ORPHAN_REASON_MISSING_ALIAS = "未命中标准字段别名"
+ORPHAN_REASON_MISSING_MAPPING = "检查项未配置标准字段映射"
+ORPHAN_REASON_INVALID_DECIMAL = "数值解析失败"
+ORPHAN_REASON_EMPTY_NAME = "项目名为空"
+
+DATE_TEXT_PATTERN = re.compile(
+    r"(?P<year>\d{4})\s*[./\-年]\s*(?P<month>\d{1,2})\s*[./\-月]\s*(?P<day>\d{1,2})\s*日?"
+)
+
 
 @dataclass
 class StructuredRowPayload:
@@ -28,11 +51,146 @@ class StructuredRowPayload:
 
     raw_name: str
     raw_value: str
+    item_code: str = ""
     unit: str = ""
     lower_bound: Decimal | None = None
     upper_bound: Decimal | None = None
     range_text: str = ""
     raw_line_text: str = ""
+
+
+def _format_decimal_display(value: Decimal | None) -> str:
+    if value is None:
+        return "-"
+    normalized = value.normalize()
+    display = format(normalized, "f")
+    if "." in display:
+        display = display.rstrip("0").rstrip(".")
+    return display or "0"
+
+
+def _format_result_value(result_value: CheckupResultValue | None) -> str:
+    if result_value is None:
+        return "-"
+    raw_value = (result_value.raw_value or "").strip()
+    if raw_value:
+        return raw_value
+    if result_value.value_text:
+        return result_value.value_text
+    if result_value.value_numeric is not None:
+        return _format_decimal_display(result_value.value_numeric)
+    return "-"
+
+
+def _format_reference_range(result_value: CheckupResultValue) -> str:
+    if result_value.range_text:
+        return result_value.range_text
+    lower = _format_decimal_display(result_value.lower_bound) if result_value.lower_bound is not None else ""
+    upper = _format_decimal_display(result_value.upper_bound) if result_value.upper_bound is not None else ""
+    if lower and upper:
+        return f"{lower}-{upper}"
+    if lower:
+        return f">={lower}"
+    if upper:
+        return f"<={upper}"
+    return "-"
+
+
+def build_report_image_metrics_payload(report_image: ReportImage) -> dict[str, Any]:
+    """Build doctor-side metrics panel payload for one report image."""
+
+    title = "复查指标"
+    if report_image.checkup_item_id and getattr(report_image.checkup_item, "name", ""):
+        title = f"复查-{report_image.checkup_item.name}"
+
+    result_values = list(
+        CheckupResultValue.objects.filter(report_image=report_image)
+        .select_related("standard_field")
+        .order_by("id")
+    )
+    if not result_values:
+        return {
+            "status": "success",
+            "title": title,
+            "report_date": report_image.report_date.isoformat() if report_image.report_date else "",
+            "image_id": report_image.id,
+            "rows": [],
+            "empty_message": "该图片暂无已匹配指标数据",
+        }
+
+    mapping_order_map: dict[int, int] = {}
+    if report_image.checkup_item_id:
+        mapping_order_map = dict(
+            CheckupFieldMapping.objects.filter(
+                checkup_item_id=report_image.checkup_item_id,
+                is_active=True,
+            ).values_list("standard_field_id", "sort_order")
+        )
+
+    current_date = _resolve_report_date(report_image)
+    previous_map: dict[int, CheckupResultValue] = {}
+    previous_values = (
+        CheckupResultValue.objects.filter(
+            patient_id=report_image.upload.patient_id,
+            standard_field_id__in={item.standard_field_id for item in result_values},
+            report_date__lt=current_date,
+        )
+        .select_related("standard_field")
+        .order_by("standard_field_id", "-report_date", "-id")
+    )
+    for previous in previous_values:
+        previous_map.setdefault(previous.standard_field_id, previous)
+
+    sorted_results = sorted(
+        result_values,
+        key=lambda item: (
+            mapping_order_map.get(item.standard_field_id, 10**9),
+            item.standard_field.local_code or "",
+            item.standard_field_id,
+            item.id,
+        ),
+    )
+
+    rows: list[dict[str, Any]] = []
+    for current in sorted_results:
+        previous = previous_map.get(current.standard_field_id)
+        value_type = current.standard_field.value_type
+        delta_display = "-"
+        delta_direction = "none"
+        if (
+            value_type == StandardFieldValueType.DECIMAL
+            and current.value_numeric is not None
+            and previous is not None
+            and previous.value_numeric is not None
+        ):
+            delta = current.value_numeric - previous.value_numeric
+            delta_direction = "up" if delta > 0 else "down" if delta < 0 else "none"
+            delta_display = _format_decimal_display(delta)
+            if delta > 0:
+                delta_display = f"+{delta_display}"
+
+        rows.append(
+            {
+                "field_code": current.standard_field.local_code or "-",
+                "field_name": current.standard_field.chinese_name or current.standard_field.english_abbr or "-",
+                "current_value_display": _format_result_value(current),
+                "unit": current.unit or current.standard_field.default_unit or "-",
+                "reference_range": _format_reference_range(current),
+                "previous_value_display": _format_result_value(previous),
+                "delta_display": delta_display,
+                "delta_direction": delta_direction,
+                "abnormal_flag": current.abnormal_flag,
+            }
+        )
+
+    return {
+        "status": "success",
+        "title": title,
+        "report_date": current_date.isoformat(),
+        "image_id": report_image.id,
+        "rows": rows,
+        "empty_message": "",
+    }
 
 
 def _coerce_decimal(value) -> Decimal | None:
@@ -85,6 +243,7 @@ def _build_orphan_defaults(
         "report_date": report_date,
         "raw_name": row.raw_name,
         "raw_value": row.raw_value,
+        "item_code": row.item_code,
         "value_numeric": numeric_value,
         "value_text": row.raw_value if numeric_value is None else "",
         "unit": row.unit,
@@ -109,6 +268,7 @@ def _upsert_result_value(
     standard_field: StandardField,
     raw_name: str,
     raw_value: str,
+    item_code: str,
     unit: str,
     lower_bound: Decimal | None,
     upper_bound: Decimal | None,
@@ -123,6 +283,7 @@ def _upsert_result_value(
         "raw_name": raw_name,
         "normalized_name": normalized_name,
         "raw_value": raw_value,
+        "item_code": item_code,
         "unit": unit,
         "lower_bound": lower_bound,
         "upper_bound": upper_bound,
@@ -150,6 +311,368 @@ def _upsert_result_value(
         defaults=defaults,
     )
     return result_value
+
+
+def _parse_report_date_text(text: str | None) -> date | None:
+    if not text:
+        return None
+    match = DATE_TEXT_PATTERN.search(str(text).strip())
+    if not match:
+        return None
+    try:
+        return date(
+            int(match.group("year")),
+            int(match.group("month")),
+            int(match.group("day")),
+        )
+    except ValueError:
+        return None
+
+
+def _build_warning(message: str, *, details: dict, status: str = WARNING_STATUS_PENDING) -> dict:
+    return {
+        "status": status,
+        "message": message,
+        "details": details,
+    }
+
+
+def _normalize_warning_keys(keys: Iterable[str] | None) -> set[str]:
+    return {
+        str(key).strip()
+        for key in (keys or [])
+        if str(key).strip()
+    }
+
+
+def ignore_ai_sync_warnings(report_image: ReportImage, warning_keys: Iterable[str] | None = None) -> dict:
+    warnings = dict(report_image.ai_sync_warnings or {})
+    selected_keys = _normalize_warning_keys(warning_keys) or set(warnings.keys())
+    changed = False
+
+    for key in selected_keys:
+        warning = warnings.get(key)
+        if not isinstance(warning, dict):
+            continue
+        if warning.get("status") == WARNING_STATUS_IGNORED:
+            continue
+        warning["status"] = WARNING_STATUS_IGNORED
+        warnings[key] = warning
+        changed = True
+
+    if changed:
+        report_image.ai_sync_warnings = warnings
+        report_image.save(update_fields=["ai_sync_warnings"])
+    return warnings
+
+
+def _get_effective_payload(report_image: ReportImage) -> dict[str, Any]:
+    payload = report_image.get_effective_structured_json()
+    return payload if isinstance(payload, dict) else {}
+
+
+def _current_source_type(report_image: ReportImage) -> str:
+    if report_image.get_effective_structured_json_source() == "REVIEWED":
+        return CheckupResultSourceType.MANUAL
+    return CheckupResultSourceType.AI
+
+
+def _clear_report_image_structured_data(report_image: ReportImage) -> None:
+    CheckupResultValue.objects.filter(report_image=report_image).delete()
+    CheckupOrphanField.objects.filter(report_image=report_image).delete()
+
+
+def _build_rows_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        item_name = str(item.get("item_name") or "").strip()
+        if not item_name:
+            continue
+        low = item.get("reference_low")
+        high = item.get("reference_high")
+        range_text = ""
+        if low not in (None, "") and high not in (None, ""):
+            range_text = f"{str(low).strip()}-{str(high).strip()}"
+        rows.append(
+            {
+                "name": item_name,
+                "value": str(item.get("item_value") or "").strip(),
+                "item_code": str(item.get("item_code") or "").strip(),
+                "unit": str(item.get("unit") or "").strip(),
+                "lower_bound": low,
+                "upper_bound": high,
+                "range_text": range_text,
+            }
+        )
+    return rows
+
+
+def analyze_report_image_structured_items(report_image: ReportImage) -> list[dict[str, Any]]:
+    payload = _get_effective_payload(report_image)
+    raw_items = payload.get("items")
+    if not isinstance(raw_items, list):
+        return []
+    if not report_image.checkup_item_id:
+        return []
+
+    normalized_names: set[str] = set()
+    parsed_rows: list[tuple[int, dict[str, Any], str]] = []
+    for index, item in enumerate(raw_items):
+        if not isinstance(item, dict):
+            parsed_rows.append((index, {}, ""))
+            continue
+        item_name = str(item.get("item_name") or "").strip()
+        parsed_rows.append((index, item, item_name))
+        if item_name:
+            normalized_names.add(normalize_standard_field_name(item_name))
+
+    aliases = {
+        alias.normalized_name: alias
+        for alias in StandardFieldAlias.objects.select_related("standard_field").filter(
+            normalized_name__in=normalized_names,
+            is_active=True,
+            standard_field__is_active=True,
+        )
+    }
+    mapped_field_ids = set(
+        CheckupFieldMapping.objects.filter(
+            checkup_item_id=report_image.checkup_item_id,
+            is_active=True,
+            standard_field__is_active=True,
+        ).values_list("standard_field_id", flat=True)
+    )
+
+    analysis_rows: list[dict[str, Any]] = []
+    for index, item, item_name in parsed_rows:
+        if not item_name:
+            analysis_rows.append(
+                {
+                    "index": index,
+                    "status": MATCH_STATUS_EMPTY,
+                    "status_label": "待补充",
+                    "is_orphan": False,
+                    "reason": ORPHAN_REASON_EMPTY_NAME,
+                    "suggestion": "补充项目名或删除该行。",
+                    "standard_field_display": "",
+                }
+            )
+            continue
+
+        normalized_name = normalize_standard_field_name(item_name)
+        alias = aliases.get(normalized_name)
+        if alias is None:
+            analysis_rows.append(
+                {
+                    "index": index,
+                    "status": MATCH_STATUS_ORPHAN,
+                    "status_label": "孤儿字段",
+                    "is_orphan": True,
+                    "reason": ORPHAN_REASON_MISSING_ALIAS,
+                    "suggestion": "补别名库或修正项目名。",
+                    "standard_field_display": "",
+                }
+            )
+            continue
+
+        standard_field = alias.standard_field
+        standard_field_display = (
+            standard_field.chinese_name
+            or standard_field.local_code
+            or str(standard_field.pk)
+        )
+        if standard_field.id not in mapped_field_ids:
+            analysis_rows.append(
+                {
+                    "index": index,
+                    "status": MATCH_STATUS_ORPHAN,
+                    "status_label": "孤儿字段",
+                    "is_orphan": True,
+                    "reason": ORPHAN_REASON_MISSING_MAPPING,
+                    "suggestion": "补检查项映射。",
+                    "standard_field_display": standard_field_display,
+                }
+            )
+            continue
+
+        item_value = str(item.get("item_value") or "").strip()
+        if (
+            standard_field.value_type == StandardFieldValueType.DECIMAL
+            and item_value
+            and _coerce_decimal(item_value) is None
+        ):
+            analysis_rows.append(
+                {
+                    "index": index,
+                    "status": MATCH_STATUS_ORPHAN,
+                    "status_label": "孤儿字段",
+                    "is_orphan": True,
+                    "reason": ORPHAN_REASON_INVALID_DECIMAL,
+                    "suggestion": "修正识别值、单位或数值格式。",
+                    "standard_field_display": standard_field_display,
+                }
+            )
+            continue
+
+        analysis_rows.append(
+            {
+                "index": index,
+                "status": MATCH_STATUS_MATCHED,
+                "status_label": "已关联标准字段",
+                "is_orphan": False,
+                "reason": "",
+                "suggestion": "",
+                "standard_field_display": standard_field_display,
+            }
+        )
+    return analysis_rows
+
+
+def _sync_payload_warnings(report_image: ReportImage, payload: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    warnings = dict(report_image.ai_sync_warnings or {})
+    changed = False
+    blocking_keys: list[str] = []
+    current_category = (report_image.checkup_item.name or "").strip()
+    ai_category = str(payload.get("report_category") or "").strip()
+
+    if ai_category:
+        existing = warnings.get(REPORT_CATEGORY_CONFLICT)
+        if ai_category != current_category:
+            status = WARNING_STATUS_PENDING
+            if isinstance(existing, dict) and existing.get("status") == WARNING_STATUS_IGNORED:
+                status = WARNING_STATUS_IGNORED
+            warning = _build_warning(
+                "AI识别的报告分类与当前归档分类不一致。",
+                details={
+                    "image_checkup_item": current_category,
+                    "ai_report_category": ai_category,
+                },
+                status=status,
+            )
+            if warnings.get(REPORT_CATEGORY_CONFLICT) != warning:
+                warnings[REPORT_CATEGORY_CONFLICT] = warning
+                changed = True
+            if status == WARNING_STATUS_PENDING:
+                blocking_keys.append(REPORT_CATEGORY_CONFLICT)
+        elif isinstance(existing, dict) and existing.get("status") != WARNING_STATUS_RESOLVED:
+            warnings[REPORT_CATEGORY_CONFLICT] = _build_warning(
+                "AI识别的报告分类已与当前归档分类一致。",
+                details={
+                    "image_checkup_item": current_category,
+                    "ai_report_category": ai_category,
+                },
+                status=WARNING_STATUS_RESOLVED,
+            )
+            changed = True
+
+    ai_report_date = _parse_report_date_text(payload.get("report_time_raw"))
+    existing_date_warning = warnings.get(REPORT_DATE_CONFLICT)
+    if report_image.report_date and ai_report_date and ai_report_date != report_image.report_date:
+        status = WARNING_STATUS_PENDING
+        if isinstance(existing_date_warning, dict) and existing_date_warning.get("status") == WARNING_STATUS_IGNORED:
+            status = WARNING_STATUS_IGNORED
+        warning = _build_warning(
+            "AI识别的报告日期与当前归档日期不一致。",
+            details={
+                "image_report_date": report_image.report_date.isoformat(),
+                "ai_report_time_raw": payload.get("report_time_raw"),
+                "parsed_ai_report_date": ai_report_date.isoformat(),
+            },
+            status=status,
+        )
+        if warnings.get(REPORT_DATE_CONFLICT) != warning:
+            warnings[REPORT_DATE_CONFLICT] = warning
+            changed = True
+        if status == WARNING_STATUS_PENDING:
+            blocking_keys.append(REPORT_DATE_CONFLICT)
+    elif (
+        report_image.report_date
+        and ai_report_date
+        and isinstance(existing_date_warning, dict)
+        and existing_date_warning.get("status") != WARNING_STATUS_RESOLVED
+    ):
+        warnings[REPORT_DATE_CONFLICT] = _build_warning(
+            "AI识别的报告日期已与当前归档日期一致。",
+            details={
+                "image_report_date": report_image.report_date.isoformat(),
+                "ai_report_time_raw": payload.get("report_time_raw"),
+                "parsed_ai_report_date": ai_report_date.isoformat(),
+            },
+            status=WARNING_STATUS_RESOLVED,
+        )
+        changed = True
+
+    if changed:
+        report_image.ai_sync_warnings = warnings
+        report_image.save(update_fields=["ai_sync_warnings"])
+    return warnings, blocking_keys
+
+
+@transaction.atomic
+def rebuild_report_image_structured_results(report_image: ReportImage) -> dict[str, object]:
+    payload = _get_effective_payload(report_image)
+    if (
+        report_image.get_effective_structured_json_source() != "REVIEWED"
+        and report_image.ai_parse_status != "SUCCESS"
+    ):
+        return {"status": "skipped", "reason": "ai_not_ready"}
+    if not payload:
+        return {"status": "skipped", "reason": "missing_payload"}
+    if not report_image.checkup_item_id:
+        return {"status": "skipped", "reason": "missing_checkup_item"}
+    if not payload.get("is_medical_report"):
+        _clear_report_image_structured_data(report_image)
+        if report_image.ai_sync_warnings:
+            report_image.ai_sync_warnings = {}
+            report_image.save(update_fields=["ai_sync_warnings"])
+        return {
+            "status": "synced",
+            "created_or_updated": 0,
+            "orphans": 0,
+            "warnings": {},
+        }
+
+    warnings, blocking_keys = _sync_payload_warnings(report_image, payload)
+
+    if blocking_keys:
+        return {
+            "status": "warning_blocked",
+            "warnings": {key: warnings[key] for key in blocking_keys},
+        }
+
+    if not str(payload.get("report_category") or "").strip():
+        return {"status": "skipped", "reason": "missing_report_category", "warnings": warnings}
+
+    rows = _build_rows_from_payload(payload)
+    _clear_report_image_structured_data(report_image)
+    if not rows:
+        return {
+            "status": "synced",
+            "created_or_updated": 0,
+            "orphans": 0,
+            "warnings": warnings,
+        }
+
+    stats = ingest_structured_checkup_rows(
+        report_image=report_image,
+        rows=rows,
+        source_type=_current_source_type(report_image),
+    )
+    return {
+        "status": "synced",
+        "created_or_updated": stats["created_or_updated"],
+        "orphans": stats["orphans"],
+        "warnings": warnings,
+    }
+
+
+def sync_lab_results_from_ai_json(report_image: ReportImage) -> dict[str, object]:
+    return rebuild_report_image_structured_results(report_image)
 
 
 @transaction.atomic
@@ -190,6 +713,7 @@ def ingest_structured_checkup_rows(
         payload = StructuredRowPayload(
             raw_name=raw_name,
             raw_value=str(item.get("raw_value") if item.get("raw_value") is not None else item.get("value") or "").strip(),
+            item_code=str(item.get("item_code") or "").strip(),
             unit=str(item.get("unit") or "").strip(),
             lower_bound=_coerce_decimal(item.get("lower_bound")),
             upper_bound=_coerce_decimal(item.get("upper_bound")),
@@ -279,6 +803,7 @@ def ingest_structured_checkup_rows(
             standard_field=standard_field,
             raw_name=row.raw_name,
             raw_value=row.raw_value,
+            item_code=row.item_code,
             unit=row.unit,
             lower_bound=row.lower_bound,
             upper_bound=row.upper_bound,
@@ -311,6 +836,7 @@ def reprocess_orphan_fields(
             "resolved": 0,
             "missing_alias": 0,
             "missing_mapping": 0,
+            "invalid_decimal": 0,
         }
 
     normalized_name_set = {item.normalized_name for item in orphan_list}
@@ -334,6 +860,7 @@ def reprocess_orphan_fields(
         "resolved": 0,
         "missing_alias": 0,
         "missing_mapping": 0,
+        "invalid_decimal": 0,
     }
 
     for orphan in orphan_list:
@@ -347,6 +874,14 @@ def reprocess_orphan_fields(
             stats["missing_mapping"] += 1
             continue
 
+        if (
+            alias.standard_field.value_type == StandardFieldValueType.DECIMAL
+            and orphan.raw_value
+            and _coerce_decimal(orphan.raw_value) is None
+        ):
+            stats["invalid_decimal"] += 1
+            continue
+
         result_value = _upsert_result_value(
             report_image=orphan.report_image,
             patient_id=orphan.patient_id,
@@ -355,25 +890,14 @@ def reprocess_orphan_fields(
             standard_field=alias.standard_field,
             raw_name=orphan.raw_name,
             raw_value=orphan.raw_value,
+            item_code=orphan.item_code,
             unit=orphan.unit,
             lower_bound=orphan.lower_bound,
             upper_bound=orphan.upper_bound,
             range_text=orphan.range_text,
             source_type=CheckupResultSourceType.MIGRATED,
         )
-        orphan.status = OrphanFieldStatus.RESOLVED
-        orphan.resolved_standard_field = alias.standard_field
-        orphan.resolved_result_value = result_value
-        orphan.resolved_at = timezone.now()
-        orphan.save(
-            update_fields=[
-                "status",
-                "resolved_standard_field",
-                "resolved_result_value",
-                "resolved_at",
-                "updated_at",
-            ]
-        )
+        orphan.delete()
         stats["resolved"] += 1
 
     return stats

@@ -11,6 +11,35 @@
     allowedUploadSources: ['个人中心', '复查计划'],
     shouldShowArchive(uploadSource) {
         return this.allowedUploadSources.includes(uploadSource);
+    },
+    async ignoreAiWarnings(url) {
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({})
+            });
+            if (response.ok) {
+                const html = await response.text();
+                const container = document.querySelector('#patient-content');
+                if (container) {
+                    container.innerHTML = html;
+                    htmx.process(container);
+                }
+                document.body.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: '已忽略告警并重新同步', type: 'success' }
+                }));
+            } else {
+                const errorMsg = await response.text();
+                alert(errorMsg || '处理失败');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('网络错误');
+        }
     }
 }">
 
@@ -224,6 +253,48 @@
                             <div class="text-slate-400">
                                 报告日期: {{ img.report_date }}
                             </div>
+                            {% if img.ai_parse_status == "PENDING" %}
+                            <div>
+                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium border border-amber-200 bg-amber-50 text-amber-700">
+                                    解析中
+                                </span>
+                            </div>
+                            {% elif img.ai_parse_status == "SUCCESS" %}
+                            <div>
+                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium border border-emerald-200 bg-emerald-50 text-emerald-700">
+                                    解析成功
+                                </span>
+                            </div>
+                            {% elif img.ai_parse_status == "FAILED" %}
+                            <div class="space-y-1">
+                                <div>
+                                    <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium border border-rose-200 bg-rose-50 text-rose-700">
+                                        解析失败
+                                    </span>
+                                </div>
+                                {% if img.ai_error_message_short %}
+                                <div class="text-[10px] leading-4 text-rose-600 break-words">
+                                    {{ img.ai_error_message_short }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if img.pending_ai_warnings %}
+                            <div class="space-y-2 pt-1">
+                                {% for warning in img.pending_ai_warnings %}
+                                <div class="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[10px] leading-4 text-amber-800">
+                                    {{ warning.message }}
+                                </div>
+                                {% endfor %}
+                                <button
+                                    type="button"
+                                    class="inline-flex items-center rounded border border-slate-300 px-2 py-1 text-[10px] font-medium text-slate-700 hover:bg-slate-50"
+                                    @click="ignoreAiWarnings('{% url 'web_doctor:ignore_ai_sync_warning' patient.id img.id %}')"
+                                >
+                                    忽略告警并同步
+                                </button>
+                            </div>
+                            {% endif %}
                         </div>
 
                         {# 编辑态控件 #}

@@ -3,7 +3,6 @@
 from django.contrib import admin, messages
 
 from core.models import CheckupFieldMapping, StandardField, StandardFieldAlias
-from health_data.services.checkup_results import reprocess_orphan_fields
 
 
 class StandardFieldAliasInline(admin.TabularInline):
@@ -88,15 +87,9 @@ class StandardFieldAliasAdmin(admin.ModelAdmin):
 
     @admin.action(description="重跑受影响孤儿")
     def reprocess_related_orphans(self, request, queryset):
+        from health_data.tasks import reprocess_orphan_fields_task
+
         normalized_names = list(queryset.values_list("normalized_name", flat=True))
-        stats = reprocess_orphan_fields(normalized_names=normalized_names)
-        self.message_user(
-            request,
-            (
-                "孤儿重跑完成："
-                f"已解决 {stats['resolved']} 条，"
-                f"缺少别名 {stats['missing_alias']} 条，"
-                f"缺少映射 {stats['missing_mapping']} 条。"
-            ),
-            messages.SUCCESS,
-        )
+        if normalized_names:
+            reprocess_orphan_fields_task.delay(normalized_names=normalized_names)
+        self.message_user(request, f"已提交 {len(normalized_names)} 个别名相关孤儿的异步重跑任务。", messages.SUCCESS)

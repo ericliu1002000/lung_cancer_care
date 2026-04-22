@@ -44,6 +44,7 @@ LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
 ALLOWED_HOSTS = parse_csv_env("ALLOWED_HOSTS")
 
 WEB_BASE_URL = os.getenv("WEB_BASE_URL", "http://localhost:8001").rstrip("/")
+AI_VISION_IMAGE_BASE_URL = os.getenv("AI_VISION_IMAGE_BASE_URL", "").rstrip("/")
 TEST_PATIENT_ID = os.getenv("TEST_PATIENT_ID") or None
 WECHAT_VERIFY_FILENAME = (os.getenv("WECHAT_VERIFY_FILENAME") or "").strip()
 WECHAT_DAILY_TASK_TEMPLATE_ID = os.getenv(
@@ -89,6 +90,7 @@ INSTALLED_APPS = [
     "health_data",
     "regions",
     "business_support",
+    "ai_vision",
     "core",
     "patient_alerts",
     "chat",
@@ -159,12 +161,19 @@ _redis_auth = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
 
 CELERY_BROKER_URL = f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 
 EMBED_URL = os.getenv("EMBED_URL", "")
 EMBED_TOKEN = os.getenv("EMBED_TOKEN", "")
+VOLCENGINE_KEY = os.getenv("VOLCENGINE_KEY", "")
+VOLCENGINE_VISION_MODEL_ID = os.getenv("VOLCENGINE_VISION_MODEL_ID", "")
+VOLCENGINE_BASE_URL = os.getenv(
+    "VOLCENGINE_BASE_URL",
+    "https://ark.cn-beijing.volces.com/api/v3",
+).rstrip("/")
 
 CACHES = {
     "default": {
