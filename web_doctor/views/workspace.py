@@ -30,6 +30,7 @@ from core.service.treatment_cycle import (
     create_treatment_cycle,
     create_treatment_cycle_from_source,
     get_active_treatment_cycle,
+    rename_treatment_cycle,
     terminate_treatment_cycle,
 )
 from core.models import TreatmentCycle, PlanItem, choices as core_choices
@@ -726,7 +727,16 @@ def _build_settings_context(
 
     cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
     cycles = _sort_cycles_for_settings(list(cycles_qs))
-    paginator = Paginator(cycles, 5)
+    current_cycles: list[TreatmentCycle] = []
+    history_cycles: list[TreatmentCycle] = []
+    for cycle in cycles:
+        runtime_state = _resolve_cycle_runtime_state(cycle)
+        if runtime_state in ("in_progress", "not_started"):
+            current_cycles.append(cycle)
+        else:
+            history_cycles.append(cycle)
+
+    paginator = Paginator(current_cycles, 5)
     try:
         page_number = int(tc_page) if tc_page else 1
     except (TypeError, ValueError):
@@ -738,15 +748,15 @@ def _build_settings_context(
     # - 否则默认选中疗程列表的第一条（最新的一个疗程）。
     selected_cycle: TreatmentCycle | None = None
     if selected_cycle_id:
-        selected_cycle = patient.treatment_cycles.filter(pk=selected_cycle_id).first()
+        selected_cycle = next(
+            (cycle for cycle in current_cycles if cycle.id == selected_cycle_id),
+            None,
+        )
     
     if selected_cycle is None:
-        # 如果没有指定 ID，则默认选中分页列表中的第一个疗程（如果存在）
+        # 如果没有指定 ID，则默认选中当前疗程分页列表中的第一个疗程（如果存在）
         if cycle_page.object_list:
             selected_cycle = cycle_page.object_list[0]
-        # 如果当前页没数据（例如空列表），尝试回退到 active_cycle 作为兜底
-        elif active_cycle:
-            selected_cycle = active_cycle
 
     # 默认展开选中的疗程；若不存在则不展开任何卡片
     # expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
@@ -934,6 +944,8 @@ def _build_settings_context(
         "can_terminate_selected_cycle": can_terminate_selected_cycle,
         "is_cycle_editable": is_cycle_editable,
         "cycle_page": cycle_page,
+        "current_cycle_count": len(current_cycles),
+        "history_cycles": history_cycles,
         "quick_cycle_candidates": cycles,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
@@ -1125,6 +1137,53 @@ def patient_treatment_cycle_terminate(request: HttpRequest, patient_id: int, cyc
     if errors:
         response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace('"', '\\"')
     
+    return response
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_treatment_cycle_rename(request: HttpRequest, patient_id: int, cycle_id: int) -> HttpResponse:
+    """修改未结束疗程的名称，并返回刷新后的管理设置区域。"""
+
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    try:
+        cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+    except TreatmentCycle.DoesNotExist:
+        raise Http404("疗程不存在或不属于该患者")
+
+    errors: list[str] = []
+    try:
+        cycle = rename_treatment_cycle(cycle.id, request.POST.get("name") or "")
+    except ValidationError as exc:
+        errors.extend(exc.messages)
+
+    context = _build_settings_page_context(
+        patient,
+        tc_page=request.GET.get("tc_page"),
+        selected_cycle_id=cycle.id,
+        cycle_form_errors=errors,
+    )
+    response = render(
+        request,
+        "web_doctor/partials/settings/treatment_cycle_settings.html",
+        context,
+    )
+
+    if errors:
+        response["HX-Trigger"] = json.dumps(
+            {"plan-error": {"message": "\n".join(errors)}},
+            ensure_ascii=True,
+        )
+    else:
+        response["HX-Trigger"] = json.dumps(
+            {"plan-success": {"message": "疗程名称已更新"}},
+            ensure_ascii=True,
+        )
     return response
 
 

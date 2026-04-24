@@ -73,7 +73,7 @@ class TreatmentCycleQuickCreateViewTests(TestCase):
         patient_service_mock = workspace.PatientService.return_value
         patient_service_mock.get_patient_family_members.return_value = []
 
-    def test_settings_page_renders_quick_create_button_and_candidates_in_sorted_order(self):
+    def test_settings_page_renders_copy_buttons_in_cycle_rows_without_candidate_picker(self):
         self._patch_settings_dependencies()
         today = date.today()
         future = TreatmentCycle.objects.create(
@@ -104,14 +104,20 @@ class TreatmentCycleQuickCreateViewTests(TestCase):
         response = self.client.get(self.settings_url)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "快捷新增")
+        self.assertContains(response, "创建并复制疗程计划")
         self.assertContains(response, 'id="quick-cycle-modal"')
+        self.assertNotContains(response, "选择参考疗程")
+        self.assertNotContains(response, "data-quick-cycle-option")
         html = response.content.decode("utf-8")
-        candidate_ids = re.findall(r'data-quick-cycle-option\s+data-cycle-id="(\d+)"', html)
-        self.assertEqual(candidate_ids, [str(in_progress.id), str(future.id), str(completed.id)])
+        self.assertNotIn(">快捷新增<", html)
+        copy_button_ids = re.findall(r'data-quick-cycle-open\s+data-cycle-id="(\d+)"', html)
+        self.assertEqual(copy_button_ids, [str(in_progress.id), str(future.id), str(completed.id)])
+        self.assertIn(f'data-cycle-name="{in_progress.name}"', html)
+        self.assertIn(f'data-cycle-days="{in_progress.cycle_days}"', html)
 
     def test_quick_create_success_selects_new_cycle_and_triggers_success_message(self):
         self._patch_settings_dependencies()
+        today = date.today()
         source_cycle = TreatmentCycle.objects.create(
             patient=self.patient,
             name="参考疗程",
@@ -143,7 +149,7 @@ class TreatmentCycleQuickCreateViewTests(TestCase):
             {
                 "source_cycle_id": str(source_cycle.id),
                 "name": "新快捷疗程",
-                "start_date": "2025-02-01",
+                "start_date": today.isoformat(),
                 "cycle_days_mode": "21",
             },
         )

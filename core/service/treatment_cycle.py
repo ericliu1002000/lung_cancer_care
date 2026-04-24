@@ -139,6 +139,31 @@ def create_treatment_cycle_from_source(
     return target_cycle, copied_count
 
 
+@transaction.atomic
+def rename_treatment_cycle(cycle_id: int, name: str) -> TreatmentCycle:
+    """修改未结束疗程的名称。"""
+
+    try:
+        cycle = TreatmentCycle.objects.get(pk=cycle_id)
+    except TreatmentCycle.DoesNotExist as exc:
+        raise ValidationError("疗程不存在。") from exc
+
+    normalized_name = (name or "").strip()
+    if not normalized_name:
+        raise ValidationError("请填写疗程名称。")
+
+    max_length = TreatmentCycle._meta.get_field("name").max_length or 50
+    if len(normalized_name) > max_length:
+        raise ValidationError(f"疗程名称不能超过 {max_length} 个字符。")
+
+    if cycle.is_finished:
+        raise ValidationError("已结束或已终止的疗程不允许修改名称。")
+
+    cycle.name = normalized_name
+    cycle.save(update_fields=["name"])
+    return cycle
+
+
 def terminate_treatment_cycle(cycle_id: int) -> TreatmentCycle:
     """
     【功能说明】
