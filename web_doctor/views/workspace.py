@@ -714,7 +714,10 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
 
 
 def _build_settings_context(
-    patient: PatientProfile, tc_page: str | None = None, selected_cycle_id: int | None = None
+    patient: PatientProfile,
+    tc_page: str | None = None,
+    selected_cycle_id: int | None = None,
+    allow_history_selection: bool = False,
 ) -> dict:
     """
     构建“管理设置（settings）”Tab 所需的上下文数据：
@@ -748,8 +751,9 @@ def _build_settings_context(
     # - 否则默认选中疗程列表的第一条（最新的一个疗程）。
     selected_cycle: TreatmentCycle | None = None
     if selected_cycle_id:
+        selectable_cycles = cycles if allow_history_selection else current_cycles
         selected_cycle = next(
-            (cycle for cycle in current_cycles if cycle.id == selected_cycle_id),
+            (cycle for cycle in selectable_cycles if cycle.id == selected_cycle_id),
             None,
         )
     
@@ -1745,6 +1749,7 @@ def patient_settings_plan_table(request: HttpRequest, patient_id: int) -> HttpRe
         patient,
         tc_page=request.GET.get("tc_page"),
         selected_cycle_id=selected_cycle_id,
+        allow_history_selection=True,
     )
     table_context = _build_settings_plan_table_context(patient, settings_ctx)
     if table_context.get("cycle") is None:

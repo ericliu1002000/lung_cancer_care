@@ -463,9 +463,13 @@
   });
 
   document.body.addEventListener("htmx:afterSwap", function (event) {
+    var target = event.detail && event.detail.target;
+    if (target && target.id === "reports-history-content") {
+      processNode(target);
+    }
+
     var pendingId = window.__pendingConsultationEventId;
     if (!pendingId) return;
-    var target = event.detail && event.detail.target;
     if (!target || (target.id !== "reports-history-content" && target.id !== "patient-content")) return;
 
     var row = document.querySelector('[data-event-id="' + pendingId + '"]');
