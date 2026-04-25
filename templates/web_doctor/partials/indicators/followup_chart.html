@@ -1,6 +1,11 @@
 <div class="bg-white p-4 rounded-lg shadow-sm ">
     <div class="flex items-center gap-2 mb-4">
-        <h3 class="font-medium text-slate-800">{{ chart.title }}</h3>
+        <div>
+            <h3 class="font-medium text-slate-800">{{ chart.title }}</h3>
+            {% if chart.subtitle %}
+                <div class="mt-1 text-xs text-slate-500">{{ chart.subtitle }}</div>
+            {% endif %}
+        </div>
     </div>
 
     <div id="{{ chart.id }}" style="width: 100%; height: 250px;"></div>

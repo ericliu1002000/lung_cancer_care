@@ -1,10 +1,18 @@
 import logging
 from datetime import date, timedelta, datetime
 from decimal import Decimal, ROUND_CEILING, InvalidOperation
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 from django.core.cache import cache
-from core.models import DailyTask, TreatmentCycle, choices, QuestionnaireCode
+from core.models import (
+    CheckupFieldMapping,
+    CheckupLibrary,
+    DailyTask,
+    TreatmentCycle,
+    choices,
+    QuestionnaireCode,
+    StandardFieldValueType,
+)
 from core.service.treatment_cycle import get_treatment_cycles as _get_treatment_cycles
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
@@ -63,6 +71,7 @@ def build_indicators_context(
     start_date_str: str | None = None,
     end_date_str: str | None = None,
     filter_type: str | None = None,
+    review_metric_mappings: list[str] | None = None,
     review_subtypes: list[str] | None = None,
 ) -> dict:
     """
@@ -640,90 +649,80 @@ def build_indicators_context(
         dynamic_y_fallback=4,
     )
 
-    review_category_specs = [
-        {
-            "code": "blood_routine",
-            "name": "血常规",
-            "subtypes": [
-                ("wbc", "白细胞计数"),
-                ("rbc", "红细胞计数"),
-                ("hgb", "血红蛋白"),
-                ("hct", "红细胞压积"),
-                ("plt", "血小板计数"),
-                ("neu_pct", "中性粒细胞%"),
-                ("lym_pct", "淋巴细胞%"),
-                ("mon_pct", "单核细胞%"),
-                ("eos_pct", "嗜酸性粒细胞%"),
-                ("bas_pct", "嗜碱性粒细胞%"),
-                ("mcv", "平均红细胞体积"),
-                ("mch", "平均红细胞血红蛋白量"),
-            ],
-        },
-        {
-            "code": "biochemistry",
-            "name": "血生化",
-            "subtypes": [
-                ("alt", "谷丙转氨酶 ALT"),
-                ("ast", "谷草转氨酶 AST"),
-                ("alp", "碱性磷酸酶 ALP"),
-                ("tbil", "总胆红素 TBil"),
-                ("alb", "白蛋白 ALB"),
-                ("bun", "尿素氮 BUN"),
-                ("cre", "肌酐 Cr"),
-                ("ua", "尿酸 UA"),
-                ("glu", "葡萄糖 GLU"),
-                ("k", "钾 K"),
-                ("na", "钠 Na"),
-                ("cl", "氯 Cl"),
-            ],
-        },
-        {
-            "code": "tumor_marker",
-            "name": "肿瘤标志物",
-            "subtypes": [
-                ("cea", "癌胚抗原 CEA"),
-                ("cyfra21", "细胞角蛋白19片段 CYFRA21-1"),
-                ("nse", "神经元特异性烯醇化酶 NSE"),
-                ("progrp", "胃泌素释放肽前体 ProGRP"),
-                ("scc", "鳞癌抗原 SCC"),
-                ("ca125", "糖类抗原 CA125"),
-                ("ca199", "糖类抗原 CA19-9"),
-                ("ca153", "糖类抗原 CA15-3"),
-                ("afp", "甲胎蛋白 AFP"),
-                ("ferritin", "铁蛋白 Ferritin"),
-            ],
-        },
-    ]
-    subtype_meta = {}
-    all_subtype_codes = []
-    review_categories = []
-    for category in review_category_specs:
-        category_subtypes = []
-        for subtype_code, subtype_name in category["subtypes"]:
-            subtype_item = {"code": subtype_code, "name": subtype_name}
-            category_subtypes.append(subtype_item)
-            subtype_meta[subtype_code] = {
-                "name": subtype_name,
-                "category_code": category["code"],
-                "category_name": category["name"],
+    review_mapping_qs = (
+        CheckupFieldMapping.objects.filter(
+            is_active=True,
+            standard_field__is_active=True,
+        )
+        .select_related("standard_field")
+        .order_by("sort_order", "id")
+    )
+    checkup_items = list(
+        CheckupLibrary.objects.filter(is_active=True)
+        .prefetch_related(
+            Prefetch(
+                "standard_field_mappings",
+                queryset=review_mapping_qs,
+                to_attr="active_standard_field_mappings",
+            )
+        )
+        .order_by("sort_order", "name", "id")
+    )
+
+    review_catalog = []
+    mapping_meta = {}
+    all_mapping_ids = []
+    for checkup in checkup_items:
+        fields = []
+        for mapping in getattr(checkup, "active_standard_field_mappings", []):
+            standard_field = mapping.standard_field
+            selectable = standard_field.value_type == StandardFieldValueType.DECIMAL
+            field_item = {
+                "mapping_id": mapping.id,
+                "field_id": standard_field.id,
+                "field_code": standard_field.local_code or "",
+                "field_name": standard_field.chinese_name or standard_field.english_abbr or standard_field.local_code or "",
+                "abbr": standard_field.english_abbr or "",
+                "unit": standard_field.default_unit or "",
+                "value_type": standard_field.value_type,
+                "selectable": selectable,
             }
-            all_subtype_codes.append(subtype_code)
-        review_categories.append(
+            fields.append(field_item)
+            mapping_meta[mapping.id] = {
+                **field_item,
+                "checkup_id": checkup.id,
+                "checkup_code": checkup.code or "",
+                "checkup_name": checkup.name or "",
+                "category_name": checkup.get_category_display(),
+            }
+            all_mapping_ids.append(mapping.id)
+        review_catalog.append(
             {
-                "code": category["code"],
-                "name": category["name"],
-                "subtypes": category_subtypes,
-                "total_subtypes": len(category_subtypes),
+                "checkup_id": checkup.id,
+                "checkup_code": checkup.code or "",
+                "checkup_name": checkup.name or "",
+                "category_name": checkup.get_category_display(),
+                "fields": fields,
             }
         )
 
-    raw_selected_subtypes = review_subtypes or []
-    normalized_selected_subtypes = []
-    seen_codes = set()
-    for subtype_code in raw_selected_subtypes:
-        if subtype_code in subtype_meta and subtype_code not in seen_codes:
-            normalized_selected_subtypes.append(subtype_code)
-            seen_codes.add(subtype_code)
+    raw_selected_mappings = review_metric_mappings or []
+    normalized_selected_mapping_ids = []
+    seen_mapping_ids = set()
+    for mapping_id_raw in raw_selected_mappings:
+        try:
+            mapping_id = int(mapping_id_raw)
+        except (TypeError, ValueError):
+            continue
+        mapping_info = mapping_meta.get(mapping_id)
+        if (
+            not mapping_info
+            or not mapping_info["selectable"]
+            or mapping_id in seen_mapping_ids
+        ):
+            continue
+        normalized_selected_mapping_ids.append(mapping_id)
+        seen_mapping_ids.add(mapping_id)
 
     review_palette = [
         "#2563eb",
@@ -736,8 +735,8 @@ def build_indicators_context(
         "#4f46e5",
     ]
 
-    def _build_mock_followup_series(subtype_code: str) -> list[float]:
-        code_seed = sum(ord(ch) for ch in subtype_code)
+    def _build_mock_followup_series(seed_text: str) -> list[float]:
+        code_seed = sum(ord(ch) for ch in seed_text)
         base_value = 20 + (code_seed % 30)
         values = []
         for index, _ in enumerate(date_list):
@@ -749,12 +748,14 @@ def build_indicators_context(
 
     review_series = []
     review_values = []
-    for idx, subtype_code in enumerate(normalized_selected_subtypes):
-        data_points = _build_mock_followup_series(subtype_code)
+    for idx, mapping_id in enumerate(normalized_selected_mapping_ids):
+        mapping_info = mapping_meta[mapping_id]
+        seed_text = f"{mapping_info['checkup_code']}:{mapping_info['field_code']}:{mapping_id}"
+        data_points = _build_mock_followup_series(seed_text)
         review_values.extend(data_points)
         review_series.append(
             {
-                "name": subtype_meta[subtype_code]["name"],
+                "name": mapping_info["field_name"],
                 "data": data_points,
                 "color": review_palette[idx % len(review_palette)],
             }
@@ -763,6 +764,8 @@ def build_indicators_context(
     review_y_max = _calc_dynamic_y_max(review_values, default_max=120, y_min=0, baselines=None, decimals=0)
     review_charts = []
     for idx, series_item in enumerate(review_series):
+        mapping_info = mapping_meta[normalized_selected_mapping_ids[idx]]
+        unit_suffix = f" / {mapping_info['unit']}" if mapping_info["unit"] else ""
         single_chart_y_max = _calc_dynamic_y_max(
             series_item["data"],
             default_max=120,
@@ -774,7 +777,10 @@ def build_indicators_context(
             {
                 "id": f"chart-followup-review-{idx}",
                 "title": series_item["name"],
-                "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+                "subtitle": (
+                    f"{mapping_info['checkup_name']}{unit_suffix} · "
+                    f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}"
+                ),
                 "dates": date_strs,
                 "series": [series_item],
                 "y_min": 0,
@@ -783,37 +789,50 @@ def build_indicators_context(
             }
         )
 
-    focus_subtype_code = (
-        normalized_selected_subtypes[0]
-        if normalized_selected_subtypes
-        else review_category_specs[0]["subtypes"][0][0]
-    )
-    focus_data = _build_mock_followup_series(focus_subtype_code)
+    focus_mapping_id = normalized_selected_mapping_ids[0] if normalized_selected_mapping_ids else None
+    if focus_mapping_id:
+        focus_mapping_info = mapping_meta[focus_mapping_id]
+        focus_seed = f"{focus_mapping_info['checkup_code']}:{focus_mapping_info['field_code']}:{focus_mapping_id}"
+    else:
+        focus_mapping_info = None
+        first_selectable_mapping = next(
+            (info for info in mapping_meta.values() if info["selectable"]),
+            None,
+        )
+        focus_seed = (
+            f"{first_selectable_mapping['checkup_code']}:{first_selectable_mapping['field_code']}"
+            if first_selectable_mapping
+            else "followup-review"
+        )
+    focus_data = _build_mock_followup_series(focus_seed)
     focus_latest_value = focus_data[-1] if focus_data else 0
     focus_prev_value = focus_data[-2] if len(focus_data) > 1 else focus_latest_value
     focus_delta = round(focus_latest_value - focus_prev_value, 1)
+    focus_name = focus_mapping_info["field_name"] if focus_mapping_info else "暂无关注指标"
+    focus_category_name = focus_mapping_info["checkup_name"] if focus_mapping_info else ""
+    focus_code = str(focus_mapping_id) if focus_mapping_id else ""
     review_indicator = {
         "module_title": "复查指标",
         "title": "核心关注指标",
         "focus_metric": {
-            "code": focus_subtype_code,
-            "name": subtype_meta[focus_subtype_code]["name"],
-            "category_name": subtype_meta[focus_subtype_code]["category_name"],
+            "code": focus_code,
+            "name": focus_name,
+            "category_name": focus_category_name,
             "current_value": focus_latest_value,
             "delta": focus_delta,
             "is_up": focus_delta >= 0,
         },
-        "categories": review_categories,
-        "selected_subtypes": normalized_selected_subtypes,
-        "selected_count": len(normalized_selected_subtypes),
-        "all_subtypes_count": len(all_subtype_codes),
+        "catalog": review_catalog,
+        "selected_mapping_ids": normalized_selected_mapping_ids,
+        "selected_count": len(normalized_selected_mapping_ids),
+        "all_mappings_count": len(all_mapping_ids),
         "selected_labels": [
-            subtype_meta[subtype_code]["name"] for subtype_code in normalized_selected_subtypes[:6]
+            mapping_meta[mapping_id]["field_name"] for mapping_id in normalized_selected_mapping_ids[:6]
         ],
-        "overflow_selected_count": max(len(normalized_selected_subtypes) - 6, 0),
+        "overflow_selected_count": max(len(normalized_selected_mapping_ids) - 6, 0),
         "chart": {
             "id": "chart-followup-review",
-            "title": "复查子类型趋势",
+            "title": "复查核心指标趋势",
             "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
             "dates": date_strs,
             "series": review_series,

@@ -674,7 +674,7 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
                 start_date_str=request.GET.get("start_date"),
                 end_date_str=request.GET.get("end_date"),
                 filter_type=request.GET.get("filter_type"),
-                review_subtypes=request.GET.getlist("review_subtypes"),
+                review_metric_mappings=request.GET.getlist("review_metric_mappings"),
             ))
 
         elif section == "statistics":
