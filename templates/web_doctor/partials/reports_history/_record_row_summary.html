@@ -1,4 +1,10 @@
-<div id="report-row-summary-{{ report.id }}" class="grid grid-cols-12 gap-4 px-6 py-4 cursor-pointer items-center">
+<div id="report-row-summary-{{ report.id }}"
+     class="grid grid-cols-12 gap-4 px-6 py-4 cursor-pointer items-center"
+     role="button"
+     tabindex="0"
+     @click="toggle()"
+     @keydown.enter.prevent="toggle()"
+     @keydown.space.prevent="toggle()">
     <div class="col-span-2 flex items-center gap-2">
         <div class="flex items-center gap-2">
             <span class="text-sm font-medium {% if report.record_type == '复查' %}text-green-600{% elif report.record_type == '门诊' %}text-amber-500{% elif report.record_type == '住院' %}text-purple-600{% else %}text-slate-700{% endif %}">

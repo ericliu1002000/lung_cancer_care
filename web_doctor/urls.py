@@ -104,9 +104,19 @@ urlpatterns = [
         name="patient_treatment_cycle_create",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/treatment-cycle/quick-create/",
+        views.patient_treatment_cycle_quick_create,
+        name="patient_treatment_cycle_quick_create",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/terminate/",
         views.patient_treatment_cycle_terminate,
         name="patient_treatment_cycle_terminate",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/rename/",
+        views.patient_treatment_cycle_rename,
+        name="patient_treatment_cycle_rename",
     ),
     path(
         "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/medication/add/",
@@ -212,6 +222,11 @@ urlpatterns = [
         "doctor/workspace/patient/<int:patient_id>/questionnaire/detail/",
         views.questionnaire_detail,
         name="questionnaire_detail",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/indicators/preferences/",
+        views.patient_indicator_preferences_update,
+        name="patient_indicator_preferences_update",
     ),
     path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",

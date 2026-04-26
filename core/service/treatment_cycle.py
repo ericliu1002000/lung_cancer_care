@@ -105,6 +105,65 @@ def create_treatment_cycle(
     return cycle
 
 
+@transaction.atomic
+def create_treatment_cycle_from_source(
+    patient: PatientProfile,
+    source_cycle_id: int,
+    name: str,
+    start_date: date,
+    cycle_days: int,
+    user,
+) -> tuple[TreatmentCycle, int]:
+    """
+    创建新疗程并复制参考疗程下已有计划条目。
+    """
+
+    try:
+        source_cycle = TreatmentCycle.objects.get(pk=source_cycle_id)
+    except TreatmentCycle.DoesNotExist as exc:
+        raise ValidationError("参考疗程不存在。") from exc
+
+    if source_cycle.patient_id != patient.id:
+        raise ValidationError("参考疗程与当前患者不匹配。")
+
+    target_cycle = create_treatment_cycle(
+        patient=patient,
+        name=name,
+        start_date=start_date,
+        cycle_days=cycle_days,
+    )
+
+    from core.service.plan_item import PlanItemService
+
+    copied_count = PlanItemService.clone_cycle_plan(source_cycle, target_cycle, user)
+    return target_cycle, copied_count
+
+
+@transaction.atomic
+def rename_treatment_cycle(cycle_id: int, name: str) -> TreatmentCycle:
+    """修改未结束疗程的名称。"""
+
+    try:
+        cycle = TreatmentCycle.objects.get(pk=cycle_id)
+    except TreatmentCycle.DoesNotExist as exc:
+        raise ValidationError("疗程不存在。") from exc
+
+    normalized_name = (name or "").strip()
+    if not normalized_name:
+        raise ValidationError("请填写疗程名称。")
+
+    max_length = TreatmentCycle._meta.get_field("name").max_length or 50
+    if len(normalized_name) > max_length:
+        raise ValidationError(f"疗程名称不能超过 {max_length} 个字符。")
+
+    if cycle.is_finished:
+        raise ValidationError("已结束或已终止的疗程不允许修改名称。")
+
+    cycle.name = normalized_name
+    cycle.save(update_fields=["name"])
+    return cycle
+
+
 def terminate_treatment_cycle(cycle_id: int) -> TreatmentCycle:
     """
     【功能说明】

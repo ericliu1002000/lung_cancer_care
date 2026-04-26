@@ -1,19 +1,159 @@
-<div id="followup-review-container" class="bg-white shadow-sm border border-slate-200 overflow-hidden p-4 mt-4">
+<div id="followup-review-section">
+{{ review_indicator.catalog|json_script:"followup-review-catalog-json" }}
+{{ review_indicator.selected_mapping_ids|json_script:"followup-review-selected-json" }}
+
+<div id="followup-review-container"
+     class="bg-white shadow-sm border border-slate-200 overflow-hidden p-4 mt-4"
+     x-data="(() => {
+       function readJson(id, fallback) {
+         var node = document.getElementById(id);
+         if (!node) return fallback;
+         try {
+           return JSON.parse(node.textContent || 'null') || fallback;
+         } catch (e) {
+           return fallback;
+         }
+       }
+
+       return {
+         configOpen: false,
+         searchText: '',
+         activeCheckupId: null,
+         catalog: readJson('followup-review-catalog-json', []),
+         selectedMappingIds: readJson('followup-review-selected-json', []).map(Number),
+         draftSelectedMappingIds: [],
+         init: function() {
+           this.activeCheckupId = this.firstCheckupId();
+         },
+         firstCheckupId: function() {
+           return this.catalog.length ? this.catalog[0].checkup_id : null;
+         },
+         openConfig: function() {
+           this.draftSelectedMappingIds = this.selectedMappingIds.slice();
+           this.activeCheckupId = this.activeCheckupId || this.firstCheckupId();
+           this.configOpen = true;
+         },
+         closeConfig: function() {
+           this.draftSelectedMappingIds = this.selectedMappingIds.slice();
+           this.configOpen = false;
+         },
+         normalizedQuery: function() {
+           return (this.searchText || '').trim().toLowerCase();
+         },
+         fieldMatches: function(field, query) {
+           if (!query) return true;
+           return [
+             field.field_name,
+             field.abbr,
+             field.field_code,
+             field.unit
+           ].join(' ').toLowerCase().indexOf(query) !== -1;
+         },
+         filteredCatalog: function() {
+           var query = this.normalizedQuery();
+           if (!query) return this.catalog;
+           return this.catalog.filter(function(checkup) {
+             var checkupText = [
+               checkup.checkup_name,
+               checkup.checkup_code,
+               checkup.category_name
+             ].join(' ').toLowerCase();
+             if (checkupText.indexOf(query) !== -1) return true;
+             return (checkup.fields || []).some(function(field) {
+               return [
+                 field.field_name,
+                 field.abbr,
+                 field.field_code,
+                 field.unit
+               ].join(' ').toLowerCase().indexOf(query) !== -1;
+             });
+           });
+         },
+         activeCheckup: function() {
+           var visible = this.filteredCatalog();
+           if (!visible.length) return null;
+           var active = visible.find(function(checkup) {
+             return checkup.checkup_id === this.activeCheckupId;
+           }, this);
+           return active || visible[0];
+         },
+         visibleFields: function() {
+           var active = this.activeCheckup();
+           if (!active) return [];
+           var query = this.normalizedQuery();
+           var checkupText = [
+             active.checkup_name,
+             active.checkup_code,
+             active.category_name
+           ].join(' ').toLowerCase();
+           if (!query || checkupText.indexOf(query) !== -1) {
+             return active.fields || [];
+           }
+           return (active.fields || []).filter(function(field) {
+             return this.fieldMatches(field, query);
+           }, this);
+         },
+         selectCheckup: function(checkupId) {
+           this.activeCheckupId = checkupId;
+         },
+         isDraftSelected: function(mappingId) {
+           return this.draftSelectedMappingIds.indexOf(Number(mappingId)) !== -1;
+         },
+         toggleMapping: function(field) {
+           if (!field.selectable) return;
+           var mappingId = Number(field.mapping_id);
+           var index = this.draftSelectedMappingIds.indexOf(mappingId);
+           if (index === -1) {
+             this.draftSelectedMappingIds.push(mappingId);
+           } else {
+             this.draftSelectedMappingIds.splice(index, 1);
+           }
+         },
+         selectedCountForCheckup: function(checkup) {
+           var fields = checkup.fields || [];
+           return fields.filter(function(field) {
+             return this.isDraftSelected(field.mapping_id);
+           }, this).length;
+         },
+         effectiveMappingIds: function() {
+           return this.configOpen ? this.draftSelectedMappingIds : this.selectedMappingIds;
+         },
+         selectedTotal: function() {
+           return this.draftSelectedMappingIds.length;
+         }
+       };
+     })()"
+     x-init="init()">
   <div class="flex items-center justify-between mb-6 relative">
     <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">{{ review_indicator.module_title }}</h3>
   </div>
 
-  <div class="border border-slate-200" x-data="{ configOpen: false }">
-    <div class="flex items-center justify-between bg-slate-100 px-4 py-2">
-      <div class="text-sm font-semibold text-slate-900">{{ review_indicator.title }}</div>
+  <div class="border border-slate-200">
+    <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-100 px-4 py-2">
+      <div>
+        <div class="text-sm font-semibold text-slate-900">{{ review_indicator.title }}</div>
+        <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          {% if review_indicator.selected_count %}
+            <span>已选择 {{ review_indicator.selected_count }} 项</span>
+            {% for label in review_indicator.selected_labels %}
+              <span class="rounded border border-slate-200 bg-white px-2 py-0.5 text-slate-600">{{ label }}</span>
+            {% endfor %}
+            {% if review_indicator.overflow_selected_count %}
+              <span>+{{ review_indicator.overflow_selected_count }}</span>
+            {% endif %}
+          {% else %}
+            <span>未选择关注指标</span>
+          {% endif %}
+        </div>
+      </div>
       <button
         type="button"
-        class="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
-        @click="configOpen = !configOpen"
+        class="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-3 py-1.5 text-sm font-semibold text-blue-600 hover:border-blue-300 hover:bg-blue-50"
+        @click="openConfig()"
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l.7 2.154a1 1 0 00.95.69h2.265c.969 0 1.371 1.24.588 1.81l-1.833 1.332a1 1 0 00-.364 1.118l.7 2.154c.3.921-.755 1.688-1.538 1.118l-1.833-1.332a1 1 0 00-1.176 0l-1.833 1.332c-.783.57-1.838-.197-1.539-1.118l.701-2.154a1 1 0 00-.364-1.118L6.546 7.58c-.783-.57-.38-1.81.588-1.81H9.4a1 1 0 00.95-.69l.699-2.154z"></path>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 14a2 2 0 100 4 2 2 0 000-4zM6 16a2 2 0 100 4 2 2 0 000-4z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
         </svg>
         配置
       </button>
@@ -22,75 +162,148 @@
     <form
       id="followup-review-config-form"
       x-ref="reviewConfigForm"
-      class="border-t border-dashed border-slate-300 px-4 py-3"
-      style="display: none;"
-      x-show="configOpen"
-      x-cloak
+      class="hidden"
     >
-      <div class="space-y-3">
-        {% for category in review_indicator.categories %}
-          <div x-data="{ expanded: false }">
-            <div class="flex items-center justify-between text-sm text-slate-900">
-              <span class="font-semibold">{{ category.name }}：</span>
+      {% csrf_token %}
+      <template x-for="mappingId in effectiveMappingIds()" :key="mappingId">
+        <input type="hidden" name="review_metric_mappings" :value="mappingId">
+      </template>
+    </form>
+  </div>
+
+  <template x-teleport="body">
+    <div
+      x-show="configOpen"
+      x-init="$nextTick(function() { if (window.htmx) window.htmx.process($el); })"
+      x-cloak
+      style="display: none; z-index: 10050;"
+      class="fixed inset-0 flex items-center justify-center bg-slate-900/40 px-4 py-6"
+      @keydown.escape.window="closeConfig()"
+    >
+      <div
+        class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
+        style="height: 750px; max-height: calc(100vh - 3rem);"
+        @click.outside="closeConfig()"
+      >
+        <div class="shrink-0 border-b border-slate-200 px-5 py-4">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-2">
+              <div class="text-base font-bold text-slate-900">配置核心关注指标</div>
+              <div class="mt-1 text-xs text-slate-500">标准指标库</div>
+            </div>
+            <button type="button" class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" @click="closeConfig()">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="relative mt-4">
+            <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.1-5.4a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z"></path>
+            </svg>
+            <input
+              type="text"
+              x-model="searchText"
+              class="w-full rounded-md border border-slate-300 py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
+              placeholder="搜索检查项、指标名称、编码或缩写"
+            >
+          </div>
+        </div>
+
+        <div class="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)] overflow-hidden">
+        <div class="flex min-h-0 flex-col border-r border-slate-200 bg-slate-50">
+          <div class="shrink-0 px-4 py-3 text-xs font-semibold text-slate-500">检查分类</div>
+          <div class="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+            <template x-for="checkup in filteredCatalog()" :key="checkup.checkup_id">
               <button
                 type="button"
-                class="text-xs text-indigo-600 hover:text-indigo-700"
-                @click="expanded = !expanded"
+                class="mb-1 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition"
+                :class="activeCheckup() && activeCheckup().checkup_id === checkup.checkup_id ? 'bg-indigo-400 text-white shadow-sm ring-1 ring-blue-100' : 'text-slate-700 hover:bg-white'"
+                @click="selectCheckup(checkup.checkup_id)"
               >
-                <span x-show="!expanded">展开全部（{{ category.total_subtypes }}）</span>
-                <span x-show="expanded">收起</span>
+                <span class="min-w-0">
+                  <span class="block truncate font-medium" x-text="checkup.checkup_name"></span>
+                </span>
+                <span
+                  x-show="selectedCountForCheckup(checkup) > 0"
+                  class="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white"
+                  x-text="selectedCountForCheckup(checkup)"
+                ></span>
               </button>
+            </template>
+            <div x-show="filteredCatalog().length === 0" class="px-3 py-8 text-center text-sm text-slate-400">
+              未找到检查项
             </div>
-            <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-              {% for subtype in category.subtypes %}
+          </div>
+        </div>
+
+        <div class="flex min-h-0 min-w-0 flex-col">
+          <div class="shrink-0 border-b border-slate-100 px-5 py-3">
+            <div class="flex items-center justify-between gap-4">
+              <div class="text-sm font-semibold text-slate-900" x-text="activeCheckup() ? activeCheckup().checkup_name : '指标库'"></div>
+              <div class=" text-xs text-slate-500" x-text="'当前已选 ' + selectedTotal() + ' 项'"></div>
+            </div>
+          </div>
+          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+            <div class="grid grid-cols-3 gap-2 md:grid-cols-3">
+              <template x-for="field in visibleFields()" :key="field.mapping_id">
                 <label
-                  class="inline-flex items-center gap-2 text-sm text-slate-900"
-                  x-show="expanded || {{ forloop.counter }} <= 6"
-                  x-cloak
+                  class="flex items-start gap-3 rounded-md border p-2 transition"
+                  :class="field.selectable ? (isDraftSelected(field.mapping_id) ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:border-blue-200') : 'border-slate-200 bg-slate-50 opacity-70'"
                 >
                   <input
                     type="checkbox"
-                    name="review_subtypes"
-                    value="{{ subtype.code }}"
-                    class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    {% if subtype.code in review_indicator.selected_subtypes %}checked{% endif %}
+                    class=" h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    :checked="isDraftSelected(field.mapping_id)"
+                    :disabled="!field.selectable"
+                    @change="toggleMapping(field)"
                   >
-                  <span>{{ subtype.name }}</span>
+                  <span class="min-w-0">
+                    <span class="block break-words text-[12px] font-semibold text-slate-900" x-text="field.field_display_name || field.field_name"></span>
+                  </span>
                 </label>
-              {% endfor %}
+              </template>
+            </div>
+            <div x-show="activeCheckup() && visibleFields().length === 0" class="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+              当前检查项暂无匹配指标
             </div>
           </div>
-        {% endfor %}
+        </div>
       </div>
 
-      <div class="mt-4 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          class="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
-          @click="$refs.reviewConfigForm.reset(); configOpen = false"
-        >
-          取消
-        </button>
-        <button
-          type="button"
-          hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-          hx-target="#indicators-wrapper"
-          hx-swap="outerHTML"
-          hx-include="#routine-filter-form,#followup-review-config-form"
-          hx-on:htmx:before-request="configOpen = false"
-          hx-on:htmx:after-request="configOpen = false"
-          @click="configOpen = false"
-          class="rounded-full bg-blue-600 px-5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          保存配置
-        </button>
+        <div class="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+          <button
+            type="button"
+            class="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            @click="closeConfig()"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            hx-post="{% url 'web_doctor:patient_indicator_preferences_update' patient.id %}"
+            hx-target="#followup-review-section"
+            hx-swap="outerHTML"
+            hx-include="#routine-filter-form,#followup-review-config-form"
+            @htmx:before-request="configOpen = false"
+            @htmx:after-request="configOpen = false"
+            class="rounded-md bg-blue-600 px-5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            确定
+          </button>
+        </div>
       </div>
-    </form>
-  </div>
+    </div>
+  </template>
 
   <div class="mt-4 space-y-4">
     {% for followup_chart in review_indicator.charts %}
       {% include "web_doctor/partials/indicators/followup_chart.html" with chart=followup_chart %}
+    {% empty %}
+      <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+        暂未配置核心关注指标
+      </div>
     {% endfor %}
   </div>
+</div>
 </div>

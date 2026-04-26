@@ -1,6 +1,8 @@
 <div class="bg-white p-4 rounded-lg shadow-sm ">
     <div class="flex items-center gap-2 mb-4">
-        <h3 class="font-medium text-slate-800">{{ chart.title }}</h3>
+        <div>
+            <h3 class="font-medium text-slate-800">{{ chart.title }}</h3>
+        </div>
     </div>
 
     <div id="{{ chart.id }}" style="width: 100%; height: 250px;"></div>
@@ -8,20 +10,21 @@
 
 <script>
     (function() {
-        var chartId = '{{ chart.id }}';
-        var chartData = {{ chart.dates|safe }};
+        var chartId = '{{ chart.id|escapejs }}';
+        var chartData = {% if chart.dates_json %}{{ chart.dates_json|safe }}{% else %}{{ chart.dates|safe }}{% endif %};
         var seriesData = [
             {% for s in chart.series %}
             {
-                name: '{{ s.name }}',
+                name: '{{ s.name|escapejs }}',
                 type: 'line',
                 smooth: true,
+                connectNulls: false,
                 symbol: 'circle',
                 symbolSize: 6,
                 itemStyle: {
                     color: '{{ s.color }}'
                 },
-                data: {{ s.data|safe }}{% if s.baseline %},
+                data: {% if s.data_json %}{{ s.data_json|safe }}{% else %}{{ s.data|safe }}{% endif %}{% if s.baseline %},
                 markLine: {
                     silent: true,
                     symbol: ['none', 'none'],
