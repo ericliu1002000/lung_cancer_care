@@ -120,7 +120,7 @@
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         
         <!-- Modal Content -->
-        <div class="relative bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in-up max-h-[60vh] flex flex-col min-h-0">
+        <div class="relative bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in-up max-h-[70vh] flex flex-col min-h-0">
             <!-- 滚动容器：添加ID用于监听 -->
             <div id="modal-content" class="p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain" style="-webkit-overflow-scrolling: touch;">
                 <h3 class="text-lg font-bold text-center text-gray-800 mb-5">图片上传示例</h3>
@@ -129,7 +129,7 @@
                 <div class="flex flex-col gap-4 mb-6">
                     <!-- Image -->
                     <div class="w-full bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
-                         <img src="{% static 'review_upload_tip.jpg' %}" alt="示例" class="w-full h-auto object-contain">
+                         <img src="{% static 'review_upload_tip.webp' %}" alt="示例" class="w-full h-auto object-contain">
                     </div>
                     
                     <!-- Checklist -->
@@ -179,12 +179,13 @@ const uploads = {};
 const compressQueue = [];
 let compressActiveCount = 0;
 
-// ========== 核心：用户发生滚动后直接启用按钮 ==========
-let hasUserScrolled = false; // 是否已经滚动过
+// ========== 核心：用户发生阅读交互后启用按钮 ==========
+let hasUserScrolled = false; // 是否已经确认过阅读交互
 const modalContent = document.getElementById('modal-content');
 const btnTextEl = document.getElementById('btn-text');
 const confirmBtn = document.getElementById('modal-confirm-btn');
 const confirmBtnContainer = document.getElementById('instructions-modal'); 
+const MODAL_SCROLL_TOLERANCE = 1;
 
 const bodyScrollLockState = {
   locked: false,
@@ -222,13 +223,44 @@ function isElementVisible(el) {
   return window.getComputedStyle(el).display !== 'none';
 }
 
+function canModalContentScroll() {
+  if (!modalContent) return false;
+  return modalContent.scrollHeight > (modalContent.clientHeight + MODAL_SCROLL_TOLERANCE);
+}
+
+function hasPendingModalImages() {
+  if (!modalContent) return false;
+  return Array.from(modalContent.querySelectorAll('img')).some((img) => !img.complete);
+}
+
+function enableModalConfirm() {
+  if (hasUserScrolled || !confirmBtn) return;
+  hasUserScrolled = true;
+  confirmBtn.disabled = false;
+  confirmBtn.classList.remove('bg-gray-200', 'text-gray-500', 'cursor-not-allowed');
+  confirmBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
+  if (btnTextEl) {
+    btnTextEl.textContent = '我已知晓，立即上传';
+  }
+}
+
+function syncModalConfirmAvailability() {
+  if (!modalContent || hasUserScrolled) return;
+  if (hasPendingModalImages()) return;
+  if (!canModalContentScroll()) {
+    enableModalConfirm();
+  }
+}
+
 function setupModalTouchScrollGuard(modalEl, scrollEl) {
   if (!modalEl || !scrollEl) return;
 
   modalEl.addEventListener('touchmove', (e) => {
-    if (!scrollEl.contains(e.target)) {
-      e.preventDefault();
+    if (scrollEl.contains(e.target)) {
+      enableModalConfirm();
+      return;
     }
+    e.preventDefault();
   }, { passive: false });
 
   let startY = 0;
@@ -239,7 +271,14 @@ function setupModalTouchScrollGuard(modalEl, scrollEl) {
   }, { passive: true });
 
   scrollEl.addEventListener('touchmove', (e) => {
+    enableModalConfirm();
     if (!e.touches || e.touches.length === 0) return;
+
+    if (!canModalContentScroll()) {
+      e.stopPropagation();
+      return;
+    }
+
     const currentY = e.touches[0].clientY;
     const deltaY = currentY - startY;
 
@@ -258,20 +297,41 @@ if (isElementVisible(confirmBtnContainer)) {
   setupModalTouchScrollGuard(confirmBtnContainer, modalContent);
 }
 
-// 监听模态框内容滚动事件
+// 监听模态框内容阅读交互事件
 if (modalContent) {
-    modalContent.addEventListener('scroll', function() {
-        // 只要用户发生过滚动，就启用按钮
-        if (!hasUserScrolled) {
-            hasUserScrolled = true;
-            // 直接启用按钮
-            confirmBtn.disabled = false;
-            // 切换按钮样式（恢复可点击状态）
-            confirmBtn.classList.remove('bg-gray-200', 'text-gray-500', 'cursor-not-allowed');
-            confirmBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
-            // 切换按钮文本
-            btnTextEl.textContent = '我已知晓，立即上传';
+    modalContent.addEventListener('scroll', enableModalConfirm, { passive: true });
+    modalContent.addEventListener('touchmove', enableModalConfirm, { passive: true });
+    modalContent.addEventListener('wheel', enableModalConfirm, { passive: true });
+
+    let pointerStartY = null;
+    modalContent.addEventListener('pointerdown', function(e) {
+        pointerStartY = e.clientY;
+    }, { passive: true });
+    modalContent.addEventListener('pointermove', function(e) {
+        if (pointerStartY === null) return;
+        if (Math.abs(e.clientY - pointerStartY) > 8) {
+            enableModalConfirm();
+            pointerStartY = null;
         }
+    }, { passive: true });
+
+    document.addEventListener('keydown', function(e) {
+        if (!isElementVisible(confirmBtnContainer)) return;
+        if (['ArrowDown', 'PageDown', ' '].includes(e.key)) {
+            enableModalConfirm();
+        }
+    });
+
+    syncModalConfirmAvailability();
+    requestAnimationFrame(syncModalConfirmAvailability);
+    window.addEventListener('resize', syncModalConfirmAvailability);
+    modalContent.querySelectorAll('img').forEach(function(img) {
+        if (img.complete) {
+            syncModalConfirmAvailability();
+            return;
+        }
+        img.addEventListener('load', syncModalConfirmAvailability, { once: true });
+        img.addEventListener('error', syncModalConfirmAvailability, { once: true });
     });
 }
 
