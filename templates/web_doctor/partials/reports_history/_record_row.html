@@ -14,13 +14,16 @@
             this.expanded = true;
             if (this.detailLoaded || this.loadingDetail) return;
             this.loadingDetail = true;
-            const loaded = await window.loadReportsDetail(this.detailUrl, 'report-detail-body-{{ report.id }}');
-            this.detailLoaded = loaded;
-            this.loadingDetail = false;
+            try {
+                const loaded = await window.loadReportsDetail(this.detailUrl, 'report-detail-body-{{ report.id }}');
+                this.detailLoaded = loaded;
+            } finally {
+                this.loadingDetail = false;
+            }
         }
      }">
     {% include "web_doctor/partials/reports_history/_record_row_summary.html" %}
-    <div x-show="expanded" x-collapse class="px-6 pb-6 border-t border-slate-50 bg-slate-50/30" style="display: none;">
+    <div x-show="expanded" class="px-6 pb-6 border-t border-slate-50 bg-slate-50/30" style="display: none;">
         <div x-show="loadingDetail" class="py-6 text-sm text-slate-500">详情加载中...</div>
         <div id="report-detail-body-{{ report.id }}" class="mt-4"></div>
     </div>
