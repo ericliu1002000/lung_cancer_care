@@ -53,6 +53,27 @@ class TemplateAssetLoadingTests(SimpleTestCase):
                 content,
             )
 
+    def test_portal_installs_htmx_alpine_lifecycle_bridge(self):
+        portal = self._read("templates/layouts/base_portal.html")
+
+        self.assertIn("installHtmxAlpineLifecycleBridge", portal)
+        self.assertIn("window.__htmxAlpineLifecycleBridgeInstalled", portal)
+        self.assertIn("document.addEventListener('htmx:beforeSwap'", portal)
+        self.assertIn("window.Alpine.destroyTree(target)", portal)
+        self.assertIn("document.addEventListener('htmx:afterSwap'", portal)
+        self.assertIn("Alpine.initTree(target)", portal)
+
+    def test_reports_history_manual_replacement_owns_alpine_init_only_for_manual_swaps(self):
+        reports_history = self._read("static/web_doctor/reports_history.js")
+
+        self.assertIn('window.Alpine.destroyTree(target);', reports_history)
+        self.assertIn("target.innerHTML = html;", reports_history)
+        self.assertIn("processNode(target);", reports_history)
+        self.assertNotIn(
+            'if (target && target.id === "reports-history-content") {\n      processNode(target);\n    }',
+            reports_history,
+        )
+
     def test_base_doctor_has_sync_jquery_chain_with_fallbacks(self):
         doctor = self._read("templates/layouts/base_doctor.html")
         local_idx = doctor.find("vendor/jquery/3.7.1/jquery.min.js")

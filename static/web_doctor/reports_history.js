@@ -53,6 +53,9 @@
 
   function replaceContent(target, html) {
     if (!target) return;
+    if (window.Alpine && typeof window.Alpine.destroyTree === "function") {
+      window.Alpine.destroyTree(target);
+    }
     target.innerHTML = html;
     processNode(target);
   }
@@ -511,10 +514,6 @@
 
   document.body.addEventListener("htmx:afterSwap", function (event) {
     var target = event.detail && event.detail.target;
-    if (target && target.id === "reports-history-content") {
-      processNode(target);
-    }
-
     var pendingId = window.__pendingConsultationEventId;
     if (!pendingId) return;
     if (!target || (target.id !== "reports-history-content" && target.id !== "patient-content")) return;

@@ -67,6 +67,10 @@ class RecordCheckupTests(TestCase):
         self.assertContains(response, 'id="instructions-modal"')
         self.assertContains(response, 'id="modal-content"')
         self.assertContains(response, 'lockBodyScroll')
+        self.assertContains(response, 'function enableModalConfirm()')
+        self.assertContains(response, "modalContent.addEventListener('touchmove'")
+        self.assertContains(response, 'function canModalContentScroll()')
+        self.assertContains(response, 'syncModalConfirmAvailability')
         
         # 验证上下文数据
         self.assertEqual(response.context['checkup_date'], self.today.strftime("%Y-%m-%d"))
