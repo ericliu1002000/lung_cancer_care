@@ -59,20 +59,48 @@ class TemplateAssetLoadingTests(SimpleTestCase):
         self.assertIn("installHtmxAlpineLifecycleBridge", portal)
         self.assertIn("window.__htmxAlpineLifecycleBridgeInstalled", portal)
         self.assertIn("document.addEventListener('htmx:beforeSwap'", portal)
-        self.assertIn("window.Alpine.destroyTree(target)", portal)
+        self.assertIn("Alpine.stopObservingMutations();", portal)
+        self.assertIn("prepareAlpineTreeForDestroy(target);", portal)
+        self.assertIn("node._x_lookup = {};", portal)
+        self.assertIn("Alpine.destroyTree(target)", portal)
+        self.assertIn("isKnownAlpineCleanupRace(error)", portal)
         self.assertIn("document.addEventListener('htmx:afterSwap'", portal)
         self.assertIn("Alpine.initTree(target)", portal)
+        self.assertIn("Alpine.startObservingMutations();", portal)
+        self.assertIn("logLifecycleWarning('alpine destroyTree failed', error);", portal)
+        self.assertNotIn("failed to load alpine for htmx lifecycle bridge", portal)
+        self.assertNotIn("ensureMany(['alpineCollapse', 'alpine']).then", portal)
 
     def test_reports_history_manual_replacement_owns_alpine_init_only_for_manual_swaps(self):
         reports_history = self._read("static/web_doctor/reports_history.js")
 
-        self.assertIn('window.Alpine.destroyTree(target);', reports_history)
+        self.assertIn("Alpine.mutateDom(swapContent);", reports_history)
+        self.assertIn("Alpine.destroyTree(target);", reports_history)
         self.assertIn("target.innerHTML = html;", reports_history)
         self.assertIn("processNode(target);", reports_history)
         self.assertNotIn(
             'if (target && target.id === "reports-history-content") {\n      processNode(target);\n    }',
             reports_history,
         )
+
+    def test_reports_history_lifecycle_errors_do_not_trigger_detail_load_failure(self):
+        reports_history = self._read("static/web_doctor/reports_history.js")
+
+        self.assertIn('logLifecycleWarning("alpine destroyTree failed", error);', reports_history)
+        self.assertIn('logLifecycleWarning("alpine initTree failed", error);', reports_history)
+        self.assertIn('logLifecycleWarning("htmx process failed", error);', reports_history)
+        self.assertIn("replaceContent(target, html);", reports_history)
+        self.assertIn('target.dataset.loaded = "1";', reports_history)
+
+    def test_reports_history_row_detail_avoids_alpine_collapse_transitions(self):
+        row_template = self._read("templates/web_doctor/partials/reports_history/_record_row.html")
+
+        self.assertIn('x-show="expanded"', row_template)
+        self.assertNotIn("x-collapse", row_template)
+        self.assertNotIn("transitioning: false", row_template)
+        self.assertIn("await window.loadReportsDetail", row_template)
+        self.assertIn("finally {", row_template)
+        self.assertIn("this.loadingDetail = false;", row_template)
 
     def test_base_doctor_has_sync_jquery_chain_with_fallbacks(self):
         doctor = self._read("templates/layouts/base_doctor.html")

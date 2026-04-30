@@ -41,22 +41,56 @@
     }, 4000);
   }
 
+  function logLifecycleWarning(message, error) {
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn("[ReportsHistory] " + message, error);
+    }
+  }
+
   function processNode(node) {
     if (!node) return;
     if (window.htmx) {
-      window.htmx.process(node);
+      try {
+        window.htmx.process(node);
+      } catch (error) {
+        logLifecycleWarning("htmx process failed", error);
+      }
     }
     if (window.Alpine && typeof window.Alpine.initTree === "function") {
-      window.Alpine.initTree(node);
+      try {
+        window.Alpine.initTree(node);
+      } catch (error) {
+        logLifecycleWarning("alpine initTree failed", error);
+      }
     }
   }
 
   function replaceContent(target, html) {
     if (!target) return;
-    if (window.Alpine && typeof window.Alpine.destroyTree === "function") {
-      window.Alpine.destroyTree(target);
+    var Alpine = window.Alpine;
+
+    function swapContent() {
+      if (Alpine && typeof Alpine.destroyTree === "function") {
+        try {
+          Alpine.destroyTree(target);
+        } catch (error) {
+          logLifecycleWarning("alpine destroyTree failed", error);
+        }
+      }
+      target.innerHTML = html;
     }
-    target.innerHTML = html;
+
+    if (Alpine && typeof Alpine.mutateDom === "function") {
+      try {
+        Alpine.mutateDom(swapContent);
+      } catch (error) {
+        logLifecycleWarning("alpine mutateDom swap failed", error);
+        swapContent();
+      }
+    } else {
+      swapContent();
+    }
+
     processNode(target);
   }
 

@@ -65,54 +65,97 @@
           return !!(node && node.nodeType === 1);
         }
 
-        function withAlpine(callback) {
-          if (window.Alpine) {
-            callback(window.Alpine);
-            return;
-          }
-          if (!window.LCCAssetLoader || typeof window.LCCAssetLoader.ensureMany !== 'function') return;
-          window.LCCAssetLoader.ensureMany(['alpineCollapse', 'alpine']).then(function () {
-            if (window.Alpine) callback(window.Alpine);
-          }).catch(function () {
-            if (typeof console !== 'undefined' && console.error) {
-              console.error('[LCCAssetLoader] failed to load alpine for htmx lifecycle bridge');
-            }
-          });
+        var alpineMutationObserverPaused = false;
+
+        function getAlpine() {
+          return window.Alpine || null;
         }
 
-        function destroyAlpineTree(target) {
-          if (!isElement(target) || !window.Alpine || typeof window.Alpine.destroyTree !== 'function') return;
-          try {
-            window.Alpine.destroyTree(target);
-          } catch (error) {
-            if (typeof console !== 'undefined' && console.warn) {
-              console.warn('[LCCAssetLoader] alpine destroyTree failed', error);
-            }
+        function logLifecycleWarning(message, error) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[LCCAssetLoader] ' + message, error);
           }
         }
 
-        function initAlpineTree(target) {
+        function isKnownAlpineCleanupRace(error) {
+          var message = error && error.message ? error.message : String(error || '');
+          return message.indexOf('Cannot convert undefined or null to object') !== -1;
+        }
+
+        function eachElementInTree(target, callback) {
           if (!isElement(target)) return;
-          withAlpine(function (Alpine) {
-            if (!document.documentElement.contains(target) || typeof Alpine.initTree !== 'function') return;
-            try {
-              Alpine.initTree(target);
-            } catch (error) {
-              if (typeof console !== 'undefined' && console.warn) {
-                console.warn('[LCCAssetLoader] alpine initTree failed', error);
-              }
+          callback(target);
+          target.querySelectorAll('*').forEach(callback);
+        }
+
+        function prepareAlpineTreeForDestroy(target) {
+          eachElementInTree(target, function (node) {
+            if (node._x_prevKeys && (node._x_lookup === undefined || node._x_lookup === null)) {
+              node._x_lookup = {};
             }
           });
+        }
+
+        function pauseAlpineMutations(Alpine) {
+          if (!Alpine || alpineMutationObserverPaused || typeof Alpine.stopObservingMutations !== 'function') return;
+          try {
+            Alpine.stopObservingMutations();
+            alpineMutationObserverPaused = true;
+          } catch (error) {
+            logLifecycleWarning('alpine stopObservingMutations failed', error);
+          }
+        }
+
+        function resumeAlpineMutations(Alpine) {
+          if (!Alpine || !alpineMutationObserverPaused || typeof Alpine.startObservingMutations !== 'function') return;
+          try {
+            Alpine.startObservingMutations();
+          } catch (error) {
+            logLifecycleWarning('alpine startObservingMutations failed', error);
+          } finally {
+            alpineMutationObserverPaused = false;
+          }
+        }
+
+        function destroyAlpineTree(target, Alpine) {
+          if (!isElement(target) || !Alpine || typeof Alpine.destroyTree !== 'function') return;
+          try {
+            prepareAlpineTreeForDestroy(target);
+            Alpine.destroyTree(target);
+          } catch (error) {
+            if (!isKnownAlpineCleanupRace(error)) {
+              logLifecycleWarning('alpine destroyTree failed', error);
+            }
+          }
+        }
+
+        function initAlpineTree(target, Alpine) {
+          if (!isElement(target) || !Alpine || typeof Alpine.initTree !== 'function') return;
+          if (!document.documentElement.contains(target)) return;
+          try {
+            Alpine.initTree(target);
+          } catch (error) {
+            logLifecycleWarning('alpine initTree failed', error);
+          }
         }
 
         document.addEventListener('htmx:beforeSwap', function (event) {
+          var Alpine = getAlpine();
+          if (!Alpine) return;
           var target = event.detail && event.detail.target ? event.detail.target : event.target;
-          destroyAlpineTree(target);
+          pauseAlpineMutations(Alpine);
+          destroyAlpineTree(target, Alpine);
         });
 
         document.addEventListener('htmx:afterSwap', function (event) {
+          var Alpine = getAlpine();
+          if (!Alpine) return;
           var target = event.detail && event.detail.target ? event.detail.target : event.target;
-          initAlpineTree(target);
+          try {
+            initAlpineTree(target, Alpine);
+          } finally {
+            resumeAlpineMutations(Alpine);
+          }
         });
       })();
     </script>
