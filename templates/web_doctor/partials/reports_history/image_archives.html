@@ -25,8 +25,7 @@
           hx-indicator="#search-loading"
           hx-trigger="submit delay:300ms"
           onsubmit="const start=this.querySelector('[name=startDate]').value; const end=this.querySelector('[name=endDate]').value; if (start && end && start > end) { alert('开始日期不能晚于结束日期'); return false; }"
-          hx-on::before-request="if (archiveFilters.dateStart && archiveFilters.dateEnd && archiveFilters.dateStart > archiveFilters.dateEnd) { alert('开始日期不能晚于结束日期'); event.preventDefault(); }"
-          @submit.prevent="if(archiveFilters.dateStart && archiveFilters.dateEnd && archiveFilters.dateStart > archiveFilters.dateEnd) { alert('开始日期不能晚于结束日期'); return; } $el.requestSubmit()">
+          hx-on::before-request="const start=this.querySelector('[name=startDate]').value; const end=this.querySelector('[name=endDate]').value; if (start && end && start > end) { event.preventDefault(); }">
         <div class="flex items-center gap-2">
             <label class="text-sm font-medium text-slate-700">上传日期：</label>
             <div class="flex items-center gap-1">
