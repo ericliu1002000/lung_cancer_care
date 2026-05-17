@@ -17,6 +17,8 @@ class Medication(models.Model):
     class Method(models.IntegerChoices):
         ORAL = 1, "口服"
         IV = 2, "静脉注射"
+        SUBCUTANEOUS = 3, "皮下注射"
+        INHALATION = 4, "口吸"
         OTHER = 9, "其它"
 
     name = models.CharField(
@@ -54,7 +56,7 @@ class Medication(models.Model):
         "给药方式",
         choices=Method.choices,
         default=Method.ORAL,
-        help_text="【说明】口服/静脉/其它。",
+        help_text="【说明】口服/静脉注射/皮下注射/口吸/其它。",
     )
 
     target_gene = models.CharField(
