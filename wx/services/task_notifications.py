@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, Iterable, List, Set
 
 from django.conf import settings
@@ -42,10 +42,14 @@ _REMINDER_MESSAGE_BY_TYPE = {
     core_choices.PlanItemCategory.MONITORING: "您的监测任务未完成",
     core_choices.PlanItemCategory.QUESTIONNAIRE: "您的随访任务未完成",
 }
+_ADVANCE_REMINDER_DAYS_BY_TYPE = {
+    core_choices.PlanItemCategory.CHECKUP: (1, 3),
+}
 _MULTI_TASK_MESSAGE = {
     SendMessageLog.Scene.DAILY_TASK_CREATED: "已为您生成今日监测任务",
     SendMessageLog.Scene.DAILY_TASK_REMINDER: "您的今日监测任务未完成",
 }
+_MIXED_UPCOMING_REMINDER_MESSAGE = "您有近期任务需要关注"
 _WATCH_TITLE_BY_TYPE = {
     core_choices.PlanItemCategory.MEDICATION: "用药提醒",
     core_choices.PlanItemCategory.CHECKUP: "复查提醒",
@@ -86,10 +90,18 @@ def _send_task_messages(
     scene: str,
     pending_only: bool,
 ) -> int:
-    task_types_by_patient = _load_task_types_by_patient(
-        task_date=task_date,
-        pending_only=pending_only,
-    )
+    reminder_items_by_patient: Dict[int, List[Dict[str, Any]]] = {}
+    if pending_only:
+        reminder_items_by_patient = _load_reminder_items_by_patient(task_date)
+        task_types_by_patient = {
+            patient_id: {int(item["task_type"]) for item in items}
+            for patient_id, items in reminder_items_by_patient.items()
+        }
+    else:
+        task_types_by_patient = _load_task_types_by_patient(
+            task_date=task_date,
+            pending_only=pending_only,
+        )
     if not task_types_by_patient:
         return 0
 
@@ -118,14 +130,20 @@ def _send_task_messages(
         task_types = task_types_by_patient.get(patient.id)
         if not task_types:
             continue
-        content = _resolve_message(task_types=task_types, scene=scene)
+        reminder_items = reminder_items_by_patient.get(patient.id, [])
+        content = (
+            _resolve_reminder_message(reminder_items)
+            if pending_only
+            else _resolve_message(task_types=task_types, scene=scene)
+        )
         if not content:
             continue
 
-        payload = {
-            "task_date": str(task_date),
-            "task_types": sorted(int(task_type) for task_type in task_types),
-        }
+        payload = _build_message_payload(
+            task_date=task_date,
+            task_types=task_types,
+            reminder_items=reminder_items,
+        )
         watch_title = _resolve_watch_title(task_types=task_types)
         _maybe_send_watch_message(
             patient=patient,
@@ -184,6 +202,30 @@ def _send_task_messages(
     return len(logs_to_create)
 
 
+def _build_message_payload(
+    *,
+    task_date: date,
+    task_types: Set[int],
+    reminder_items: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "task_date": str(task_date),
+        "task_types": sorted(int(task_type) for task_type in task_types),
+    }
+    if reminder_items:
+        payload["reminder_date"] = str(task_date)
+        payload["tasks"] = [
+            {
+                "task_id": item["task_id"],
+                "task_date": str(item["task_date"]),
+                "task_type": int(item["task_type"]),
+                "lead_days": item["lead_days"],
+            }
+            for item in reminder_items
+        ]
+    return payload
+
+
 def _load_task_types_by_patient(
     *,
     task_date: date,
@@ -211,6 +253,54 @@ def _load_task_types_by_patient(
     for patient_id, task_type in pairs:
         task_types_by_patient.setdefault(patient_id, set()).add(int(task_type))
     return task_types_by_patient
+
+
+def _load_reminder_items_by_patient(as_of_date: date) -> Dict[int, List[Dict[str, Any]]]:
+    due_tasks = DailyTask.objects.filter(
+        patient__is_active=True,
+        task_type__in=_TASK_TYPES,
+        status=core_choices.TaskStatus.PENDING,
+        task_date__lte=as_of_date,
+    )
+
+    reminder_items_by_patient: Dict[int, List[Dict[str, Any]]] = {}
+    for task_id, patient_id, task_type, task_date_value in due_tasks.order_by(
+        "patient_id", "task_date", "id"
+    ).values_list("id", "patient_id", "task_type", "task_date"):
+        reminder_items_by_patient.setdefault(patient_id, []).append(
+            {
+                "task_id": task_id,
+                "task_type": int(task_type),
+                "task_date": task_date_value,
+                "lead_days": 0,
+            }
+        )
+
+    for task_type, lead_days_list in _ADVANCE_REMINDER_DAYS_BY_TYPE.items():
+        target_dates = [as_of_date + timedelta(days=days) for days in lead_days_list]
+        future_tasks = DailyTask.objects.filter(
+            patient__is_active=True,
+            task_type=task_type,
+            task_date__in=target_dates,
+            status__in=[
+                core_choices.TaskStatus.PENDING,
+                core_choices.TaskStatus.NOT_STARTED,
+            ],
+        )
+        for task_id, patient_id, task_date_value in future_tasks.order_by(
+            "patient_id", "task_date", "id"
+        ).values_list("id", "patient_id", "task_date"):
+            lead_days = (task_date_value - as_of_date).days
+            reminder_items_by_patient.setdefault(patient_id, []).append(
+                {
+                    "task_id": task_id,
+                    "task_type": int(task_type),
+                    "task_date": task_date_value,
+                    "lead_days": lead_days,
+                }
+            )
+
+    return reminder_items_by_patient
 
 
 def _load_patients(patient_ids: Iterable[int]) -> List[PatientProfile]:
@@ -333,6 +423,33 @@ def _resolve_message(*, task_types: Set[int], scene: str) -> str | None:
     if scene == SendMessageLog.Scene.DAILY_TASK_REMINDER:
         return _REMINDER_MESSAGE_BY_TYPE.get(task_type)
     return None
+
+
+def _resolve_reminder_message(reminder_items: List[Dict[str, Any]]) -> str | None:
+    if not reminder_items:
+        return None
+
+    task_types = {int(item["task_type"]) for item in reminder_items}
+    has_due_task = any(item["lead_days"] == 0 for item in reminder_items)
+    has_future_task = any(item["lead_days"] > 0 for item in reminder_items)
+    if has_due_task and has_future_task:
+        return _MIXED_UPCOMING_REMINDER_MESSAGE
+    if has_due_task:
+        return _resolve_message(
+            task_types=task_types,
+            scene=SendMessageLog.Scene.DAILY_TASK_REMINDER,
+        )
+
+    if task_types == {core_choices.PlanItemCategory.CHECKUP}:
+        lead_days = sorted({item["lead_days"] for item in reminder_items})
+        if len(lead_days) == 1:
+            lead_day = lead_days[0]
+            if lead_day == 1:
+                return "您有明天的复查任务"
+            return f"您有{lead_day}天后的复查任务"
+        return "您有近期复查任务"
+
+    return _MIXED_UPCOMING_REMINDER_MESSAGE
 
 
 def _resolve_watch_title(*, task_types: Set[int]) -> str:

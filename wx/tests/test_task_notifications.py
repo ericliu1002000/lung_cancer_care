@@ -66,14 +66,21 @@ class TaskNotificationTests(TestCase):
         )
         return family_user
 
-    def _create_task(self, *, patient: PatientProfile, task_date, task_type) -> DailyTask:
+    def _create_task(
+        self,
+        *,
+        patient: PatientProfile,
+        task_date,
+        task_type,
+        status=core_choices.TaskStatus.PENDING,
+    ) -> DailyTask:
         return DailyTask.objects.create(
             patient=patient,
             task_date=task_date,
             task_type=task_type,
             title="任务标题",
             detail="",
-            status=core_choices.TaskStatus.PENDING,
+            status=status,
         )
 
     def test_creation_sends_wechat_and_watch_logs_for_multi_task(self):
@@ -166,6 +173,97 @@ class TaskNotificationTests(TestCase):
         log = SendMessageLog.objects.first()
         self.assertEqual(log.channel, SendMessageLog.Channel.WECHAT)
         self.assertEqual(log.content, "您的复查任务未完成")
+        mock_send.assert_not_called()
+
+    def test_reminder_sends_future_checkup_three_days_before(self):
+        today = timezone.localdate()
+        patient = self._create_patient(phone="13800000013", openid="wx_openid_13")
+        task_date = today + timedelta(days=3)
+        self._create_task(
+            patient=patient,
+            task_date=task_date,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            status=core_choices.TaskStatus.NOT_STARTED,
+        )
+
+        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+            sent = send_daily_task_reminder_messages(today)
+
+        self.assertEqual(sent, 1)
+        log = SendMessageLog.objects.get()
+        self.assertEqual(log.channel, SendMessageLog.Channel.WECHAT)
+        self.assertEqual(log.biz_date, today)
+        self.assertEqual(log.content, "您有3天后的复查任务")
+        self.assertEqual(log.payload["reminder_date"], str(today))
+        self.assertEqual(log.payload["tasks"][0]["task_date"], str(task_date))
+        self.assertEqual(log.payload["tasks"][0]["lead_days"], 3)
+        mock_send.assert_not_called()
+
+    def test_reminder_sends_future_checkup_one_day_before(self):
+        today = timezone.localdate()
+        patient = self._create_patient(phone="13800000014", openid="wx_openid_14")
+        task_date = today + timedelta(days=1)
+        self._create_task(
+            patient=patient,
+            task_date=task_date,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            status=core_choices.TaskStatus.NOT_STARTED,
+        )
+
+        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+            sent = send_daily_task_reminder_messages(today)
+
+        self.assertEqual(sent, 1)
+        log = SendMessageLog.objects.get()
+        self.assertEqual(log.biz_date, today)
+        self.assertEqual(log.content, "您有明天的复查任务")
+        self.assertEqual(log.payload["tasks"][0]["task_date"], str(task_date))
+        self.assertEqual(log.payload["tasks"][0]["lead_days"], 1)
+        mock_send.assert_not_called()
+
+    def test_reminder_skips_future_non_checkup_tasks(self):
+        today = timezone.localdate()
+        patient = self._create_patient(phone="13800000015", openid="wx_openid_15")
+        self._create_task(
+            patient=patient,
+            task_date=today + timedelta(days=1),
+            task_type=core_choices.PlanItemCategory.MEDICATION,
+            status=core_choices.TaskStatus.NOT_STARTED,
+        )
+
+        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+            sent = send_daily_task_reminder_messages(today)
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(SendMessageLog.objects.count(), 0)
+        mock_send.assert_not_called()
+
+    def test_future_checkup_reminder_sends_again_on_next_lead_day(self):
+        today = timezone.localdate()
+        patient = self._create_patient(phone="13800000016", openid="wx_openid_16")
+        task_date = today + timedelta(days=3)
+        self._create_task(
+            patient=patient,
+            task_date=task_date,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            status=core_choices.TaskStatus.NOT_STARTED,
+        )
+
+        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+            first_sent = send_daily_task_reminder_messages(today)
+            second_sent = send_daily_task_reminder_messages(today + timedelta(days=2))
+
+        self.assertEqual(first_sent, 1)
+        self.assertEqual(second_sent, 1)
+        self.assertEqual(SendMessageLog.objects.count(), 2)
+        contents = list(
+            SendMessageLog.objects.order_by("biz_date").values_list("content", flat=True)
+        )
+        self.assertEqual(contents, ["您有3天后的复查任务", "您有明天的复查任务"])
+        self.assertEqual(
+            list(SendMessageLog.objects.order_by("biz_date").values_list("biz_date", flat=True)),
+            [today, today + timedelta(days=2)],
+        )
         mock_send.assert_not_called()
 
     def test_creation_skips_wechat_when_user_disabled(self):
