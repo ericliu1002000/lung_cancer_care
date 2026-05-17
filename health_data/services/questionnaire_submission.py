@@ -969,6 +969,17 @@ class QuestionnaireSubmissionService:
                 grade_level = 1
             else:
                 raise ValidationError("问卷分数不在有效范围内。")
+        elif questionnaire_code == QuestionnaireCode.Q_KQNMLB:
+            if total_score >= Decimal("10"):
+                grade_level = 4
+            elif total_score >= Decimal("5"):
+                grade_level = 3
+            elif total_score >= Decimal("1"):
+                grade_level = 2
+            elif total_score == Decimal("0"):
+                grade_level = 1
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
         else:
             raise ValidationError("该问卷暂不支持分级。")
 

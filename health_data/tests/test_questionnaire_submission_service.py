@@ -929,3 +929,35 @@ class QuestionnaireSubmissionGradeTest(TestCase):
             QuestionnaireSubmissionService.get_submission_grade(submission.id),
             4,
         )
+
+    def test_grade_oral_mucosa(self):
+        questionnaire = self._get_or_create_questionnaire(
+            QuestionnaireCode.Q_KQNMLB,
+            "口腔黏膜损伤自评量表",
+        )
+        cases = [
+            ("0", 1),
+            ("1", 2),
+            ("4", 2),
+            ("5", 3),
+            ("9", 3),
+            ("10", 4),
+        ]
+
+        for score, expected_grade in cases:
+            with self.subTest(score=score):
+                submission = self._create_submission(questionnaire, score)
+                self.assertEqual(
+                    QuestionnaireSubmissionService.get_submission_grade(submission.id),
+                    expected_grade,
+                )
+
+    def test_grade_oral_mucosa_rejects_negative_score(self):
+        questionnaire = self._get_or_create_questionnaire(
+            QuestionnaireCode.Q_KQNMLB,
+            "口腔黏膜损伤自评量表",
+        )
+        submission = self._create_submission(questionnaire, "-1")
+
+        with self.assertRaises(ValidationError):
+            QuestionnaireSubmissionService.get_submission_grade(submission.id)

@@ -59,6 +59,9 @@ class QuestionnaireAlertServiceTests(TestCase):
             (QuestionnaireCode.Q_SLEEP, "睡眠质量评估", Decimal("30.00"), AlertLevel.MODERATE),
             (QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", Decimal("5.00"), AlertLevel.MILD),
             (QuestionnaireCode.Q_ANXIETY, "焦虑评估", Decimal("5.00"), AlertLevel.MILD),
+            (QuestionnaireCode.Q_KQNMLB, "口腔黏膜损伤自评量表", Decimal("1.00"), AlertLevel.MILD),
+            (QuestionnaireCode.Q_KQNMLB, "口腔黏膜损伤自评量表", Decimal("5.00"), AlertLevel.MODERATE),
+            (QuestionnaireCode.Q_KQNMLB, "口腔黏膜损伤自评量表", Decimal("10.00"), AlertLevel.SEVERE),
         ]
 
         for code, name, score, expected_level in cases:
@@ -73,3 +76,18 @@ class QuestionnaireAlertServiceTests(TestCase):
                 self.assertIsNotNone(alert)
                 self.assertEqual(alert.event_type, AlertEventType.QUESTIONNAIRE)
                 self.assertEqual(alert.event_level, expected_level)
+
+    def test_no_alert_when_oral_mucosa_score_is_zero(self):
+        questionnaire = self._get_questionnaire(
+            QuestionnaireCode.Q_KQNMLB,
+            "口腔黏膜损伤自评量表",
+        )
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("0.00"),
+        )
+
+        alert = QuestionnaireAlertService.process_submission(submission)
+
+        self.assertIsNone(alert)
