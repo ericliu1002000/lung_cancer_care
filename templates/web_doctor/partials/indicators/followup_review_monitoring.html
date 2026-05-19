@@ -28,10 +28,24 @@
          firstCheckupId: function() {
            return this.catalog.length ? this.catalog[0].checkup_id : null;
          },
+         cleanupStaleModalLayers: function() {
+           var visibleLayers = Array.from(document.querySelectorAll('[data-followup-review-modal-layer]')).filter(function(layer) {
+             return !!(layer.offsetWidth || layer.offsetHeight || layer.getClientRects().length);
+           });
+           var keepLayer = visibleLayers.length ? visibleLayers[visibleLayers.length - 1] : null;
+           document.querySelectorAll('[data-followup-review-modal-layer]').forEach(function(layer) {
+             if (keepLayer && layer === keepLayer) return;
+             layer.remove();
+           });
+         },
          openConfig: function() {
            this.draftSelectedMappingIds = this.selectedMappingIds.slice();
            this.activeCheckupId = this.activeCheckupId || this.firstCheckupId();
            this.configOpen = true;
+           var self = this;
+           window.setTimeout(function() {
+             self.cleanupStaleModalLayers();
+           }, 0);
          },
          closeConfig: function() {
            this.draftSelectedMappingIds = this.selectedMappingIds.slice();
@@ -149,7 +163,7 @@
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-3 py-1.5 text-sm font-semibold text-blue-600 hover:border-blue-300 hover:bg-blue-50"
-        @click="openConfig()"
+        onclick="var root = this.closest('#followup-review-container'); if (root && window.Alpine && typeof window.Alpine.initTree === 'function' && !root._x_dataStack) window.Alpine.initTree(root); if (root && window.Alpine && typeof window.Alpine.$data === 'function') window.Alpine.$data(root).openConfig();"
       >
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"></path>
@@ -173,17 +187,19 @@
 
   <template x-teleport="body">
     <div
+      data-followup-review-modal-layer
       x-show="configOpen"
       x-init="$nextTick(function() { if (window.htmx) window.htmx.process($el); })"
       x-cloak
       style="display: none; z-index: 10050;"
       class="fixed inset-0 flex items-center justify-center bg-slate-900/40 px-4 py-6"
       @keydown.escape.window="closeConfig()"
+      @click.self="closeConfig()"
     >
       <div
         class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
         style="height: 750px; max-height: calc(100vh - 3rem);"
-        @click.outside="closeConfig()"
+        @click.stop
       >
         <div class="shrink-0 border-b border-slate-200 px-5 py-4">
           <div class="flex items-start justify-between gap-4">
@@ -285,6 +301,7 @@
             hx-target="#followup-review-section"
             hx-swap="outerHTML"
             hx-include="#routine-filter-form,#followup-review-config-form"
+            hx-on::after-settle="var section = document.getElementById('followup-review-section'); if (section && window.Alpine && typeof window.Alpine.initTree === 'function') window.Alpine.initTree(section); if (section && window.htmx) window.htmx.process(section);"
             @htmx:before-request="configOpen = false"
             @htmx:after-request="configOpen = false"
             class="rounded-md bg-blue-600 px-5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
