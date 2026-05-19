@@ -11,7 +11,7 @@ from market.service.order import get_paid_orders_for_patient
 from core.service.tasks import get_adherence_metrics, MONITORING_ADHERENCE_ALL
 from health_data.services.health_metric import HealthMetricService
 from core.models.choices import PlanItemCategory
-from health_data.models import MetricType, QuestionnaireSubmission
+from health_data.models import CheckupResultValue, MetricType, QuestionnaireSubmission
 from django.contrib.auth.decorators import login_required
 from users.decorators import check_doctor_or_assistant
 from chat.services.chat import ChatService
@@ -105,6 +105,9 @@ class ManagementStatsView:
 
         # 生成图表数据
         charts = self._generate_charts_data(patient, start_date, end_date)
+
+        # 生成复查指标统计
+        followup_review_charts = self._generate_followup_review_charts(patient, start_date, end_date)
         
         # 生成咨询数据统计
         query_stats = self._generate_query_stats(patient, start_date, end_date)
@@ -113,8 +116,25 @@ class ManagementStatsView:
             "service_packages": service_packages,
             "stats_overview": stats_overview,
             "charts": charts,
+            "followup_review_charts": followup_review_charts,
             "query_stats": query_stats,
         }
+
+    @staticmethod
+    def _build_month_labels(start_date: date | None, end_date: date | None) -> list[str]:
+        if not start_date or not end_date:
+            return []
+
+        months = []
+        curr = date(start_date.year, start_date.month, 1)
+        end = date(end_date.year, end_date.month, 1)
+        while curr <= end:
+            months.append(f"{curr.year}-{curr.month:02d}")
+            if curr.month == 12:
+                curr = date(curr.year + 1, 1, 1)
+            else:
+                curr = date(curr.year, curr.month + 1, 1)
+        return months
     
     def _generate_charts_data(self, patient: Any, start_date: date | None, end_date: date | None) -> Dict[str, Any]:
         """
@@ -136,6 +156,7 @@ class ManagementStatsView:
             ("sleep", "睡眠质量统计次数", "次", "#82E608", "Q_SLEEP"),
             ("depressed", "抑郁评估统计次数", "次", "#4861EC", "Q_DEPRESSIVE"),
             ("anxiety", "焦虑统计次数", "次", "#48B8EC", "Q_ANXIETY"),
+            ("oral_mucosa", "口腔黏膜损伤自评量表统计次数", "次", "#14B8A6", "Q_KQNMLB"),
         ]
 
         charts = {}
@@ -143,19 +164,7 @@ class ManagementStatsView:
         # 初始化默认数据（空数据）
         # 默认显示月份（如果无日期，默认显示当前年1-12月? 或者空列表?）
         # 如果没有 start_date，则无法确定月份范围。这里我们假设如果没数据，就显示当前年的月份
-        months = []
-        if start_date and end_date:
-            curr = date(start_date.year, start_date.month, 1)
-            end = date(end_date.year, end_date.month, 1)
-            while curr <= end:
-                months.append(f"{curr.year}-{curr.month:02d}")
-                if curr.month == 12:
-                    curr = date(curr.year + 1, 1, 1)
-                else:
-                    curr = date(curr.year, curr.month + 1, 1)
-        else:
-            # 默认显示空
-            months = []
+        months = self._build_month_labels(start_date, end_date)
 
         # 准备批量查询的数据源
         all_types_to_query = []
@@ -210,6 +219,111 @@ class ManagementStatsView:
                 ]
             }
         
+        return charts
+
+    def _generate_followup_review_charts(self, patient: Any, start_date: date | None, end_date: date | None) -> list[Dict[str, Any]]:
+        """
+        生成患者已勾选复查指标的按月统计图表数据。
+
+        统计口径：同一患者、同一复查项目、同一标准字段、同一报告日期只计 1 次。
+        """
+        months = self._build_month_labels(start_date, end_date)
+        if not patient or not start_date or not end_date or not months:
+            return []
+
+        try:
+            from web_doctor.views.indicators import (
+                build_followup_review_catalog,
+                get_saved_followup_review_mapping_ids,
+                normalize_followup_review_mapping_ids,
+            )
+
+            _, mapping_meta, _ = build_followup_review_catalog()
+            selected_mapping_ids = normalize_followup_review_mapping_ids(
+                get_saved_followup_review_mapping_ids(patient),
+                mapping_meta=mapping_meta,
+            )
+        except Exception:
+            return []
+
+        if not selected_mapping_ids:
+            return []
+
+        selected_pairs = {
+            (
+                mapping_meta[mapping_id]["checkup_id"],
+                mapping_meta[mapping_id]["field_id"],
+            )
+            for mapping_id in selected_mapping_ids
+        }
+        checkup_ids = {checkup_id for checkup_id, _ in selected_pairs}
+        field_ids = {field_id for _, field_id in selected_pairs}
+
+        distinct_result_days = (
+            CheckupResultValue.objects.filter(
+                patient=patient,
+                checkup_item_id__in=checkup_ids,
+                standard_field_id__in=field_ids,
+                report_date__range=(start_date, end_date),
+                value_numeric__isnull=False,
+            )
+            .order_by()
+            .values("checkup_item_id", "standard_field_id", "report_date")
+            .distinct()
+        )
+
+        month_index = {label: idx for idx, label in enumerate(months)}
+        counts_by_pair = {
+            pair: [0 for _ in months]
+            for pair in selected_pairs
+        }
+        for item in distinct_result_days:
+            pair = (item["checkup_item_id"], item["standard_field_id"])
+            report_date = item["report_date"]
+            if pair not in counts_by_pair or not report_date:
+                continue
+            month_label = f"{report_date.year}-{report_date.month:02d}"
+            if month_label in month_index:
+                counts_by_pair[pair][month_index[month_label]] += 1
+
+        palette = [
+            "#2563EB",
+            "#059669",
+            "#EA580C",
+            "#9333EA",
+            "#DB2777",
+            "#0F766E",
+            "#B45309",
+            "#4F46E5",
+        ]
+        charts = []
+        for idx, mapping_id in enumerate(selected_mapping_ids):
+            mapping_info = mapping_meta[mapping_id]
+            pair = (mapping_info["checkup_id"], mapping_info["field_id"])
+            series_data = counts_by_pair.get(pair, [0 for _ in months])
+            total_count = sum(series_data)
+            title = (
+                f"复查指标-{mapping_info['checkup_name']}-"
+                f"{mapping_info['field_name']}统计次数: {total_count}次"
+            )
+            charts.append(
+                {
+                    "id": f"chart-followup-review-stats-{idx}",
+                    "title": title,
+                    "subtitle": "",
+                    "dates": months,
+                    "y_min": 0,
+                    "y_max": max(series_data) + 5 if series_data else 10,
+                    "series": [
+                        {
+                            "name": title,
+                            "data": series_data,
+                            "color": palette[idx % len(palette)],
+                        }
+                    ],
+                }
+            )
+
         return charts
 
     def _generate_query_stats(self, patient: Any, start_date: date | None, end_date: date | None) -> Dict[str, Any]:
