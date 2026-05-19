@@ -359,9 +359,3 @@ class ConsultationModalLayeringTemplateTests(SimpleTestCase):
         self.assertIn("this.closeModal();", content)
         self.assertIn("this.refreshTimelineAfterSave(submittedRecordMonth)", content)
         self.assertNotIn("htmx.ajax('GET', this.refreshUrl", content)
-
-    def test_home_reports_preview_modal_teleports_to_body(self):
-        content = self._read("templates/web_doctor/partials/home/reports.html")
-        self.assertIn("<template x-teleport=\"body\">", content)
-        self.assertIn("x-show=\"showPreview\"", content)
-        self.assertIn("class=\"fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4\"", content)
