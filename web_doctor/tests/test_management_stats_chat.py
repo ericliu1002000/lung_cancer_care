@@ -216,6 +216,7 @@ class TestManagementStatsChatIntegration(TestCase):
         self.assertEqual(len(charts), 1)
         self.assertEqual(charts[0]["dates"], ["2025-01", "2025-02", "2025-03"])
         self.assertEqual(charts[0]["series"][0]["data"], [1, 2, 0])
+        self.assertEqual(charts[0]["series"][0]["name"], "统计次数")
         self.assertEqual(charts[0]["title"], "复查指标-血常规-白细胞计数统计次数: 3次")
 
     def test_generate_followup_review_charts_deduplicates_same_metric_same_day(self):

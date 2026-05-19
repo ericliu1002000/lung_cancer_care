@@ -316,7 +316,7 @@ class ManagementStatsView:
                     "y_max": max(series_data) + 5 if series_data else 10,
                     "series": [
                         {
-                            "name": title,
+                            "name": "统计次数",
                             "data": series_data,
                             "color": palette[idx % len(palette)],
                         }
