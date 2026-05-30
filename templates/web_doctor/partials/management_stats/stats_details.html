@@ -5,7 +5,8 @@
     <h3 class="font-bold text-gray-800">管理数据统计</h3>
   </div>
 
-  <!-- 5行2列网格布局 -->
+  <!-- 常规监测指标 -->
+   <p class="text-gray-600 mb-2">常规监测指标</p>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <!-- 1. 服药统计 -->
     {% include "web_doctor/partials/management_stats/stats_medication_chart.html" %}
@@ -26,10 +27,22 @@
      <!-- 7. 步数统计 -->
     {% include "web_doctor/partials/management_stats/stats_step_chart.html" %}
 
-    
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-t-slate-300 border-dashed mt-10 pt-5">
+  <!-- 复查指标 -->
+  {% if followup_review_charts %}
+    <p class="text-gray-600 mb-2 border-t border-t-slate-300 border-dashed pt-5 mt-5">复查指标</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {% for followup_chart in followup_review_charts %}
+        {% include "web_doctor/partials/management_stats/stats_chart_base.html" with chart=followup_chart icon_type="checkup" %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- 随访问卷 -->
+  <p class="text-gray-600 mb-2 border-t border-t-slate-300 border-dashed pt-5 mt-5">随访问卷</p>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6  ">
+
     <!-- 1. 体能评分统计 -->
     {% include "web_doctor/partials/management_stats/stats_stamina_chart.html"%}
     <!-- 2. 呼吸困难统计 -->
@@ -50,5 +63,7 @@
     {% include "web_doctor/partials/management_stats/stats_depressed_chart.html" %}
      <!-- 8. 焦虑评估统计 -->
     {% include "web_doctor/partials/management_stats/stats_anxiety_chart.html" %}
+     <!-- 9. 口腔黏膜损伤自评量表统计 -->
+    {% include "web_doctor/partials/management_stats/stats_chart_base.html" with chart=charts.oral_mucosa icon_type="oral_mucosa" %}
   </div>
 </div>

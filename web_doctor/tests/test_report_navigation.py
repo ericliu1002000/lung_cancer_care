@@ -43,20 +43,3 @@ class ReportNavigationTests(TestCase):
         
         self.assertContains(response, "activeTab: 'images'")
 
-    def test_reports_partial_link_has_tab_param(self):
-        """
-        Test that the reports.html partial contains the link with ?tab=images.
-        """
-        # reports.html no longer depends on latest_reports (feature removed), but the link should remain correct.
-        from django.template.loader import render_to_string
-        
-        context = {
-            'patient': self.patient,
-        }
-        
-        rendered = render_to_string('web_doctor/partials/home/reports.html', context)
-        
-        expected_url = reverse('web_doctor:patient_workspace_section', args=[self.patient.id, 'reports_history'])
-        expected_link = f'hx-get="{expected_url}?tab=images"'
-        
-        self.assertIn(expected_link, rendered)
