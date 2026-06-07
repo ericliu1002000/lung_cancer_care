@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
+from patient_alerts.services.alert_sources import PatientAlertSourceService
 from patient_alerts.services.patient_alert import PatientAlertService
 from health_data.models import QuestionnaireSubmission
 
@@ -56,7 +57,7 @@ class QuestionnaireAlertService:
             "total_score": str(total_score),
             "grade_level": grade_level,
         }
-        return PatientAlertService.create_or_update_alert(
+        alert = PatientAlertService.create_or_update_alert(
             patient_id=submission.patient_id,
             event_type=AlertEventType.QUESTIONNAIRE,
             event_level=alert_level,
@@ -71,3 +72,12 @@ class QuestionnaireAlertService:
                 "source_type": "questionnaire",
             },
         )
+        PatientAlertSourceService.record_questionnaire_source(
+            alert=alert,
+            submission=submission,
+            event_level=alert_level,
+            grade_level=grade_level,
+            total_score=total_score,
+            source_payload=payload,
+        )
+        return alert

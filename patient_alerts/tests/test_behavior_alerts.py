@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from core.models import DailyTask, MonitoringTemplate, PlanItem, TreatmentCycle, choices as core_choices
 from health_data.models import MetricType
-from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
+from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert, PatientAlertSource
 from patient_alerts.services.behavior_alerts import BehaviorAlertService
 from users.models import PatientProfile
 
@@ -44,6 +44,15 @@ class BehaviorAlertServiceTests(TestCase):
         self.assertEqual(alert.event_title, "用药未完成")
         self.assertEqual(alert.event_content, "连续1天未完成用药任务")
         self.assertEqual(timezone.localdate(alert.event_time), as_of_date)
+
+        source = PatientAlertSource.objects.get(alert=alert)
+        self.assertEqual(source.patient_id, self.patient.id)
+        self.assertEqual(source.source_type, "behavior_medication")
+        self.assertEqual(source.source_key, f"behavior_medication:{self.patient.id}:{as_of_date}")
+        self.assertEqual(source.source_label, "用药未完成")
+        self.assertEqual(source.value_display, "连续1天未完成用药任务")
+        self.assertEqual(source.event_level, AlertLevel.MILD)
+        self.assertEqual(source.source_payload["missed_days"], 1)
 
     def test_medication_consecutive_missed_creates_alert(self):
         as_of_date = self.today - timedelta(days=1)

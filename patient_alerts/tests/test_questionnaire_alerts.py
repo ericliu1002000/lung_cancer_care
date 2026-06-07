@@ -4,7 +4,7 @@ from django.test import TestCase
 
 from core.models import Questionnaire, QuestionnaireCode
 from health_data.models import QuestionnaireSubmission
-from patient_alerts.models import AlertEventType, AlertLevel
+from patient_alerts.models import AlertEventType, AlertLevel, PatientAlertSource
 from patient_alerts.services.questionnaire_alerts import QuestionnaireAlertService
 from users.models import PatientProfile
 
@@ -76,6 +76,29 @@ class QuestionnaireAlertServiceTests(TestCase):
                 self.assertIsNotNone(alert)
                 self.assertEqual(alert.event_type, AlertEventType.QUESTIONNAIRE)
                 self.assertEqual(alert.event_level, expected_level)
+
+    def test_questionnaire_alert_records_submission_source(self):
+        questionnaire = self._get_questionnaire(
+            QuestionnaireCode.Q_COUGH,
+            "咳嗽与痰色评估",
+        )
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("9.00"),
+        )
+
+        alert = QuestionnaireAlertService.process_submission(submission)
+
+        source = PatientAlertSource.objects.get(alert=alert)
+        self.assertEqual(source.patient_id, self.patient.id)
+        self.assertEqual(source.source_type, "questionnaire")
+        self.assertEqual(source.source_id, submission.id)
+        self.assertEqual(source.source_key, f"questionnaire:{submission.id}")
+        self.assertEqual(source.source_label, "咳嗽与痰色评估")
+        self.assertEqual(source.value_display, "总分 9，分级 4级")
+        self.assertEqual(source.event_level, AlertLevel.SEVERE)
+        self.assertEqual(source.source_payload["questionnaire_code"], QuestionnaireCode.Q_COUGH)
 
     def test_no_alert_when_oral_mucosa_score_is_zero(self):
         questionnaire = self._get_questionnaire(

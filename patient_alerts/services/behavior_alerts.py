@@ -9,6 +9,7 @@ from django.utils import timezone
 from core.models import DailyTask, MonitoringTemplate, choices as core_choices
 from health_data.models import MetricType
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
+from patient_alerts.services.alert_sources import PatientAlertSourceService
 from patient_alerts.services.patient_alert import PatientAlertService
 from users.models import PatientProfile
 
@@ -332,7 +333,7 @@ class BehaviorAlertService:
             qs = qs.filter(source_id=source_id)
         existing = qs.order_by("-event_time", "-id").first()
         if not existing:
-            return PatientAlertService.create_alert(
+            alert = PatientAlertService.create_alert(
                 patient_id=patient_id,
                 event_type=AlertEventType.BEHAVIOR,
                 event_level=level,
@@ -343,6 +344,18 @@ class BehaviorAlertService:
                 source_id=source_id,
                 source_payload=payload,
             )
+            PatientAlertSourceService.record_behavior_source(
+                alert=alert,
+                patient_id=patient_id,
+                source_type=source_type,
+                source_id=source_id,
+                title=title,
+                content=content,
+                event_level=level,
+                occurred_at=event_time,
+                source_payload=payload,
+            )
+            return alert
 
         updated = False
         new_level = max(existing.event_level, level)
@@ -365,6 +378,28 @@ class BehaviorAlertService:
                     "source_payload",
                 ]
             )
+            PatientAlertSourceService.record_behavior_source(
+                alert=existing,
+                patient_id=patient_id,
+                source_type=source_type,
+                source_id=source_id,
+                title=title,
+                content=content,
+                event_level=level,
+                occurred_at=event_time,
+                source_payload=payload,
+            )
             return existing
 
+        PatientAlertSourceService.record_behavior_source(
+            alert=existing,
+            patient_id=patient_id,
+            source_type=source_type,
+            source_id=source_id,
+            title=title,
+            content=content,
+            event_level=level,
+            occurred_at=event_time,
+            source_payload=payload,
+        )
         return existing

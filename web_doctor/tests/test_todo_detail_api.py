@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
+from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert, PatientAlertSource
 from patient_alerts.services.patient_alert import PatientAlertService
 from users import choices
 from users.models import (
@@ -156,6 +156,50 @@ class TodoDetailApiTests(TestCase):
         payload = response.json()
         self.assertTrue(payload["success"])
         self.assertEqual(payload["data"]["history"], [])
+        self.assertEqual(payload["data"]["source_records"], [])
+
+    def test_detail_returns_source_records_in_latest_first_order(self):
+        older_time = timezone.now() - timedelta(days=1)
+        newer_time = timezone.now()
+        PatientAlertSource.objects.create(
+            alert=self.alert,
+            patient=self.patient,
+            source_type="metric",
+            source_id=101,
+            source_key="metric:101",
+            source_label="血氧",
+            value_display="94%",
+            baseline_display="98%",
+            event_level=AlertLevel.MILD,
+            occurred_at=older_time,
+            source_payload={"metric_type": "M_SPO2"},
+        )
+        PatientAlertSource.objects.create(
+            alert=self.alert,
+            patient=self.patient,
+            source_type="metric",
+            source_id=102,
+            source_key="metric:102",
+            source_label="血氧",
+            value_display="89%",
+            baseline_display="98%",
+            event_level=AlertLevel.SEVERE,
+            occurred_at=newer_time,
+            source_payload={"metric_type": "M_SPO2"},
+        )
+
+        self.client.force_login(self.doctor_user)
+        response = self.client.get(self.detail_url, {"id": self.alert.id})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        source_records = payload["data"]["source_records"]
+        self.assertEqual(len(source_records), 2)
+        self.assertEqual(source_records[0]["source_label"], "血氧")
+        self.assertEqual(source_records[0]["value_display"], "89%")
+        self.assertEqual(source_records[0]["baseline_display"], "98%")
+        self.assertEqual(source_records[0]["event_level_display"], "3级")
+        self.assertEqual(source_records[1]["value_display"], "94%")
 
     def test_detail_fallbacks_when_history_empty_but_legacy_fields_exist(self):
         handled_at = timezone.now()
@@ -186,4 +230,3 @@ class TodoDetailApiTests(TestCase):
         self.assertEqual(history[0]["status_display"], "升级主任")
         self.assertEqual(history[0]["handle_content"], "旧数据仅写入了主字段")
         self.assertEqual(history[0]["handler_name"], "助理甲")
-
