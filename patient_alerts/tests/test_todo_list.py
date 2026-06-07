@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from core.models import QuestionnaireCode
 from health_data.models import MetricType
-from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
+from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert, PatientAlertSource
 from patient_alerts.services.todo_list import TodoListService
 from users import choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
@@ -180,6 +180,44 @@ class TodoListServiceTests(TestCase):
         )
 
         self.assertEqual(count, 1)
+
+    def test_count_abnormal_events_by_metric_counts_source_records(self):
+        now = timezone.now()
+        alert = PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="血压异常",
+            event_content="血压异常",
+            event_time=now,
+            status=AlertStatus.PENDING,
+            source_type="metric",
+            source_payload={"metric_type": MetricType.BLOOD_PRESSURE},
+        )
+        for index, minutes in enumerate([10, 5], start=1):
+            PatientAlertSource.objects.create(
+                alert=alert,
+                patient=self.patient,
+                source_type="metric",
+                source_id=index,
+                source_key=f"metric:{index}",
+                source_label="血压",
+                value_display=f"15{index}/10{index}",
+                baseline_display="120/80",
+                event_level=AlertLevel.SEVERE,
+                occurred_at=now - timedelta(minutes=minutes),
+                source_payload={"metric_type": MetricType.BLOOD_PRESSURE},
+            )
+
+        count = TodoListService.count_abnormal_events(
+            patient=self.patient,
+            start_date=timezone.localdate() - timedelta(days=1),
+            end_date=timezone.localdate(),
+            type=MetricType.BLOOD_PRESSURE,
+        )
+
+        self.assertEqual(count, 2)
 
     def test_count_abnormal_events_by_questionnaire(self):
         now = timezone.now()

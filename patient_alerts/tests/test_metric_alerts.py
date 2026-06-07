@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from health_data.models import HealthMetric, MetricSource, MetricType
-from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
+from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert, PatientAlertSource
 from patient_alerts.services.metric_alerts import MetricAlertService
 from users import choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
@@ -192,6 +192,74 @@ class MetricAlertServiceTests(TestCase):
         )
         self.assertEqual(alerts.count(), 1)
         self.assertEqual(alerts.first().event_level, AlertLevel.SEVERE)
+
+    def test_metric_alert_records_each_abnormal_metric_source(self):
+        time_now = timezone.now()
+        metric_first = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            value_main=Decimal("150"),
+            value_sub=Decimal("100"),
+            measured_at=time_now - timedelta(hours=1),
+            source=MetricSource.MANUAL,
+        )
+        MetricAlertService.process_metric(metric_first)
+
+        metric_second = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            value_main=Decimal("160"),
+            value_sub=Decimal("105"),
+            measured_at=time_now,
+            source=MetricSource.MANUAL,
+        )
+        MetricAlertService.process_metric(metric_second)
+
+        alert = PatientAlert.objects.get(
+            patient=self.patient,
+            event_type=AlertEventType.DATA,
+            event_title="血压异常",
+        )
+        sources = PatientAlertSource.objects.filter(alert=alert).order_by("occurred_at")
+
+        self.assertEqual(sources.count(), 2)
+        self.assertEqual(sources[0].source_type, "metric")
+        self.assertEqual(sources[0].source_id, metric_first.id)
+        self.assertEqual(sources[0].source_key, f"metric:{metric_first.id}")
+        self.assertEqual(sources[0].source_label, "血压")
+        self.assertEqual(sources[0].value_display, "150/100")
+        self.assertEqual(sources[0].baseline_display, "120/80")
+        self.assertEqual(sources[0].event_level, AlertLevel.SEVERE)
+        self.assertEqual(sources[1].source_id, metric_second.id)
+        self.assertEqual(sources[1].value_display, "160/105")
+
+    def test_metric_alert_after_completion_starts_new_source_group(self):
+        time_now = timezone.now()
+        metric_first = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            value_main=Decimal("150"),
+            value_sub=Decimal("100"),
+            measured_at=time_now - timedelta(hours=1),
+            source=MetricSource.MANUAL,
+        )
+        alert_first = MetricAlertService.process_metric(metric_first)
+        alert_first.status = AlertStatus.COMPLETED
+        alert_first.save(update_fields=["status"])
+
+        metric_second = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            value_main=Decimal("160"),
+            value_sub=Decimal("105"),
+            measured_at=time_now,
+            source=MetricSource.MANUAL,
+        )
+        alert_second = MetricAlertService.process_metric(metric_second)
+
+        self.assertNotEqual(alert_first.id, alert_second.id)
+        self.assertEqual(PatientAlertSource.objects.filter(alert=alert_first).count(), 1)
+        self.assertEqual(PatientAlertSource.objects.filter(alert=alert_second).count(), 1)
 
     def test_spo2_confirmed_drop_promotes_level(self):
         time_now = timezone.now()

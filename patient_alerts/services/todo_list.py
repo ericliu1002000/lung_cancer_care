@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import QuestionnaireCode
 from health_data.models import MetricType
-from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
+from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert, PatientAlertSource
 from users.models import CustomUser, PatientProfile
 
 
@@ -176,18 +176,36 @@ class TodoListService:
         if not start_dt or not end_dt:
             raise ValidationError("起止日期不能为空。")
 
+        source_qs = PatientAlertSource.objects.filter(
+            patient_id=patient.id,
+            occurred_at__gte=start_dt,
+            occurred_at__lte=end_dt,
+        )
+
         qs = PatientAlert.objects.filter(
             patient_id=patient.id,
             is_active=True,
         )
 
         if resolved_type in _MONITORING_TASK_TYPES:
+            source_count = source_qs.filter(
+                source_type="metric",
+                source_payload__metric_type=resolved_type,
+            ).count()
+            if source_count:
+                return source_count
             qs = qs.filter(
                 event_type=AlertEventType.DATA,
                 source_type="metric",
                 source_payload__metric_type=resolved_type,
             )
         elif resolved_type in QuestionnaireCode.values:
+            source_count = source_qs.filter(
+                source_type="questionnaire",
+                source_payload__questionnaire_code=resolved_type,
+            ).count()
+            if source_count:
+                return source_count
             qs = qs.filter(
                 event_type=AlertEventType.QUESTIONNAIRE,
                 source_type="questionnaire",

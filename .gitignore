@@ -95,3 +95,5 @@ package-lock.json
 .editorconfig
 /.codegraph
 /.cursor
+deploy.sh
+ecosystem.config.js

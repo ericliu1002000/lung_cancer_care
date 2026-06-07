@@ -15,6 +15,7 @@ from users import choices
 from web_doctor.views.workspace import _get_workspace_identities, _get_workspace_patients, get_user_display_name
 
 from patient_alerts.services.todo_list import TodoListService
+from patient_alerts.services.alert_sources import PatientAlertSourceService
 from patient_alerts.services.patient_alert import PatientAlertService
 from patient_alerts.models import AlertStatus
 from django.http import JsonResponse
@@ -130,6 +131,7 @@ def doctor_todo_detail(request: HttpRequest) -> JsonResponse:
             "data": {
                 "id": alert.id,
                 "history": _build_alert_history_payload(alert),
+                "source_records": PatientAlertSourceService.get_serialized_sources(alert),
             },
         }
     )

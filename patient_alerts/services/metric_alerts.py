@@ -14,6 +14,7 @@ from health_data.utils import (
     evaluate_temperature_level,
 )
 from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
+from patient_alerts.services.alert_sources import PatientAlertSourceService
 from patient_alerts.services.patient_alert import PatientAlertService
 from users.models import PatientProfile
 
@@ -380,7 +381,7 @@ class MetricAlertService:
             "value_sub": str(metric.value_sub) if metric.value_sub is not None else None,
             "measured_at": metric.measured_at.isoformat(),
         }
-        return PatientAlertService.create_or_update_alert(
+        alert = PatientAlertService.create_or_update_alert(
             patient_id=metric.patient_id,
             event_type=AlertEventType.DATA,
             event_level=level,
@@ -395,3 +396,10 @@ class MetricAlertService:
                 "source_type": "metric",
             },
         )
+        PatientAlertSourceService.record_metric_source(
+            alert=alert,
+            metric=metric,
+            event_level=level,
+            source_payload=payload,
+        )
+        return alert

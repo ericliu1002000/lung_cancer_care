@@ -185,6 +185,9 @@ class TodoPatientBindingTests(TestCase):
         self.assertContains(response, 'name="start_date"', html=False)
         self.assertContains(response, 'name="end_date"', html=False)
         self.assertContains(response, 'id="todo-table-container"', html=False)
+        self.assertContains(response, "历史处理记录")
+        self.assertContains(response, "异常数据记录")
+        self.assertContains(response, "本次事件处理情况")
         self.assertContains(response, "搜索")
         self.assertContains(response, "重置")
 

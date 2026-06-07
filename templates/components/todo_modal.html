@@ -1,6 +1,6 @@
 <!-- 弹框HTML结构 -->
 <div id="todo-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 transition-opacity duration-200">
-    <div id="todo-modal-panel" class="bg-white rounded-lg p-6 w-[650px] shadow-xl transform scale-95 transition-transform duration-200">
+    <div id="todo-modal-panel" class="bg-white rounded-lg p-6 w-[92vw] max-w-[960px] max-h-[92vh] overflow-y-auto shadow-xl transform scale-95 transition-transform duration-200">
         <h3 class="text-lg font-medium mb-4 text-slate-800" id="modal-title">处理患者待办</h3>
         
         <div class="mb-4">
@@ -11,16 +11,28 @@
             <div id="event-content" class="p-2 bg-slate-50 rounded mt-1 text-sm text-slate-600 border border-slate-100"></div>
         </div>
 
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-1">处理结果列表</label>
-            <div id="todo-history-loading" class="hidden text-sm text-slate-400 py-2">加载处理中...</div>
-            <div id="todo-history-empty" class="hidden text-sm text-slate-400 py-2">暂无处理记录</div>
-            <div id="todo-history-list" class="space-y-2"></div>
+        <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">历史处理记录</label>
+                <div class="border border-slate-200 rounded bg-white p-2 max-h-56 overflow-y-auto">
+                    <div id="todo-history-loading" class="hidden text-sm text-slate-400 py-2">加载处理中...</div>
+                    <div id="todo-history-empty" class="hidden text-sm text-slate-400 py-2">暂无处理记录</div>
+                    <div id="todo-history-list" class="space-y-2"></div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 mb-1">异常数据记录</label>
+                <div class="border border-slate-200 rounded bg-white p-2 max-h-56 overflow-y-auto">
+                    <div id="todo-source-loading" class="hidden text-sm text-slate-400 py-2">加载处理中...</div>
+                    <div id="todo-source-empty" class="hidden text-sm text-slate-400 py-2">暂无异常数据</div>
+                    <div id="todo-source-list" class="space-y-2"></div>
+                </div>
+            </div>
         </div>
         
         <div class="mb-4">
-            <label for="event-handle" class="block text-sm font-medium text-slate-700 mb-1">事件处理情况 <span class="text-rose-500" id="handle-required-mark">*</span></label>
-            <textarea id="event-handle" class="w-full p-2 border border-slate-300 rounded focus:ring-rose-500 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-500" rows="3" required placeholder="请填写处理详情..."></textarea>
+            <label for="event-handle" class="block text-sm font-medium text-slate-700 mb-1">本次事件处理情况 <span class="text-rose-500" id="handle-required-mark">*</span></label>
+            <textarea id="event-handle" class="w-full p-2 border border-slate-300 rounded focus:ring-rose-500 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-500" rows="3" required placeholder="请填写本次处理详情..."></textarea>
         </div>
         
         <div class="mb-6">
@@ -76,9 +88,26 @@
         loadingEl.classList.toggle('hidden', !isLoading);
     }
 
+    function setSourceLoading(isLoading) {
+        const loadingEl = document.getElementById('todo-source-loading');
+        if (!loadingEl) return;
+        loadingEl.classList.toggle('hidden', !isLoading);
+    }
+
     function clearHistoryView() {
         const listEl = document.getElementById('todo-history-list');
         const emptyEl = document.getElementById('todo-history-empty');
+        if (listEl) {
+            listEl.innerHTML = '';
+        }
+        if (emptyEl) {
+            emptyEl.classList.add('hidden');
+        }
+    }
+
+    function clearSourceView() {
+        const listEl = document.getElementById('todo-source-list');
+        const emptyEl = document.getElementById('todo-source-empty');
         if (listEl) {
             listEl.innerHTML = '';
         }
@@ -126,6 +155,41 @@
         listEl.innerHTML = html;
     }
 
+    function renderSourceRecords(records) {
+        const listEl = document.getElementById('todo-source-list');
+        const emptyEl = document.getElementById('todo-source-empty');
+        if (!listEl || !emptyEl) return;
+
+        listEl.innerHTML = '';
+        if (!Array.isArray(records) || records.length === 0) {
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        emptyEl.classList.add('hidden');
+        const html = records.map(function(record) {
+            const sourceLabel = record && record.source_label ? String(record.source_label) : '异常数据';
+            const valueDisplay = record && record.value_display ? String(record.value_display) : '-';
+            const baselineDisplay = record && record.baseline_display ? String(record.baseline_display) : '';
+            const occurredAt = record && record.occurred_at ? String(record.occurred_at) : '-';
+            const levelDisplay = record && record.event_level_display ? String(record.event_level_display) : '';
+
+            return ''
+                + '<div class="border border-slate-200 rounded p-3 bg-slate-50">'
+                +   '<div class="flex items-start justify-between gap-2">'
+                +       '<div class="min-w-0">'
+                +           '<div class="text-sm font-medium text-slate-800 break-words">' + escapeHtml(sourceLabel) + ' ' + escapeHtml(valueDisplay) + '</div>'
+                +           (baselineDisplay ? '<div class="mt-1 text-xs text-slate-500">基线 ' + escapeHtml(baselineDisplay) + '</div>' : '')
+                +       '</div>'
+                +       '<span class="text-xs text-slate-400 shrink-0">' + escapeHtml(occurredAt) + '</span>'
+                +   '</div>'
+                +   (levelDisplay ? '<div class="mt-2"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">' + escapeHtml(levelDisplay) + '</span></div>' : '')
+                + '</div>';
+        }).join('');
+
+        listEl.innerHTML = html;
+    }
+
     function buildFallbackHistory(itemData) {
         if (!itemData) {
             return [];
@@ -151,12 +215,16 @@
 
     function loadTodoHistory(itemData) {
         clearHistoryView();
+        clearSourceView();
         setHistoryLoading(true);
+        setSourceLoading(true);
 
         const todoId = itemData && itemData.id ? itemData.id : '';
         if (!todoId) {
             renderHistoryRecords(buildFallbackHistory(itemData));
+            renderSourceRecords([]);
             setHistoryLoading(false);
+            setSourceLoading(false);
             return Promise.resolve();
         }
 
@@ -182,13 +250,16 @@
             }
             const payload = result.data.data || {};
             renderHistoryRecords(Array.isArray(payload.history) ? payload.history : []);
+            renderSourceRecords(Array.isArray(payload.source_records) ? payload.source_records : []);
         })
         .catch(function(error) {
             console.error('加载处理记录失败:', error);
             renderHistoryRecords(buildFallbackHistory(itemData));
+            renderSourceRecords([]);
         })
         .finally(function() {
             setHistoryLoading(false);
+            setSourceLoading(false);
         });
     }
 
@@ -240,7 +311,7 @@
                 const status = $('#event-status').val();
                 
                 if (!handleContent) {
-                    alert('请填写事件处理情况');
+                    alert('请填写本次事件处理情况');
                     return;
                 }
                 

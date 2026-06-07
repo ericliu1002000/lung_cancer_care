@@ -145,3 +145,93 @@ class PatientAlert(models.Model):
 
     def __str__(self) -> str:
         return f"{self.patient_id} - {self.event_title}"
+
+
+class PatientAlertSource(models.Model):
+    alert = models.ForeignKey(
+        PatientAlert,
+        on_delete=models.CASCADE,
+        related_name="sources",
+        verbose_name="Patient alert",
+        help_text="Aggregated alert this source record belongs to.",
+    )
+    patient = models.ForeignKey(
+        "users.PatientProfile",
+        on_delete=models.CASCADE,
+        related_name="patient_alert_sources",
+        verbose_name="Patient",
+        help_text="Target patient profile for this source record.",
+    )
+    source_type = models.CharField(
+        "Source type",
+        max_length=80,
+        help_text="Origin type, e.g. metric, questionnaire, or behavior_medication.",
+    )
+    source_id = models.BigIntegerField(
+        "Source ID",
+        null=True,
+        blank=True,
+        help_text="Origin record ID when one exists.",
+    )
+    source_key = models.CharField(
+        "Source key",
+        max_length=160,
+        unique=True,
+        help_text="Stable idempotency key for this alert source.",
+    )
+    source_label = models.CharField(
+        "Source label",
+        max_length=120,
+        help_text="Human-readable source name shown in alert detail.",
+    )
+    value_display = models.CharField(
+        "Value display",
+        max_length=200,
+        blank=True,
+        help_text="Snapshot of the abnormal value or fact.",
+    )
+    baseline_display = models.CharField(
+        "Baseline display",
+        max_length=200,
+        blank=True,
+        help_text="Snapshot of the baseline when available.",
+    )
+    event_level = models.PositiveSmallIntegerField(
+        "Event level",
+        choices=AlertLevel.choices,
+        help_text="Severity level of this source record.",
+    )
+    occurred_at = models.DateTimeField(
+        "Occurred at",
+        help_text="When this source abnormality happened.",
+    )
+    source_payload = models.JSONField(
+        "Source payload",
+        default=dict,
+        blank=True,
+        help_text="Full source snapshot for detail display and statistics.",
+    )
+    created_at = models.DateTimeField(
+        "Created at",
+        auto_now_add=True,
+        help_text="Record creation time.",
+    )
+    updated_at = models.DateTimeField(
+        "Updated at",
+        auto_now=True,
+        help_text="Record update time.",
+    )
+
+    class Meta:
+        db_table = "patient_alert_sources"
+        verbose_name = "Patient alert source"
+        verbose_name_plural = "Patient alert sources"
+        ordering = ("-occurred_at", "-id")
+        indexes = [
+            models.Index(fields=["alert", "occurred_at"]),
+            models.Index(fields=["patient", "source_type", "occurred_at"]),
+            models.Index(fields=["source_type", "source_id"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.alert_id} - {self.source_label}"
