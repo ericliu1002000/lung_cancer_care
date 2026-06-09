@@ -4,12 +4,46 @@ from django.test import tag
 from django.utils import timezone
 
 from chat.models import Conversation, ConversationType, Message, MessageSenderRole
-from core.models import TreatmentCycle, choices
+from core.models import (
+    CheckupFieldMapping,
+    CheckupLibrary,
+    StandardField,
+    StandardFieldValueType,
+    TreatmentCycle,
+    choices,
+)
 from tests.browser.web_doctor.base import DoctorBrowserTestCase, expect
 
 
 @tag("browser")
 class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
+    def _create_followup_review_mapping(self):
+        checkup = CheckupLibrary.objects.create(
+            name="浏览器复查血常规",
+            code="BROWSER_FOLLOWUP_REVIEW",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        field = StandardField.objects.create(
+            local_code="BROWSER_REVIEW_WBC",
+            chinese_name="浏览器白细胞",
+            english_abbr="WBC",
+            value_type=StandardFieldValueType.DECIMAL,
+            is_active=True,
+        )
+        return CheckupFieldMapping.objects.create(
+            checkup_item=checkup,
+            standard_field=field,
+            is_active=True,
+        )
+
+    def _open_followup_review_config_modal(self):
+        self.page.locator("#followup-review-section").get_by_role("button", name="配置").click()
+        modal = self.page.locator('[data-followup-review-modal-layer]:visible')
+        expect(modal).to_have_count(1, timeout=10000)
+        expect(modal.first).to_contain_text("配置核心关注指标")
+        return modal.first
+
     def test_workspace_search_and_patient_selection_load_home(self):
         self.open_doctor_workspace()
 
@@ -131,6 +165,27 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(form.get_by_role("button", name="搜索")).to_be_visible(timeout=10000)
         expect(cycle_select).to_have_value(str(selected_cycle.id))
         expect(self.page.locator("#patient-content")).to_contain_text("浏览器中间疗程", timeout=10000)
+
+    def test_followup_review_config_modal_reopens_after_cancel_and_save(self):
+        self._create_followup_review_mapping()
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-indicators").click()
+        expect(self.page.locator("#followup-review-section")).to_be_visible(timeout=10000)
+
+        modal = self._open_followup_review_config_modal()
+        modal.get_by_text("浏览器白细胞").first.click()
+        modal.get_by_role("button", name="取消").click()
+        expect(self.page.locator('[data-followup-review-modal-layer]:visible')).to_have_count(0, timeout=10000)
+
+        modal = self._open_followup_review_config_modal()
+        modal.get_by_text("浏览器白细胞").first.click()
+        with self.page.expect_response(lambda response: "/indicators/preferences/" in response.url):
+            modal.get_by_role("button", name="确定").click()
+        expect(self.page.locator("#followup-review-section")).to_be_visible(timeout=10000)
+        expect(self.page.locator('[data-followup-review-modal-layer]:visible')).to_have_count(0, timeout=10000)
+
+        self._open_followup_review_config_modal()
 
     def test_settings_profile_edit_modal_opens_and_closes(self):
         self.open_patient_workspace()
