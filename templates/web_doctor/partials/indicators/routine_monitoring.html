@@ -122,7 +122,7 @@
                 ></path>
               </svg>
             <div class="font-medium text-black ">服药记录 ({{ medication_stats.count }}次) 
-                <span class="font-medium text-black ml-3">依从性：{{ medication_stats.compliance }}%</span>
+                <span class="font-medium text-black ml-3">依从性：{{ medication_stats.compliance_display|default:"-" }}</span>
             </div>
         </div>
         
