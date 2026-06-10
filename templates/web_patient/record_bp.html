@@ -43,6 +43,7 @@
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.GET.next }}">
       <input type="hidden" name="selected_date" value="{{ selected_date }}">
+      <input type="hidden" name="record_time_touched" id="record-time-touched" value="0">
 
       <div class="bg-white rounded-xl shadow-sm p-5">
         <!-- 1. Measurement Time -->
@@ -228,6 +229,19 @@
     errorEl.classList.add("hidden"); // Clear error on input
   }
 
+  function syncSavedRecordTime(data) {
+    // 成功提交后以后端实际保存时间为准，避免展示时间与入库时间不一致。
+    if (!data || !data.saved_record_time) return;
+    const datePicker = document.getElementById("date-picker");
+    const timeDisplay = document.getElementById("time-display");
+    if (datePicker) {
+      datePicker.value = data.saved_record_time;
+    }
+    if (timeDisplay && data.saved_record_time_display) {
+      timeDisplay.innerText = data.saved_record_time_display;
+    }
+  }
+
   function submitBP() {
     const sysInput = document.getElementById("systolic-input");
     const diaInput = document.getElementById("diastolic-input");
@@ -292,6 +306,7 @@
     })
     .then(data => {
         if (data.status === 'success') {
+            syncSavedRecordTime(data);
             const selectedDate = formData.get("selected_date") || "";
             const dateParam = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : "";
             const syncUrl = "{% url 'web_patient:query_last_metric' %}" + dateParam;
@@ -330,6 +345,11 @@
   document
     .getElementById("date-picker")
     .addEventListener("change", function (e) {
+      // 用户主动改过时间后，后端需要按用户选择值保存。
+      const touchedInput = document.getElementById("record-time-touched");
+      if (touchedInput) {
+        touchedInput.value = "1";
+      }
       if (this.value) {
         const date = new Date(this.value);
         const formatted =

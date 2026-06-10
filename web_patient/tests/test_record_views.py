@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase, Client
 from django.urls import reverse
@@ -30,6 +31,7 @@ class RecordViewTests(TestCase):
         response = self.client.post(url, {
             'temperature': '36.5',
             'record_time': record_time_str,
+            'record_time_touched': '1',
             'patient_id': self.patient.id
         })
         
@@ -64,6 +66,7 @@ class RecordViewTests(TestCase):
             'szy': '80',
             'heart': '75',
             'record_time': record_time_str,
+            'record_time_touched': '1',
             'patient_id': self.patient.id
         })
         
@@ -93,6 +96,7 @@ class RecordViewTests(TestCase):
         response = self.client.post(url, {
             'spo2': '98',
             'record_time': record_time_str,
+            'record_time_touched': '1',
             'patient_id': self.patient.id
         })
         
@@ -105,6 +109,92 @@ class RecordViewTests(TestCase):
             metric_type=MetricType.BLOOD_OXYGEN
         ).last()
         self.assertTrue(timezone.is_aware(metric.measured_at))
+
+    @patch("web_patient.views.record.timezone.now")
+    def test_record_bp_uses_submit_time_when_time_not_touched(self, mock_now):
+        """未手动切换时间时，应以提交时的服务端当前时间为准"""
+        mock_now.return_value = timezone.make_aware(
+            datetime.datetime(2026, 1, 11, 10, 5, 30)
+        )
+        response = self.client.post(
+            reverse("web_patient:record_bp"),
+            {
+                "ssy": "120",
+                "szy": "80",
+                "heart": "75",
+                "record_time": "2026-01-11 10:01",
+                "record_time_touched": "0",
+                "patient_id": self.patient.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        bp_metric = HealthMetric.objects.filter(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+        ).last()
+        hr_metric = HealthMetric.objects.filter(
+            patient=self.patient,
+            metric_type=MetricType.HEART_RATE,
+        ).last()
+        self.assertEqual(
+            timezone.localtime(bp_metric.measured_at).strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-01-11 10:05:30",
+        )
+        self.assertEqual(bp_metric.measured_at, hr_metric.measured_at)
+
+    @patch("web_patient.views.record.timezone.now")
+    def test_record_bp_keeps_user_selected_time_when_time_touched(self, mock_now):
+        """手动切换时间后，应保留用户选择时间"""
+        mock_now.return_value = timezone.make_aware(
+            datetime.datetime(2026, 1, 11, 10, 5, 30)
+        )
+        response = self.client.post(
+            reverse("web_patient:record_bp"),
+            {
+                "ssy": "120",
+                "szy": "80",
+                "heart": "75",
+                "record_time": "2026-01-11 09:41",
+                "record_time_touched": "1",
+                "patient_id": self.patient.id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        bp_metric = HealthMetric.objects.filter(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+        ).last()
+        self.assertEqual(
+            timezone.localtime(bp_metric.measured_at).strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-01-11 09:41:00",
+        )
+
+    @patch("web_patient.views.record.timezone.now")
+    def test_record_bp_ajax_returns_saved_record_time(self, mock_now):
+        """AJAX 提交成功后，应返回后端实际保存时间供前端同步展示"""
+        mock_now.return_value = timezone.make_aware(
+            datetime.datetime(2026, 1, 11, 10, 5, 30)
+        )
+        response = self.client.post(
+            reverse("web_patient:record_bp"),
+            {
+                "ssy": "120",
+                "szy": "80",
+                "heart": "75",
+                "record_time": "2026-01-11 10:01",
+                "record_time_touched": "0",
+                "patient_id": self.patient.id,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["saved_record_time"], "2026-01-11T10:05")
+        self.assertEqual(payload["saved_record_time_display"], "2026/01/11 10:05")
 
     def test_health_record_detail_month_boundary_excludes_next_month_midnight(self):
         tz = timezone.get_current_timezone()
