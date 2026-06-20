@@ -192,7 +192,7 @@ class TaskSummaryServiceTest(TestCase):
         questionnaire_summary = summary[0]
         self.assertEqual(questionnaire_summary["questionnaire_ids"], [])
 
-    def test_daily_plan_summary_returns_empty_when_date_outside_any_cycle(self):
+    def test_daily_plan_summary_returns_empty_when_date_outside_any_cycle_without_recent_backlog(self):
         outside_date = date(2025, 2, 1)
         self.cycle.end_date = date(2025, 1, 10)
         self.cycle.save(update_fields=["end_date"])
@@ -205,6 +205,56 @@ class TaskSummaryServiceTest(TestCase):
         )
         summary = get_daily_plan_summary(self.patient, outside_date)
         self.assertEqual(summary, [])
+
+    def test_default_date_keeps_recent_checkup_when_today_outside_cycle(self):
+        self.cycle.end_date = date(2025, 1, 10)
+        self.cycle.save(update_fields=["end_date"])
+        today = date(2025, 1, 12)
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date(2025, 1, 10),
+            task_type=choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=choices.TaskStatus.PENDING,
+        )
+
+        with patch("core.service.tasks.timezone.localdate", return_value=today):
+            summary = get_daily_plan_summary(self.patient)
+
+        checkup_summary = next(
+            (s for s in summary if s["task_type"] == int(choices.PlanItemCategory.CHECKUP)),
+            None,
+        )
+        self.assertIsNotNone(checkup_summary)
+        self.assertEqual(checkup_summary["status"], int(choices.TaskStatus.PENDING))
+
+    def test_default_date_keeps_recent_questionnaire_when_today_outside_cycle(self):
+        self.cycle.end_date = date(2025, 1, 10)
+        self.cycle.save(update_fields=["end_date"])
+        today = date(2025, 1, 12)
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date(2025, 1, 10),
+            task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+            plan_item=self.questionnaire_plan,
+            title="问卷提醒",
+            status=choices.TaskStatus.PENDING,
+        )
+
+        with patch("core.service.tasks.timezone.localdate", return_value=today):
+            summary = get_daily_plan_summary(self.patient)
+
+        questionnaire_summary = next(
+            (
+                s
+                for s in summary
+                if s["task_type"] == int(choices.PlanItemCategory.QUESTIONNAIRE)
+            ),
+            None,
+        )
+        self.assertIsNotNone(questionnaire_summary)
+        self.assertEqual(questionnaire_summary["status"], int(choices.TaskStatus.PENDING))
+        self.assertEqual(questionnaire_summary["questionnaire_ids"], [self.questionnaire.id])
 
     def test_daily_plan_summary_includes_cycle_boundaries(self):
         self.cycle.end_date = date(2025, 1, 10)

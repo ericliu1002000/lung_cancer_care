@@ -3,6 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.test import TestCase
 from django.utils import timezone
@@ -36,6 +37,7 @@ class IndicatorsLogicTests(TestCase):
         self.user = User.objects.create_user(username='testpatient', password='password', wx_openid='test_openid_123')
         self.patient = PatientProfile.objects.create(user=self.user, name="Test Patient")
         self.today = timezone.localdate()
+        cache.clear()
 
     def test_default_view_active_cycle(self):
         """测试默认视图按日期返回最近30天，不再默认选疗程"""
@@ -264,6 +266,47 @@ class IndicatorsLogicTests(TestCase):
         self.assertFalse(rec['has_task'])
         self.assertEqual(rec['status'], 'none')
         self.assertFalse(rec['taken'])
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_medication_compliance_display_dash_when_not_calculable(self, _mock_query):
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=self.today.isoformat(),
+            end_date_str=self.today.isoformat(),
+            filter_type='date',
+        )
+
+        self.assertIsNone(context["medication_stats"]["compliance"])
+        self.assertEqual(context["medication_stats"]["compliance_display"], "-")
+
+        context["patient"] = self.patient
+        html = render_to_string(
+            "web_doctor/partials/indicators/routine_monitoring.html",
+            context,
+        )
+        medication_section = html.split("<!-- Charts Grid -->", 1)[0]
+        self.assertIn("依从性：-", medication_section)
+        self.assertNotIn("依从性：0%", medication_section)
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_medication_compliance_display_keeps_real_zero_percent(self, _mock_query):
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=self.today,
+            task_type=choices.PlanItemCategory.MEDICATION,
+            title="今日用药",
+            status=choices.TaskStatus.PENDING,
+        )
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=self.today.isoformat(),
+            end_date_str=self.today.isoformat(),
+            filter_type='date',
+        )
+
+        self.assertEqual(context["medication_stats"]["compliance"], 0)
+        self.assertEqual(context["medication_stats"]["compliance_display"], "0%")
 
     @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
     def test_indicators_query_end_date_inclusive(self, mock_query):

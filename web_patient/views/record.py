@@ -32,6 +32,39 @@ def _is_member(patient) -> bool:
     )
 
 
+def _resolve_submitted_record_time(
+    *,
+    record_time_raw,
+    record_time_touched_raw,
+    selected_date,
+):
+    use_user_selected_time = (
+        str(record_time_touched_raw or "").strip() == "1"
+        and bool(str(record_time_raw or "").strip())
+    )
+
+    if use_user_selected_time:
+        record_time_str = str(record_time_raw).replace("T", " ")
+        if len(record_time_str.split(":")) == 2:
+            record_time_str += ":00"
+        resolved_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+    else:
+        resolved_time = timezone.localtime(timezone.now()).replace(microsecond=0, tzinfo=None)
+
+    if selected_date:
+        resolved_time = datetime.combine(selected_date, resolved_time.time())
+
+    return timezone.make_aware(resolved_time)
+
+
+def _build_saved_record_time_payload(record_time):
+    local_record_time = timezone.localtime(record_time)
+    return {
+        "saved_record_time": local_record_time.strftime("%Y-%m-%dT%H:%M"),
+        "saved_record_time_display": local_record_time.strftime("%Y/%m/%d %H:%M"),
+    }
+
+
 QUESTIONNAIRE_RECORD_TYPE_MAP = {
     "physical": QuestionnaireCode.Q_PHYSICAL,
     "breath": QuestionnaireCode.Q_BREATH,
@@ -247,27 +280,15 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         weight_val = request.POST.get("temperature")
         record_time = request.POST.get("record_time")
+        record_time_touched = request.POST.get("record_time_touched")
 
         if weight_val and patient_id:
             try:
-                if not record_time and selected_date:
-                    now_local = timezone.localtime(timezone.now())
-                    record_time = datetime.combine(
-                        selected_date,
-                        now_local.time().replace(second=0, microsecond=0),
-                    ).strftime("%Y-%m-%d %H:%M:%S")
-
-                record_time_str = (record_time or "").replace("T", " ")
-                if len(record_time_str.split(":")) == 2:
-                    record_time_str += ":00"
-                record_time_naive = datetime.strptime(
-                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                record_time = _resolve_submitted_record_time(
+                    record_time_raw=record_time,
+                    record_time_touched_raw=record_time_touched,
+                    selected_date=selected_date,
                 )
-                if selected_date and record_time_naive.date() != selected_date:
-                    record_time_naive = datetime.combine(
-                        selected_date, record_time_naive.time()
-                    )
-                record_time = timezone.make_aware(record_time_naive)
                 
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
@@ -299,6 +320,7 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                         "status": "success",
                         "redirect_url": "",
                         "refresh_flag": True,
+                        **_build_saved_record_time_payload(record_time),
                         "metric_data": {
                             "temperature": {
                                 "value": weight_val,
@@ -362,27 +384,15 @@ def record_bp(request: HttpRequest) -> HttpResponse:
         szy_val = request.POST.get("szy")
         heart_val = request.POST.get("heart")
         record_time = request.POST.get("record_time")
+        record_time_touched = request.POST.get("record_time_touched")
 
         if ssy_val and szy_val and heart_val and patient_id:
             try:
-                if not record_time and selected_date:
-                    now_local = timezone.localtime(timezone.now())
-                    record_time = datetime.combine(
-                        selected_date,
-                        now_local.time().replace(second=0, microsecond=0),
-                    ).strftime("%Y-%m-%d %H:%M:%S")
-
-                record_time_str = (record_time or "").replace("T", " ")
-                if len(record_time_str.split(":")) == 2:
-                    record_time_str += ":00"
-                record_time_naive = datetime.strptime(
-                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                record_time = _resolve_submitted_record_time(
+                    record_time_raw=record_time,
+                    record_time_touched_raw=record_time_touched,
+                    selected_date=selected_date,
                 )
-                if selected_date and record_time_naive.date() != selected_date:
-                    record_time_naive = datetime.combine(
-                        selected_date, record_time_naive.time()
-                    )
-                record_time = timezone.make_aware(record_time_naive)
 
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
@@ -419,6 +429,7 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                         "status": "success",
                         "redirect_url": "",
                         "refresh_flag": True,
+                        **_build_saved_record_time_payload(record_time),
                         "metric_data": {
                             "bp_hr": {
                                 "ssy": ssy_val,
@@ -481,28 +492,15 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         weight_val = request.POST.get("spo2")
         record_time = request.POST.get("record_time")
+        record_time_touched = request.POST.get("record_time_touched")
 
         if weight_val and patient_id:
             try:
-                # 调用 Service 保存数据
-                if not record_time and selected_date:
-                    now_local = timezone.localtime(timezone.now())
-                    record_time = datetime.combine(
-                        selected_date,
-                        now_local.time().replace(second=0, microsecond=0),
-                    ).strftime("%Y-%m-%d %H:%M:%S")
-
-                record_time_str = (record_time or "").replace("T", " ")
-                if len(record_time_str.split(":")) == 2:
-                    record_time_str += ":00"
-                record_time_naive = datetime.strptime(
-                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                record_time = _resolve_submitted_record_time(
+                    record_time_raw=record_time,
+                    record_time_touched_raw=record_time_touched,
+                    selected_date=selected_date,
                 )
-                if selected_date and record_time_naive.date() != selected_date:
-                    record_time_naive = datetime.combine(
-                        selected_date, record_time_naive.time()
-                    )
-                record_time = timezone.make_aware(record_time_naive)
 
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
@@ -534,6 +532,7 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                         "status": "success",
                         "redirect_url": "",
                         "refresh_flag": True,
+                        **_build_saved_record_time_payload(record_time),
                         "metric_data": {
                             "spo2": {
                                 "value": weight_val,
@@ -593,31 +592,15 @@ def record_weight(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         weight_val = request.POST.get("weight")
         record_time = request.POST.get("record_time")
+        record_time_touched = request.POST.get("record_time_touched")
 
         if weight_val and patient_id:
             try:
-                if not record_time and selected_date:
-                    now_local = timezone.localtime(timezone.now())
-                    record_time = datetime.combine(
-                        selected_date,
-                        now_local.time().replace(second=0, microsecond=0),
-                    ).strftime("%Y-%m-%d %H:%M:%S")
-
-                # 替换T为空格，补全秒数
-                record_time_str = (record_time or "").replace("T", " ")
-                if len(record_time_str.split(":")) == 2:
-                    record_time_str += ":00"
-
-                # 1. 先解析为无时区的datetime（naive）
-                record_time_naive = datetime.strptime(
-                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                record_time = _resolve_submitted_record_time(
+                    record_time_raw=record_time,
+                    record_time_touched_raw=record_time_touched,
+                    selected_date=selected_date,
                 )
-                if selected_date and record_time_naive.date() != selected_date:
-                    record_time_naive = datetime.combine(
-                        selected_date, record_time_naive.time()
-                    )
-                # 2. 转换为带时区的datetime（使用Django配置的TIME_ZONE，如Asia/Shanghai）
-                record_time = timezone.make_aware(record_time_naive)
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.WEIGHT,
@@ -648,6 +631,7 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                         "status": "success",
                         "redirect_url": "",
                         "refresh_flag": True,
+                        **_build_saved_record_time_payload(record_time),
                         "metric_data": {
                             "weight": {
                                 "value": weight_val,

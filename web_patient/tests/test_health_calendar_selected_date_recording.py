@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -41,6 +42,7 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
             {
                 "temperature": "36.5",
                 "record_time": "2026-01-24 19:46",
+                "record_time_touched": "1",
                 "selected_date": selected_date,
             },
         )
@@ -61,6 +63,7 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
                 "szy": "80",
                 "heart": "75",
                 "record_time": "2026-01-24 19:46",
+                "record_time_touched": "1",
                 "selected_date": selected_date,
             },
         )
@@ -75,6 +78,43 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
         self.assertIsNotNone(hr_metric)
         self.assertEqual(timezone.localtime(bp_metric.measured_at).date().isoformat(), selected_date)
         self.assertEqual(timezone.localtime(hr_metric.measured_at).date().isoformat(), selected_date)
+        self.assertEqual(
+            timezone.localtime(bp_metric.measured_at).strftime("%Y-%m-%d %H:%M"),
+            "2026-01-11 19:46",
+        )
+
+    @patch("web_patient.views.record.timezone.now")
+    def test_record_bp_selected_date_uses_submit_current_time_when_not_touched(
+        self, mock_now
+    ):
+        selected_date = "2026-01-11"
+        mock_now.return_value = timezone.make_aware(datetime(2026, 1, 24, 10, 5, 30))
+        resp = self.client.post(
+            reverse("web_patient:record_bp"),
+            {
+                "ssy": "120",
+                "szy": "80",
+                "heart": "75",
+                "record_time": "2026-01-24 10:01",
+                "record_time_touched": "0",
+                "selected_date": selected_date,
+            },
+        )
+
+        self.assertEqual(resp.status_code, 302)
+        bp_metric = HealthMetric.objects.filter(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+        ).last()
+        hr_metric = HealthMetric.objects.filter(
+            patient=self.patient,
+            metric_type=MetricType.HEART_RATE,
+        ).last()
+        self.assertEqual(
+            timezone.localtime(bp_metric.measured_at).strftime("%Y-%m-%d %H:%M:%S"),
+            "2026-01-11 10:05:30",
+        )
+        self.assertEqual(bp_metric.measured_at, hr_metric.measured_at)
 
     def test_record_spo2_post_overrides_date_to_selected_date(self):
         selected_date = "2026-01-11"
@@ -84,6 +124,7 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
             {
                 "spo2": "98",
                 "record_time": "2026-01-24 19:46",
+                "record_time_touched": "1",
                 "selected_date": selected_date,
             },
         )
@@ -102,6 +143,7 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
             {
                 "weight": "60.0",
                 "record_time": "2026-01-24 19:46",
+                "record_time_touched": "1",
                 "selected_date": selected_date,
             },
         )

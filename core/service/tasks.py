@@ -35,9 +35,40 @@ _TASK_MAX_OVERDUE_DAYS = {
     choices.PlanItemCategory.CHECKUP: 6,
     choices.PlanItemCategory.QUESTIONNAIRE: 6,
 }
+_DEFAULT_DATE_BACKLOG_TASK_TYPES = (
+    choices.PlanItemCategory.CHECKUP,
+    choices.PlanItemCategory.QUESTIONNAIRE,
+)
 
 # TODO 查询复查档案的记录数（需要支持到二级分类）。
 # TODO 根据日期来查询复查的图像。
+
+
+def _resolve_summary_task_types(
+    *,
+    is_default_date: bool,
+    in_cycle: bool,
+) -> tuple[int, ...]:
+    """
+    【功能说明】
+    - 解析计划摘要查询允许返回的任务类型集合。
+    - 默认首页查询在疗程外仅保留存在宽限期的复查/问卷任务。
+
+    【参数说明】
+    - is_default_date: bool，是否为首页默认查询。
+    - in_cycle: bool，查询日期是否位于任一疗程内。
+
+    【返回值说明】
+    - tuple[int, ...]：允许参与摘要聚合的任务类型列表。
+    """
+    if is_default_date and not in_cycle:
+        return _DEFAULT_DATE_BACKLOG_TASK_TYPES
+    return (
+        choices.PlanItemCategory.MEDICATION,
+        choices.PlanItemCategory.CHECKUP,
+        choices.PlanItemCategory.QUESTIONNAIRE,
+        choices.PlanItemCategory.MONITORING,
+    )
 
 def get_daily_plan_summary(
     patient: PatientProfile,
@@ -73,14 +104,12 @@ def get_daily_plan_summary(
         patient=patient,
         start_date__lte=task_date,
     ).filter(models.Q(end_date__isnull=True) | models.Q(end_date__gte=task_date)).exists()
-    if not in_cycle:
+    if not in_cycle and not is_default_date:
         return []
 
-    task_types = (
-        choices.PlanItemCategory.MEDICATION,
-        choices.PlanItemCategory.CHECKUP,
-        choices.PlanItemCategory.QUESTIONNAIRE,
-        choices.PlanItemCategory.MONITORING,
+    task_types = _resolve_summary_task_types(
+        is_default_date=is_default_date,
+        in_cycle=in_cycle,
     )
 
     refresh_task_statuses(as_of_date=task_date, patient_id=patient.id)
@@ -143,7 +172,7 @@ def get_daily_plan_summary(
         choices.PlanItemCategory.CHECKUP,
         choices.PlanItemCategory.QUESTIONNAIRE,
     ):
-        task_list = tasks_by_type[task_type]
+        task_list = tasks_by_type.get(task_type, [])
         if not task_list:
             continue
         task_list.sort(
@@ -180,7 +209,7 @@ def get_daily_plan_summary(
         )
 
     # 监测：逐条返回（前端需逐项展示）。
-    for task in tasks_by_type[choices.PlanItemCategory.MONITORING]:
+    for task in tasks_by_type.get(choices.PlanItemCategory.MONITORING, []):
         summary.append(
             {
                 "task_type": int(task.task_type),

@@ -34,6 +34,13 @@ _INDICATOR_PREFERENCES_VERSION = 1
 _FOLLOWUP_REVIEW_PREFERENCES_KEY = "followup_review"
 
 
+def _format_adherence_percent(rate) -> tuple[int | None, str]:
+    if rate is None:
+        return None, "-"
+    percent = int(rate * 100)
+    return percent, f"{percent}%"
+
+
 def _resolve_cycle_runtime_state(cycle: TreatmentCycle, today: date | None = None) -> str:
     if today is None:
         today = timezone.localdate()
@@ -993,7 +1000,7 @@ def build_indicators_context(
             cache.set(cache_key, adherence_results, 300)
         except Exception as e:
             logger.error(f"Failed to fetch adherence metrics for patient {patient.id}: {e}")
-            # 发生错误时，返回空列表，页面依从性将显示为 0%
+            # 发生错误时保留“不可计算”语义，页面依从性显示为 "-"
             adherence_results = []
         
     # 将结果转换为字典以便查找
@@ -1001,9 +1008,8 @@ def build_indicators_context(
     
     # 更新用药依从性
     med_res = adherence_map.get(med_type)
-    compliance = 0
-    if med_res and med_res['rate'] is not None:
-         compliance = int(med_res['rate'] * 100)
+    med_rate = med_res.get("rate") if med_res else None
+    compliance, compliance_display = _format_adherence_percent(med_rate)
     
     # 更新各图表的依从性
     for key, metric_type in chart_metric_map.items():
@@ -1305,7 +1311,8 @@ def build_indicators_context(
         "medication_data": medication_data,
         "medication_stats": {
             "count": med_count,
-            "compliance": compliance
+            "compliance": compliance,
+            "compliance_display": compliance_display,
         },
         "charts": charts,
         "cough_table": cough_table,

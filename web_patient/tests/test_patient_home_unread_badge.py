@@ -8,6 +8,8 @@ from market.models import Product, Order
 from decimal import Decimal
 from django.utils import timezone
 from datetime import timedelta
+from core.models import DailyTask, TreatmentCycle
+from core.models import choices as core_choices
 
 @override_settings(DEBUG=True, TEST_PATIENT_ID="1")
 class PatientHomeUnreadBadgeTests(TestCase):
@@ -97,3 +99,30 @@ class PatientHomeUnreadBadgeTests(TestCase):
     self.assertIn("目标：6000 步", html)
     self.assertNotIn("基础设置指标就绪", html)
     self.assertNotIn("步数基础指标", html)
+
+  @patch("web_patient.views.chat_api.get_unread_chat_count", return_value=0)
+  def test_home_shows_recent_checkup_plan_after_cycle_end(self, mock_func):
+    today = timezone.localdate()
+    TreatmentCycle.objects.create(
+      patient=self.patient,
+      name="第一疗程",
+      start_date=today - timedelta(days=7),
+      end_date=today - timedelta(days=2),
+      cycle_days=7,
+      status=core_choices.TreatmentCycleStatus.COMPLETED,
+    )
+    DailyTask.objects.create(
+      patient=self.patient,
+      task_date=today - timedelta(days=2),
+      task_type=core_choices.PlanItemCategory.CHECKUP,
+      title="复查提醒",
+      status=core_choices.TaskStatus.PENDING,
+    )
+
+    response = self.client.get(reverse("web_patient:patient_home"))
+    self.assertEqual(response.status_code, 200)
+
+    daily_plans = response.context["daily_plans"]
+    checkup_plan = next((item for item in daily_plans if item.get("type") == "checkup"), None)
+    self.assertIsNotNone(checkup_plan)
+    self.assertEqual(checkup_plan["status"], "pending")
