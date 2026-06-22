@@ -404,7 +404,13 @@
       event.preventDefault();
     }
 
-    if (UNREAD_CHAT_COUNT > 0 && URLS.chatResetUnread) {
+    const hadUnread = UNREAD_CHAT_COUNT > 0;
+    if (hadUnread) {
+      setUnreadBadge(0);
+      LAST_UNREAD_FETCH_AT = Date.now();
+    }
+
+    if (hadUnread && URLS.chatResetUnread) {
       const controller = new AbortController();
       const timeout = setTimeout(function () {
         controller.abort();

@@ -7,6 +7,7 @@ from chat.services.chat import ChatService
 from chat.models import Message, MessageContentType, MessageSenderRole
 from users.decorators import check_patient, auto_wechat_login
 from web_patient.views.chat import get_patient_chat_title
+from web_patient.services.home_cache import invalidate_patient_home_unread_cache
 from users.models import CustomUser
 from users.models import PatientProfile
 
@@ -190,6 +191,7 @@ def mark_read(request: HttpRequest):
         
         conversation = service.get_or_create_patient_conversation(patient=patient)
         service.mark_conversation_read(conversation, request.user, last_message_id)
+        invalidate_patient_home_unread_cache(patient, request.user)
         
         return JsonResponse({'status': 'success'})
     except ValidationError as e:
@@ -221,7 +223,8 @@ def reset_unread(request: HttpRequest):
     service = ChatService()
     try:
         conversation = service.get_or_create_patient_conversation(patient=patient)
-        state = service.mark_conversation_read(conversation, request.user, None)
+        service.mark_conversation_read(conversation, request.user, None)
+        invalidate_patient_home_unread_cache(patient, request.user)
         return JsonResponse({'status': 'success'})
     except ValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
