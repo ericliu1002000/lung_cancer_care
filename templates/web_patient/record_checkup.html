@@ -701,8 +701,6 @@ function submitCheckup() {
             const entrySource = getEntrySource();
             if (entrySource === 'home') {
                 writeHomePlanRefreshMarker('checkup');
-                const allCompleted = await refreshHomeCheckupStatus();
-                try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
             }
             try { localStorage.setItem('refresh_flag', 'true'); } catch(e) {}
             setTimeout(() => { returnAfterCheckup(entrySource); }, 300);
@@ -734,39 +732,6 @@ function returnAfterCheckup(entrySource) {
     } else {
         window.location.href = HOME_URL;
     }
-}
-
-async function refreshHomeCheckupStatus() {
-    const todayStr = document.getElementById('checkup-date')?.textContent?.trim();
-    if (!todayStr) return false;
-    const dayMs = 24 * 60 * 60 * 1000;
-    const base = new Date(todayStr.replace(/-/g, '/')).getTime();
-    const dates = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(base - (6 - i) * dayMs);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const da = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${da}`;
-    });
-    let hasCheckup = false;
-    const results = await Promise.all(dates.map(async (d) => {
-        try {
-            const resp = await fetch("{% url 'web_patient:query_last_metric' %}" + `?date=${encodeURIComponent(d)}`, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            const data = await resp.json();
-            if (!data?.plans?.checkup) {
-                return null;
-            }
-            hasCheckup = true;
-            const status = data?.plans?.checkup?.status || 'pending';
-            return status === 'completed';
-        } catch { return false; }
-    }));
-    const allCompleted = hasCheckup && results.filter(r => r !== null).every(Boolean);
-    // 通知首页模块
-    try {
-        window.parent?.postMessage?.({ type: 'CHECKUP_COMPLETION_UPDATED', allCompleted }, '*');
-    } catch {}
-    return allCompleted;
 }
 
 function showStatus(message, type) {

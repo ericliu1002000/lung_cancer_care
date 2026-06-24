@@ -305,7 +305,7 @@
     const planMap = plans || {};
     marker.completedTypes.forEach(function (type) {
       const plan = planMap[type];
-      if (plan && plan.status === 'completed') {
+      if (plan) {
         return;
       }
 
@@ -410,19 +410,6 @@
     let followupSubmitted = false;
 
     try {
-      const checkupFlag = localStorage.getItem('checkup_all_completed');
-      if (checkupFlag === 'true') {
-        setPlanCardState('checkup', 'completed', '已完成复查任务');
-        shouldRefresh = true;
-      } else if (checkupFlag === 'false') {
-        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
-        shouldRefresh = true;
-      }
-
-      if (checkupFlag !== null) {
-        localStorage.removeItem('checkup_all_completed');
-      }
-
       const refreshFlag = localStorage.getItem('refresh_flag');
       if (refreshFlag === 'true') {
         shouldRefresh = true;
@@ -632,18 +619,6 @@
   window.addEventListener('pagehide', handleHomePageHide);
   window.addEventListener('beforeunload', handleHomeBeforeUnload);
   document.addEventListener('visibilitychange', handleHomeVisibilityChange);
-
-  window.addEventListener('message', function (event) {
-    const data = event.data || {};
-    if (data.type === 'CHECKUP_COMPLETION_UPDATED') {
-      if (data.allCompleted) {
-        setPlanCardState('checkup', 'completed', '已完成复查任务');
-      } else {
-        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
-      }
-      requestPlanRefresh('message', {});
-    }
-  });
 
   window.showMemberOnlyModal = showMemberOnlyModal;
   window.closeMemberOnlyModal = closeMemberOnlyModal;

@@ -311,7 +311,11 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
         self.assertIn("Array.isArray(marker.completedTypes)", content)
         self.assertIn("localStorage.removeItem(HOME_PLAN_REFRESH_MARKER_KEY);", content)
         self.assertIn("HOME_COMPLETED_FALLBACK_SUBTITLES[type]", content)
+        self.assertIn("if (plan) {", content)
         self.assertIn("setPlanCardState(type, 'completed', subtitle);", content)
+        self.assertNotIn("if (plan && plan.status === 'completed')", content)
+        self.assertNotIn("checkup_all_completed", content)
+        self.assertNotIn("CHECKUP_COMPLETION_UPDATED", content)
 
     def test_patient_home_task_click_marks_every_task_as_home_source(self):
         script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
@@ -356,6 +360,9 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
         self.assertIn("if (entrySource === 'home') {", content)
         self.assertIn("function writeHomePlanRefreshMarker(type)", content)
         self.assertIn("writeHomePlanRefreshMarker('checkup');", content)
+        self.assertNotIn("const allCompleted = await refreshHomeCheckupStatus();", content)
+        self.assertNotIn("async function refreshHomeCheckupStatus()", content)
+        self.assertNotIn("localStorage.setItem('checkup_all_completed'", content)
         self.assertIn(
             "window.location.replace(HOME_CHECKUP_URL);",
             content,
