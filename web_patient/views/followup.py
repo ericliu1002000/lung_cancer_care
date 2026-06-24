@@ -11,6 +11,7 @@ from core.service import tasks as task_service
 from core.models import DailyTask
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
+from web_patient.services.home_cache import invalidate_patient_home_plan_cache
 from django.core.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,11 @@ def submit_surveys(request: HttpRequest) -> JsonResponse:
                 request.session.modified = True
             except Exception:
                 pass
+            selected_date = request.GET.get("selected_date")
+            invalidate_patient_home_plan_cache(
+                request.patient.id,
+                {timezone.localdate(), selected_date} if selected_date else {timezone.localdate()},
+            )
             # 返回 metric_data 供前端刷新首页状态
             return JsonResponse({
                 "success": True, 

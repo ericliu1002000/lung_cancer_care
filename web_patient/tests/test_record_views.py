@@ -196,6 +196,43 @@ class RecordViewTests(TestCase):
         self.assertEqual(payload["saved_record_time"], "2026-01-11T10:05")
         self.assertEqual(payload["saved_record_time_display"], "2026/01/11 10:05")
 
+    @patch("web_patient.views.record.invalidate_patient_home_plan_cache")
+    def test_record_metric_posts_invalidate_home_plan_cache(self, mock_invalidate):
+        """首页今日计划相关体征录入成功后，应清理首页计划缓存。"""
+        cases = [
+            (
+                reverse("web_patient:record_temperature"),
+                {"temperature": "36.5", "record_time": "2026-01-11 08:00", "record_time_touched": "1"},
+            ),
+            (
+                reverse("web_patient:record_bp"),
+                {"ssy": "120", "szy": "80", "heart": "75", "record_time": "2026-01-11 08:00", "record_time_touched": "1"},
+            ),
+            (
+                reverse("web_patient:record_spo2"),
+                {"spo2": "98", "record_time": "2026-01-11 08:00", "record_time_touched": "1"},
+            ),
+            (
+                reverse("web_patient:record_weight"),
+                {"weight": "65.5", "record_time": "2026-01-11 08:00", "record_time_touched": "1"},
+            ),
+        ]
+
+        for url, payload in cases:
+            with self.subTest(url=url):
+                mock_invalidate.reset_mock()
+                response = self.client.post(
+                    url,
+                    {**payload, "patient_id": self.patient.id},
+                    HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["status"], "success")
+                mock_invalidate.assert_called_once()
+                self.assertEqual(mock_invalidate.call_args.args[0], self.patient.id)
+                self.assertIn(timezone.localdate(), mock_invalidate.call_args.args[1])
+
     def test_health_record_detail_month_boundary_excludes_next_month_midnight(self):
         tz = timezone.get_current_timezone()
         month = "2025-01"

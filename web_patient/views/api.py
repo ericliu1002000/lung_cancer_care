@@ -7,6 +7,7 @@ from decimal import Decimal
 import logging
 from django.utils import timezone
 from datetime import datetime
+from web_patient.services.home_cache import invalidate_patient_home_plan_cache
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ def submit_medication(request: HttpRequest) -> JsonResponse:
         
     try:
         selected_date_str = request.POST.get("selected_date")
+        selected_date = None
         measured_at = timezone.now()
         if selected_date_str:
             try:
@@ -64,6 +66,10 @@ def submit_medication(request: HttpRequest) -> JsonResponse:
             request.session.modified = True
         except Exception:
             pass
+        invalidate_patient_home_plan_cache(
+            patient_id,
+            {timezone.localdate(), timezone.localtime(measured_at).date()},
+        )
         return JsonResponse({'success': True, 'message': '提交成功'})
     except Exception as e:
         logger.error(f"提交用药记录失败: {e}")

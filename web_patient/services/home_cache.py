@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -14,6 +16,53 @@ def build_patient_home_cache_key(
     if user_id is None:
         return f"web_patient:home:{namespace}:{patient_id}:{date_key}"
     return f"web_patient:home:{namespace}:{patient_id}:{user_id}:{date_key}"
+
+
+def _normalize_home_plan_cache_date_keys(dates=None) -> list[str]:
+    if dates is None:
+        dates = [timezone.localdate()]
+    elif isinstance(dates, (date, datetime, str)):
+        dates = [dates]
+
+    date_keys = []
+    for item in dates:
+        if isinstance(item, datetime):
+            date_keys.append(item.date().strftime("%Y%m%d"))
+            continue
+        if isinstance(item, date):
+            date_keys.append(item.strftime("%Y%m%d"))
+            continue
+
+        value = str(item or "").strip()
+        if not value:
+            continue
+        if len(value) == 8 and value.isdigit():
+            date_keys.append(value)
+            continue
+        try:
+            date_keys.append(datetime.strptime(value, "%Y-%m-%d").strftime("%Y%m%d"))
+        except ValueError:
+            continue
+
+    return list(dict.fromkeys(date_keys))
+
+
+def invalidate_patient_home_plan_cache(patient_id: int, dates=None) -> None:
+    """Delete patient-home daily plan and last-metric cache entries."""
+    if not patient_id:
+        return
+
+    cache_keys = []
+    for date_key in _normalize_home_plan_cache_date_keys(dates):
+        cache_keys.append(
+            build_patient_home_cache_key("daily_plan_summary", int(patient_id), date_key)
+        )
+        cache_keys.append(
+            build_patient_home_cache_key("last_metric", int(patient_id), date_key)
+        )
+
+    if cache_keys:
+        cache.delete_many(cache_keys)
 
 
 def get_patient_home_unread_cache_key(

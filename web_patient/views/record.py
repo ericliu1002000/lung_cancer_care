@@ -4,6 +4,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.db.models import Max, Q
+from django.views.decorators.cache import never_cache
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
@@ -14,6 +15,7 @@ from patient_alerts.services.todo_list import TodoListService
 from core.service.tasks import get_daily_plan_summary
 from core.service.checkup import get_active_checkup_library
 from market.service.order import get_paid_orders_for_patient
+from web_patient.services.home_cache import invalidate_patient_home_plan_cache
 from wx.services.oauth import generate_menu_auth_url
 import calendar
 import json
@@ -65,6 +67,15 @@ def _build_saved_record_time_payload(record_time):
     }
 
 
+def _invalidate_home_plan_cache_after_record(patient_id, *, selected_date=None, record_time=None):
+    dates = {timezone.localdate()}
+    if selected_date:
+        dates.add(selected_date)
+    if record_time:
+        dates.add(timezone.localtime(record_time).date())
+    invalidate_patient_home_plan_cache(patient_id, dates)
+
+
 QUESTIONNAIRE_RECORD_TYPE_MAP = {
     "physical": QuestionnaireCode.Q_PHYSICAL,
     "breath": QuestionnaireCode.Q_BREATH,
@@ -101,6 +112,7 @@ WEEKDAY_MAP = {
 }
 
 
+@never_cache
 @auto_wechat_login
 @check_patient
 def query_last_metric(request: HttpRequest) -> JsonResponse:
@@ -313,7 +325,13 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                     request.session.modified = True
                 except Exception:
                     pass
-                
+
+                _invalidate_home_plan_cache_after_record(
+                    patient_id,
+                    selected_date=selected_date,
+                    record_time=record_time,
+                )
+
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({
@@ -422,7 +440,13 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                     request.session.modified = True
                 except Exception:
                     pass
-                
+
+                _invalidate_home_plan_cache_after_record(
+                    patient_id,
+                    selected_date=selected_date,
+                    record_time=record_time,
+                )
+
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({
@@ -526,6 +550,12 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 except Exception:
                     pass
 
+                _invalidate_home_plan_cache_after_record(
+                    patient_id,
+                    selected_date=selected_date,
+                    record_time=record_time,
+                )
+
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({
@@ -624,6 +654,12 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                     request.session.modified = True
                 except Exception:
                     pass
+
+                _invalidate_home_plan_cache_after_record(
+                    patient_id,
+                    selected_date=selected_date,
+                    record_time=record_time,
+                )
 
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -1104,8 +1140,11 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                 # 即时完成实际有图片的任务
                 now_ts = timezone.now()
                 affected_task_ids = [tid for tid, files in task_files_map.items() if files]
+                affected_task_dates = {today}
                 if affected_task_ids:
                     for task in DailyTask.objects.filter(id__in=affected_task_ids):
+                        if task.task_date:
+                            affected_task_dates.add(task.task_date)
                         payload = task.interaction_payload or {}
                         payload["report_id"] = upload.id
                         task.status = TaskStatus.COMPLETED
@@ -1126,6 +1165,8 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                     request.session.modified = True
                 except Exception:
                     pass
+
+                invalidate_patient_home_plan_cache(patient.id, affected_task_dates)
  
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({"code": 200, "msg": "OK", "redirect_url": reverse('web_patient:patient_home')})

@@ -6,6 +6,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
 from core.models import choices as core_choices
 from core.service.tasks import get_daily_plan_summary
@@ -259,6 +260,7 @@ def _is_today_data(metric_info: dict) -> bool:
     return local_time.date() == timezone.localdate()
 
 
+@never_cache
 @auto_wechat_login
 @check_patient
 def patient_home(request: HttpRequest) -> HttpResponse:

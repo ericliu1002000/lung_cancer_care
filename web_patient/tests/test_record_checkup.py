@@ -104,7 +104,8 @@ class RecordCheckupTests(TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], task_yesterday.id)
 
-    def test_record_checkup_post_success(self):
+    @patch("web_patient.views.record.invalidate_patient_home_plan_cache")
+    def test_record_checkup_post_success(self, mock_invalidate):
         """测试成功上传图片并完成任务"""
         # 模拟图片文件
         image = SimpleUploadedFile(
@@ -143,6 +144,9 @@ class RecordCheckupTests(TestCase):
         self.assertEqual(images.count(), 1)
         # 现在视图会在可识别时携带 checkup_item_id，期望不为空
         self.assertIsNotNone(images.first().checkup_item)
+        mock_invalidate.assert_called_once()
+        self.assertEqual(mock_invalidate.call_args.args[0], self.patient.id)
+        self.assertIn(self.today, mock_invalidate.call_args.args[1])
 
     def test_query_last_metric_checkup_and_followup_completed_subtitle(self):
         """测试复查与随访完成后返回新文案"""
