@@ -124,13 +124,11 @@
 - 重点覆盖：权限边界、异常分支、跨疗程或跨状态边界、兼容旧数据分支。
 - 多端页面、HTMX/OOB、图表、上传流程等改动，优先检查 `tests/browser/` 是否已有入口；若服务层测试无法证明问题已修复，再补最小必要页面测试。
 - 当前仓库命令：
-  - HTML 检查：`npm run lint:html`
   - 浏览器测试：`npm run test:browser`
   - 前端联调：`npm run test:ui`
   - Django 测试：`python manage.py test`
 - 验证原则：
   - 未改前端模板时，不必强行跑前端命令。
-  - 改了模板或页面结构，优先执行 `npm run lint:html`。
   - 改了 Python 业务逻辑，至少运行受影响的 Django 测试。
   - 声称“已完成”前，必须给出实际验证依据。
 
