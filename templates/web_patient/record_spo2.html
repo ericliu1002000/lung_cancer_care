@@ -132,6 +132,25 @@
         }
     }
 
+    function writeHomePlanRefreshMarker(type) {
+        try {
+            const markerKey = 'home_plan_refresh_marker';
+            const today = new Date();
+            const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            const raw = localStorage.getItem(markerKey);
+            const marker = raw ? JSON.parse(raw) : {};
+            const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
+            if (!completedTypes.includes(type)) {
+                completedTypes.push(type);
+            }
+            localStorage.setItem(markerKey, JSON.stringify({
+                completedTypes: completedTypes,
+                date: dateKey,
+                expiresAt: Date.now() + 10 * 60 * 1000
+            }));
+        } catch (e) {}
+    }
+
     function submitSpo2() {
         const input = document.getElementById('spo2-input');
         const errorMsg = document.getElementById('spo2-error');
@@ -171,6 +190,8 @@
                 const selectedDate = formData.get('selected_date') || '';
                 const dateParam = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '';
                 const syncUrl = "{% url 'web_patient:query_last_metric' %}" + dateParam;
+                const urlParams = new URLSearchParams(window.location.search);
+                const source = (urlParams.get('source') || '').trim();
 
                 localStorage.setItem('refresh_flag', 'true');
                 submitBtn.innerText = '提交成功';
@@ -179,6 +200,11 @@
                     .catch(() => showToast('网络异常，状态同步稍后完成', 'error'));
 
                 setTimeout(() => {
+                    if (source === 'home') {
+                        writeHomePlanRefreshMarker('spo2');
+                        window.location.replace("{% url 'web_patient:patient_home' %}?spo2=true");
+                        return;
+                    }
                     if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
                         history.back();
                     } else {

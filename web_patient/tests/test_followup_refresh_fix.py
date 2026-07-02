@@ -1,6 +1,8 @@
 from pathlib import Path
 from datetime import timedelta
 from decimal import Decimal
+import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.conf import settings
@@ -178,6 +180,43 @@ class FollowupPlanCompletionTests(TestCase):
         self.assertEqual(data["plans"]["followup"]["status"], "completed")
         self.assertEqual(data["plans"]["followup"]["subtitle"], "已完成随访任务")
 
+    def test_patient_home_and_query_last_metric_are_never_cached(self):
+        home_response = self.client.get(reverse("web_patient:patient_home"))
+        self.assertEqual(home_response.status_code, 200)
+        home_cache_control = home_response.headers.get("Cache-Control", "")
+        self.assertIn("no-cache", home_cache_control)
+        self.assertIn("no-store", home_cache_control)
+
+        metric_response = self.client.get(reverse("web_patient:query_last_metric"))
+        self.assertEqual(metric_response.status_code, 200)
+        metric_cache_control = metric_response.headers.get("Cache-Control", "")
+        self.assertIn("no-cache", metric_cache_control)
+        self.assertIn("no-store", metric_cache_control)
+
+    @patch("web_patient.views.followup.invalidate_patient_home_plan_cache")
+    @patch("web_patient.views.followup.QuestionnaireSubmissionService.submit_questionnaire")
+    def test_submit_surveys_invalidates_home_plan_cache(self, mock_submit, mock_invalidate):
+        mock_submit.return_value = SimpleNamespace(id=123)
+
+        response = self.client.post(
+            reverse("web_patient:submit_surveys"),
+            data=json.dumps(
+                {
+                    "patient_id": self.patient.id,
+                    "questionnaire_id": self.questionnaire.id,
+                    "answers": [],
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+        mock_invalidate.assert_called_once()
+        patient_id, dates = mock_invalidate.call_args.args
+        self.assertEqual(patient_id, self.patient.id)
+        self.assertIn(timezone.localdate(), dates)
+
 
 class FollowupRefreshTemplateTests(SimpleTestCase):
     def test_patient_home_uses_single_pageshow_refresh_entry(self):
@@ -192,12 +231,145 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
             1,
         )
         self.assertNotIn("window.addEventListener('popstate', consumeHomeRefreshFlag);", script_content)
-        self.assertNotIn("document.addEventListener('visibilitychange'", script_content)
+        self.assertIn("document.addEventListener('visibilitychange', handleHomeVisibilityChange);", script_content)
+        self.assertIn("window.addEventListener('pagehide', handleHomePageHide);", script_content)
+        self.assertIn("window.addEventListener('beforeunload', handleHomeBeforeUnload);", script_content)
         self.assertIn("async function consumeRefreshMarkersAndSync()", script_content)
-        self.assertIn("if (options && options.followupSubmitted && !hasFollowupPlan)", script_content)
+        self.assertIn("const HOME_PLAN_REFRESH_MARKER_KEY = 'home_plan_refresh_marker';", script_content)
+        self.assertIn("function readHomePlanRefreshMarker()", script_content)
+        self.assertIn("function applyRecentCompletedFallbacks(plans)", script_content)
+        self.assertIn("function requestPlanRefresh(reason, options)", script_content)
         self.assertIn("markFollowupCompletedFallback();", script_content)
         self.assertIn("refreshUrl.searchParams.set('_ts', String(Date.now()));", script_content)
         self.assertIn("cache: 'no-store'", script_content)
+
+    def test_patient_home_refreshes_daily_plan_on_history_restore(self):
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("function isHistoryRestore(event)", content)
+        self.assertIn("navEntry.type === 'back_forward'", content)
+        self.assertIn("nav.type === 2", content)
+        self.assertIn("const markerResult = await consumeRefreshMarkersAndSync();", content)
+        self.assertIn("const shouldRefreshPlans = !markerResult.refreshed;", content)
+        self.assertNotIn(
+            "const shouldRefreshPlans = !markerResult.refreshed && (historyRestored || hasHomeSuccessParam() || HOME_PAGE_WAS_HIDDEN || hasRecentCompletionMarker);",
+            content,
+        )
+        self.assertIn(
+            "await requestPlanRefresh('pageshow', { followupSubmitted: markerResult.followupSubmitted, force: true });",
+            content,
+        )
+
+    def test_patient_home_plan_refresh_reuses_in_flight_request(self):
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("let PLAN_REFRESH_IN_FLIGHT = null;", content)
+        self.assertIn("if (PLAN_REFRESH_IN_FLIGHT) {", content)
+        self.assertIn("if (options.force !== true && now - LAST_PLAN_REFRESH_AT < HOME_PLAN_REFRESH_THROTTLE_MS)", content)
+        self.assertIn("PLAN_REFRESH_IN_FLIGHT = refreshMetricData(refreshOptions)", content)
+        self.assertIn("PLAN_REFRESH_IN_FLIGHT = null;", content)
+
+    def test_patient_home_success_param_whitelist_matches_home_refresh_params(self):
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("const HOME_SUCCESS_PARAMS = [", content)
+        for param in (
+            "temperature",
+            "bp_hr",
+            "spo2",
+            "weight",
+            "breath_val",
+            "sputum_val",
+            "pain_val",
+            "step",
+            "medication_taken",
+            "checkup_completed",
+            "followup",
+        ):
+            self.assertIn(f"'{param}'", content)
+        self.assertIn("function hasHomeSuccessParam()", content)
+        self.assertIn("HOME_SUCCESS_PARAMS.some(function (param) {", content)
+
+    def test_patient_home_marker_sync_reports_whether_it_refreshed(self):
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("return { refreshed: false, followupSubmitted: followupSubmitted };", content)
+        self.assertIn("return { refreshed: true, followupSubmitted: followupSubmitted };", content)
+        self.assertIn("await requestPlanRefresh('legacy_marker', { followupSubmitted: followupSubmitted });", content)
+
+    def test_patient_home_keeps_short_lived_completed_marker(self):
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("const HOME_PLAN_REFRESH_MARKER_TTL_MS = 10 * 60 * 1000;", content)
+        self.assertIn("completedTypes: completedTypes", content)
+        self.assertIn("expiresAt: Date.now() + HOME_PLAN_REFRESH_MARKER_TTL_MS", content)
+        self.assertIn("Array.isArray(marker.completedTypes)", content)
+        self.assertIn("localStorage.removeItem(HOME_PLAN_REFRESH_MARKER_KEY);", content)
+        self.assertIn("HOME_COMPLETED_FALLBACK_SUBTITLES[type]", content)
+        self.assertIn("if (plan) {", content)
+        self.assertIn("setPlanCardState(type, 'completed', subtitle);", content)
+        self.assertNotIn("if (plan && plan.status === 'completed')", content)
+        self.assertNotIn("checkup_all_completed", content)
+        self.assertNotIn("CHECKUP_COMPLETION_UPDATED", content)
+
+    def test_patient_home_task_click_marks_every_task_as_home_source(self):
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn("finalUrl = finalUrl + sep2 + 'source=home';", content)
+        self.assertNotIn("if (type === 'checkup') {", content)
+
+    def test_metric_record_pages_replace_home_for_home_source(self):
+        cases = {
+            "record_temperature.html": "temperature=true",
+            "record_bp.html": "bp_hr=true",
+            "record_spo2.html": "spo2=true",
+            "record_weight.html": "weight=true",
+        }
+
+        for template_name, success_param in cases.items():
+            with self.subTest(template=template_name):
+                template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / template_name
+                content = template_path.read_text(encoding="utf-8")
+
+                self.assertIn("const source = (urlParams.get('source') || '').trim();", content)
+                self.assertIn("if (source === 'home') {", content)
+                self.assertIn("function writeHomePlanRefreshMarker(type)", content)
+                metric_type = success_param.split("=")[0]
+                self.assertIn(f"writeHomePlanRefreshMarker('{metric_type}');", content)
+                self.assertIn(
+                    f'window.location.replace("{{% url \'web_patient:patient_home\' %}}?{success_param}");',
+                    content,
+                )
+                self.assertIn("history.back();", content)
+
+    def test_record_checkup_replaces_home_for_home_source(self):
+        template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / "record_checkup.html"
+        content = template_path.read_text(encoding="utf-8")
+
+        self.assertIn('data-entry-source="{{ entry_source|default:\'\' }}"', content)
+        self.assertIn("const pageRoot = document.querySelector('[data-entry-source]');", content)
+        self.assertIn("return urlSource || rootSource;", content)
+        self.assertIn("const entrySource = getEntrySource();", content)
+        self.assertIn("function returnAfterCheckup(entrySource) {", content)
+        self.assertIn("if (entrySource === 'home') {", content)
+        self.assertIn("function writeHomePlanRefreshMarker(type)", content)
+        self.assertIn("writeHomePlanRefreshMarker('checkup');", content)
+        self.assertNotIn("const allCompleted = await refreshHomeCheckupStatus();", content)
+        self.assertNotIn("async function refreshHomeCheckupStatus()", content)
+        self.assertNotIn("localStorage.setItem('checkup_all_completed'", content)
+        self.assertIn(
+            "window.location.replace(HOME_CHECKUP_URL);",
+            content,
+        )
+        self.assertIn("setTimeout(() => { returnAfterCheckup(entrySource); }, 300);", content)
+        self.assertIn("history.back();", content)
+        self.assertIn("window.location.href = HOME_URL;", content)
 
     def test_daily_survey_redirects_home_only_for_home_source(self):
         template_path = (
@@ -211,10 +383,21 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
 
         self.assertIn("localStorage.setItem('refresh_flag', 'true');", content)
         self.assertIn('"followup_completed": true', content)
-        self.assertIn("const source = (urlParams.get('source') || '').trim();", content)
-        self.assertIn("if (source === 'home') {", content)
-        self.assertIn(
-            'window.location.replace("{% url \'web_patient:patient_home\' %}?followup=true");',
+        self.assertIn('id="finish-home-btn"', content)
+        self.assertNotIn(
+            '<a href="{% url \'web_patient:patient_home\' %}?followup=true&patient_id={{ patient_id }}"',
             content,
         )
+        self.assertIn("function getEntrySource()", content)
+        self.assertIn("function returnAfterSurvey(source)", content)
+        self.assertIn("const source = (urlParams.get('source') || '').trim();", content)
+        self.assertIn("if (source === 'home') {", content)
+        self.assertIn("function writeHomePlanRefreshMarker(type)", content)
+        self.assertIn("writeHomePlanRefreshMarker('followup');", content)
+        self.assertIn(
+            "window.location.replace(HOME_FOLLOWUP_URL);",
+            content,
+        )
+        self.assertIn("setTimeout(() => { returnAfterSurvey(source); }, 300);", content)
         self.assertIn("history.back();", content)
+        self.assertIn("window.location.href = HOME_URL;", content)

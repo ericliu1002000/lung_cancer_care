@@ -1,5 +1,6 @@
 import json
 from decimal import Decimal
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -25,8 +26,10 @@ class HomeUnreadFlowTests(TestCase):
     )
     self.client.force_login(self.user)
     self.home_url = reverse("web_patient:patient_home")
+    self.consultation_chat_url = reverse("web_patient:consultation_chat")
     self.unread_count_url = reverse("web_patient:chat_api_unread_count")
     self.reset_unread_url = reverse("web_patient:chat_api_reset_unread")
+    cache.clear()
     self.doctor_user = CustomUser.objects.create_user(
       username="doc_unread_flow",
       password="password",
@@ -58,6 +61,18 @@ class HomeUnreadFlowTests(TestCase):
       paid_at=timezone.now(),
     )
 
+  def _create_doctor_message(self, content="消息1"):
+    svc = ChatService()
+    conv = svc.get_or_create_patient_conversation(self.patient)
+    doc_user2 = CustomUser.objects.create_user(
+      username=f"doc_member_flow_{CustomUser.objects.count()}",
+      password="password",
+      user_type=choices.UserType.DOCTOR,
+      phone="13800000004",
+    )
+    DoctorProfile.objects.create(user=doc_user2, name="医生B", studio=self.studio)
+    return svc.create_text_message(conv, doc_user2, content)
+
   def test_home_unread_gating_non_member(self):
     resp = self.client.get(self.home_url)
     self.assertEqual(resp.status_code, 200)
@@ -65,16 +80,7 @@ class HomeUnreadFlowTests(TestCase):
 
   def test_home_unread_gating_member_and_reset(self):
     self._enable_membership()
-    svc = ChatService()
-    conv = svc.get_or_create_patient_conversation(self.patient)
-    doc_user2 = CustomUser.objects.create_user(
-      username="doc_member_flow",
-      password="password",
-      user_type=choices.UserType.DOCTOR,
-      phone="13800000004",
-    )
-    doc_profile2 = DoctorProfile.objects.create(user=doc_user2, name="医生B", studio=self.studio)
-    svc.create_text_message(conv, doc_user2, "消息1")
+    self._create_doctor_message()
     resp = self.client.get(self.home_url)
     self.assertEqual(resp.status_code, 200)
     self.assertTrue(resp.context["is_member"])
@@ -89,3 +95,37 @@ class HomeUnreadFlowTests(TestCase):
     resp = self.client.get(self.unread_count_url)
     data = resp.json()
     self.assertEqual(data["count"], 0)
+
+  def test_consultation_chat_entry_marks_current_user_unread_as_read(self):
+    self._enable_membership()
+    self._create_doctor_message("进入聊天即已读")
+
+    resp = self.client.get(self.home_url)
+    self.assertEqual(resp.status_code, 200)
+    self.assertGreaterEqual(resp.context["unread_chat_count"], 1)
+
+    resp = self.client.get(self.consultation_chat_url)
+    self.assertEqual(resp.status_code, 200)
+
+    resp = self.client.get(self.unread_count_url)
+    self.assertEqual(resp.status_code, 200)
+    self.assertEqual(resp.json()["count"], 0)
+
+  def test_reset_unread_invalidates_patient_home_unread_cache(self):
+    self._enable_membership()
+    self._create_doctor_message("缓存清理")
+
+    resp = self.client.get(self.home_url)
+    self.assertEqual(resp.status_code, 200)
+    self.assertGreaterEqual(resp.context["unread_chat_count"], 1)
+
+    resp = self.client.post(
+      self.reset_unread_url,
+      json.dumps({}),
+      content_type="application/json",
+    )
+    self.assertEqual(resp.status_code, 200)
+
+    resp = self.client.get(self.home_url)
+    self.assertEqual(resp.status_code, 200)
+    self.assertEqual(resp.context["unread_chat_count"], 0)

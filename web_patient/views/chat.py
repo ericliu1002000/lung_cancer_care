@@ -1,7 +1,15 @@
+import logging
+
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
+
+from chat.services.chat import ChatService
 from users.decorators import auto_wechat_login, check_patient
 from users.models import PatientRelation
+from web_patient.services.home_cache import invalidate_patient_home_unread_cache
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_patient_chat_title(patient) -> str:
@@ -42,7 +50,19 @@ def consultation_chat(request: HttpRequest) -> HttpResponse:
     is_family = True
     if patient and patient.user_id == request.user.id:
         is_family = False
-    
+
+    try:
+        service = ChatService()
+        conversation = service.get_or_create_patient_conversation(patient=patient)
+        service.mark_conversation_read(conversation, request.user, None)
+        invalidate_patient_home_unread_cache(patient, request.user)
+    except Exception:
+        logger.debug(
+            "consultation_chat mark read skipped patient_id=%s user_id=%s",
+            getattr(patient, "id", None),
+            getattr(request.user, "id", None),
+        )
+
     context = {
         "patient": patient,
         "patient_id": patient_id,

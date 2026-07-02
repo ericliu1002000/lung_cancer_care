@@ -178,6 +178,27 @@
 const uploads = {};
 const compressQueue = [];
 let compressActiveCount = 0;
+const HOME_CHECKUP_URL = "{% url 'web_patient:patient_home' %}?checkup_completed=true";
+const HOME_URL = "{% url 'web_patient:patient_home' %}";
+
+function writeHomePlanRefreshMarker(type) {
+    try {
+        const markerKey = 'home_plan_refresh_marker';
+        const today = new Date();
+        const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const raw = localStorage.getItem(markerKey);
+        const marker = raw ? JSON.parse(raw) : {};
+        const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
+        if (!completedTypes.includes(type)) {
+            completedTypes.push(type);
+        }
+        localStorage.setItem(markerKey, JSON.stringify({
+            completedTypes: completedTypes,
+            date: dateKey,
+            expiresAt: Date.now() + 10 * 60 * 1000
+        }));
+    } catch (e) {}
+}
 
 // ========== 核心：用户发生阅读交互后启用按钮 ==========
 let hasUserScrolled = false; // 是否已经确认过阅读交互
@@ -679,11 +700,10 @@ function submitCheckup() {
             showStatus(T('uploadSuccess', '上传成功'), 'success');
             const entrySource = getEntrySource();
             if (entrySource === 'home') {
-                const allCompleted = await refreshHomeCheckupStatus();
-                try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
+                writeHomePlanRefreshMarker('checkup');
             }
             try { localStorage.setItem('refresh_flag', 'true'); } catch(e) {}
-            setTimeout(() => { try { history.back(); } catch(e) {} }, 200);
+            setTimeout(() => { returnAfterCheckup(entrySource); }, 300);
         } catch (err) {
             showStatus(err.message || T('uploadFailed', '上传失败，请重试'), 'error');
             submitBtn.disabled = false;
@@ -694,41 +714,24 @@ function submitCheckup() {
 
 // 近7天完成度查询并通知首页
 function getEntrySource() {
-    const container = document.querySelector('.min-h-screen[data-entry-source]');
-    return (container?.dataset?.entrySource || 'home').trim();
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSource = (urlParams.get('source') || '').trim();
+    const pageRoot = document.querySelector('[data-entry-source]');
+    const rootSource = pageRoot ? (pageRoot.dataset.entrySource || '').trim() : '';
+    return urlSource || rootSource;
 }
 
-async function refreshHomeCheckupStatus() {
-    const todayStr = document.getElementById('checkup-date')?.textContent?.trim();
-    if (!todayStr) return false;
-    const dayMs = 24 * 60 * 60 * 1000;
-    const base = new Date(todayStr.replace(/-/g, '/')).getTime();
-    const dates = Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(base - (6 - i) * dayMs);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const da = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${da}`;
-    });
-    let hasCheckup = false;
-    const results = await Promise.all(dates.map(async (d) => {
-        try {
-            const resp = await fetch("{% url 'web_patient:query_last_metric' %}" + `?date=${encodeURIComponent(d)}`, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-            const data = await resp.json();
-            if (!data?.plans?.checkup) {
-                return null;
-            }
-            hasCheckup = true;
-            const status = data?.plans?.checkup?.status || 'pending';
-            return status === 'completed';
-        } catch { return false; }
-    }));
-    const allCompleted = hasCheckup && results.filter(r => r !== null).every(Boolean);
-    // 通知首页模块
-    try {
-        window.parent?.postMessage?.({ type: 'CHECKUP_COMPLETION_UPDATED', allCompleted }, '*');
-    } catch {}
-    return allCompleted;
+function returnAfterCheckup(entrySource) {
+    if (entrySource === 'home') {
+        window.location.replace(HOME_CHECKUP_URL);
+        return;
+    }
+
+    if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+        history.back();
+    } else {
+        window.location.href = HOME_URL;
+    }
 }
 
 function showStatus(message, type) {

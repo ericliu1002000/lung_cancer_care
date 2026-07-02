@@ -6,12 +6,18 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
 from core.models import choices as core_choices
 from core.service.tasks import get_daily_plan_summary
 from health_data.models import MetricType
 from health_data.services.health_metric import HealthMetricService
 from users.decorators import auto_wechat_login, check_patient
+from web_patient.services.home_cache import (
+    HOME_CACHE_TTL_SECONDS,
+    build_patient_home_cache_key,
+    get_patient_home_unread_cache_key,
+)
 from users.services.patient import PatientService
 from wx.services.oauth import generate_menu_auth_url
 
@@ -19,7 +25,6 @@ from . import chat_api
 
 logger = logging.getLogger(__name__)
 
-HOME_CACHE_TTL_SECONDS = 30
 HOME_SUCCESS_PARAM_TASK_MAP = {
     "temperature": "temperature",
     "bp_hr": "bp_hr",
@@ -106,9 +111,7 @@ OPTIMISTIC_COMPLETED_TASK_TYPES = MEASURE_PLAN_TYPES | {"medication"}
 
 
 def _cache_key(namespace: str, patient_id: int, date_key: str, user_id: int = None) -> str:
-    if user_id is None:
-        return f"web_patient:home:{namespace}:{patient_id}:{date_key}"
-    return f"web_patient:home:{namespace}:{patient_id}:{user_id}:{date_key}"
+    return build_patient_home_cache_key(namespace, patient_id, date_key, user_id)
 
 
 def _fetch_with_cache(cache_key: str, bypass_cache: bool, fetcher, perf_log: dict, perf_key: str):
@@ -257,6 +260,7 @@ def _is_today_data(metric_info: dict) -> bool:
     return local_time.date() == timezone.localdate()
 
 
+@never_cache
 @auto_wechat_login
 @check_patient
 def patient_home(request: HttpRequest) -> HttpResponse:
@@ -335,11 +339,10 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             logger.debug("patient_home metric fetch failed patient_id=%s", patient_id)
             list_data = {}
 
-        unread_cache_key = _cache_key(
-            "unread_count",
+        unread_cache_key = get_patient_home_unread_cache_key(
             int(patient_id),
+            request.user.id,
             date_key,
-            user_id=request.user.id,
         )
         try:
             unread_chat_count = _fetch_with_cache(

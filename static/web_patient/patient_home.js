@@ -14,11 +14,101 @@
   const URLS = config.urls || {};
   const CSRF_TOKEN = config.csrfToken || '';
   const UNREAD_REFRESH_INTERVAL_MS = Number(config.unreadRefreshIntervalMs || 15000);
+  const HOME_SUCCESS_PARAMS = [
+    'temperature',
+    'bp_hr',
+    'spo2',
+    'weight',
+    'breath_val',
+    'sputum_val',
+    'pain_val',
+    'step',
+    'medication_taken',
+    'checkup_completed',
+    'followup'
+  ];
+  const HOME_PLAN_REFRESH_MARKER_KEY = 'home_plan_refresh_marker';
+  const HOME_PLAN_REFRESH_MARKER_TTL_MS = 10 * 60 * 1000;
+  const HOME_PLAN_REFRESH_THROTTLE_MS = 1200;
+  const HOME_COMPLETED_FALLBACK_SUBTITLES = {
+    temperature: '今日已记录',
+    bp_hr: '今日已记录',
+    spo2: '今日已记录',
+    weight: '今日已记录',
+    medication: '今日已服药',
+    checkup: '已完成复查任务',
+    followup: '已完成随访任务'
+  };
 
   let UNREAD_CHAT_COUNT = parseInt(config.unreadChatCount, 10) || 0;
   let MEMBER_ONLY_REDIRECT_URL = BUY_URL;
   let LAST_UNREAD_FETCH_AT = Date.now();
+  let LAST_PLAN_REFRESH_AT = 0;
+  let PLAN_REFRESH_IN_FLIGHT = null;
+  let HOME_PAGE_WAS_HIDDEN = false;
   let HOME_PERF_REPORTED = false;
+
+  function getHomePlanMarkerDateKey() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return year + '-' + month + '-' + day;
+  }
+
+  function readHomePlanRefreshMarker() {
+    try {
+      const raw = localStorage.getItem(HOME_PLAN_REFRESH_MARKER_KEY);
+      if (!raw) {
+        return null;
+      }
+
+      const marker = JSON.parse(raw);
+      if (!marker || marker.date !== getHomePlanMarkerDateKey() || Number(marker.expiresAt || 0) <= Date.now()) {
+        localStorage.removeItem(HOME_PLAN_REFRESH_MARKER_KEY);
+        return null;
+      }
+
+      const completedTypes = Array.isArray(marker.completedTypes)
+        ? marker.completedTypes.filter(function (type) {
+          return typeof type === 'string' && type.length > 0;
+        })
+        : [];
+
+      if (completedTypes.length === 0) {
+        localStorage.removeItem(HOME_PLAN_REFRESH_MARKER_KEY);
+        return null;
+      }
+
+      return {
+        completedTypes: completedTypes,
+        date: marker.date,
+        expiresAt: marker.expiresAt
+      };
+    } catch (error) {
+      localStorage.removeItem(HOME_PLAN_REFRESH_MARKER_KEY);
+      return null;
+    }
+  }
+
+  function writeHomePlanRefreshMarker(type) {
+    if (!type) {
+      return;
+    }
+
+    try {
+      const marker = readHomePlanRefreshMarker() || {};
+      const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes.slice() : [];
+      if (!completedTypes.includes(type)) {
+        completedTypes.push(type);
+      }
+      localStorage.setItem(HOME_PLAN_REFRESH_MARKER_KEY, JSON.stringify({
+        completedTypes: completedTypes,
+        date: getHomePlanMarkerDateKey(),
+        expiresAt: Date.now() + HOME_PLAN_REFRESH_MARKER_TTL_MS
+      }));
+    } catch (error) {}
+  }
 
   function showMemberOnlyModal(message, redirectUrl) {
     const modal = document.getElementById('member-only-modal');
@@ -110,6 +200,7 @@
       .then(function (data) {
         if (data.success) {
           if (URLS.patientHome) {
+            writeHomePlanRefreshMarker('medication');
             window.location.replace(URLS.patientHome + '?medication_taken=true');
             return;
           }
@@ -146,7 +237,7 @@
     const separator = urlBase.includes('?') ? '&' : '?';
     let finalUrl = urlBase + separator + 'patient_id=' + encodeURIComponent(PATIENT_ID);
 
-    if (type === 'checkup') {
+    if (!/[?&]source=/.test(finalUrl)) {
       const sep2 = finalUrl.includes('?') ? '&' : '?';
       finalUrl = finalUrl + sep2 + 'source=home';
     }
@@ -205,9 +296,29 @@
     setPlanCardState('followup', 'completed', '已完成随访任务');
   }
 
+  function applyRecentCompletedFallbacks(plans) {
+    const marker = readHomePlanRefreshMarker();
+    if (!marker) {
+      return;
+    }
+
+    const planMap = plans || {};
+    marker.completedTypes.forEach(function (type) {
+      const plan = planMap[type];
+      if (plan) {
+        return;
+      }
+
+      const subtitle = HOME_COMPLETED_FALLBACK_SUBTITLES[type];
+      if (subtitle) {
+        setPlanCardState(type, 'completed', subtitle);
+      }
+    });
+  }
+
   function refreshMetricData(options) {
     if (!IS_MEMBER || !URLS.queryLastMetric) {
-      return Promise.resolve();
+      return Promise.resolve(null);
     }
 
     const refreshUrl = new URL(URLS.queryLastMetric, window.location.origin);
@@ -221,9 +332,11 @@
         if (data.success) {
           updateMetricDisplay(data.plans || {}, options || {});
         }
+        return data;
       })
       .catch(function (error) {
         console.error('Error refreshing metrics:', error);
+        return null;
       });
   }
 
@@ -241,6 +354,55 @@
     if (options && options.followupSubmitted && !hasFollowupPlan) {
       markFollowupCompletedFallback();
     }
+    applyRecentCompletedFallbacks(plans);
+  }
+
+  function requestPlanRefresh(reason, options) {
+    options = options || {};
+    const refreshOptions = options;
+    const now = Date.now();
+    if (PLAN_REFRESH_IN_FLIGHT) {
+      return PLAN_REFRESH_IN_FLIGHT;
+    }
+    if (options.force !== true && now - LAST_PLAN_REFRESH_AT < HOME_PLAN_REFRESH_THROTTLE_MS) {
+      applyRecentCompletedFallbacks({});
+      return Promise.resolve(null);
+    }
+    PLAN_REFRESH_IN_FLIGHT = refreshMetricData(refreshOptions).then(function (data) {
+      LAST_PLAN_REFRESH_AT = Date.now();
+      applyRecentCompletedFallbacks((data && data.plans) || {});
+      return data;
+    }).finally(function () {
+      PLAN_REFRESH_IN_FLIGHT = null;
+    });
+    return PLAN_REFRESH_IN_FLIGHT;
+  }
+
+  function hasHomeSuccessParam() {
+    const searchParams = new URLSearchParams(window.location.search);
+    return HOME_SUCCESS_PARAMS.some(function (param) {
+      return searchParams.has(param);
+    });
+  }
+
+  function isHistoryRestore(event) {
+    if (event && event.persisted === true) {
+      return true;
+    }
+
+    if (!window.performance) {
+      return false;
+    }
+
+    if (typeof window.performance.getEntriesByType === 'function') {
+      const navEntry = (window.performance.getEntriesByType('navigation') || [])[0];
+      if (navEntry && navEntry.type === 'back_forward') {
+        return true;
+      }
+    }
+
+    const nav = window.performance.navigation;
+    return Boolean(nav && nav.type === 2);
   }
 
   async function consumeRefreshMarkersAndSync() {
@@ -248,19 +410,6 @@
     let followupSubmitted = false;
 
     try {
-      const checkupFlag = localStorage.getItem('checkup_all_completed');
-      if (checkupFlag === 'true') {
-        setPlanCardState('checkup', 'completed', '已完成复查任务');
-        shouldRefresh = true;
-      } else if (checkupFlag === 'false') {
-        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
-        shouldRefresh = true;
-      }
-
-      if (checkupFlag !== null) {
-        localStorage.removeItem('checkup_all_completed');
-      }
-
       const refreshFlag = localStorage.getItem('refresh_flag');
       if (refreshFlag === 'true') {
         shouldRefresh = true;
@@ -287,10 +436,11 @@
       }
 
       if (!shouldRefresh) {
-        return;
+        return { refreshed: false, followupSubmitted: followupSubmitted };
       }
 
-      await refreshMetricData({ followupSubmitted: followupSubmitted });
+      await requestPlanRefresh('legacy_marker', { followupSubmitted: followupSubmitted });
+      return { refreshed: true, followupSubmitted: followupSubmitted };
     } finally {
       localStorage.removeItem('metric_data');
       localStorage.removeItem('refresh_flag');
@@ -377,13 +527,38 @@
 
   async function handleHomePageShow(event) {
     reportHomePerf(event);
-    await consumeRefreshMarkersAndSync();
+    const markerResult = await consumeRefreshMarkersAndSync();
 
-    const isBfCacheRestore = Boolean(event && event.persisted === true);
+    const historyRestored = isHistoryRestore(event);
+    const shouldRefreshPlans = !markerResult.refreshed;
     const isUnreadExpired = Date.now() - LAST_UNREAD_FETCH_AT > UNREAD_REFRESH_INTERVAL_MS;
+    HOME_PAGE_WAS_HIDDEN = false;
 
-    if (isBfCacheRestore || isUnreadExpired) {
+    if (shouldRefreshPlans) {
+      await requestPlanRefresh('pageshow', { followupSubmitted: markerResult.followupSubmitted, force: true });
+    }
+
+    if (historyRestored || isUnreadExpired) {
       fetchUnreadCount();
+    }
+  }
+
+  function handleHomePageHide() {
+    HOME_PAGE_WAS_HIDDEN = true;
+  }
+
+  function handleHomeBeforeUnload() {
+    HOME_PAGE_WAS_HIDDEN = true;
+  }
+
+  function handleHomeVisibilityChange() {
+    if (document.visibilityState === 'hidden') {
+      HOME_PAGE_WAS_HIDDEN = true;
+      return;
+    }
+
+    if (document.visibilityState === 'visible') {
+      requestPlanRefresh('visibilitychange', {});
     }
   }
 
@@ -404,7 +579,13 @@
       event.preventDefault();
     }
 
-    if (UNREAD_CHAT_COUNT > 0 && URLS.chatResetUnread) {
+    const hadUnread = UNREAD_CHAT_COUNT > 0;
+    if (hadUnread) {
+      setUnreadBadge(0);
+      LAST_UNREAD_FETCH_AT = Date.now();
+    }
+
+    if (hadUnread && URLS.chatResetUnread) {
       const controller = new AbortController();
       const timeout = setTimeout(function () {
         controller.abort();
@@ -435,18 +616,9 @@
   }
 
   window.addEventListener('pageshow', handleHomePageShow);
-
-  window.addEventListener('message', function (event) {
-    const data = event.data || {};
-    if (data.type === 'CHECKUP_COMPLETION_UPDATED') {
-      if (data.allCompleted) {
-        setPlanCardState('checkup', 'completed', '已完成复查任务');
-      } else {
-        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
-      }
-      refreshMetricData();
-    }
-  });
+  window.addEventListener('pagehide', handleHomePageHide);
+  window.addEventListener('beforeunload', handleHomeBeforeUnload);
+  document.addEventListener('visibilitychange', handleHomeVisibilityChange);
 
   window.showMemberOnlyModal = showMemberOnlyModal;
   window.closeMemberOnlyModal = closeMemberOnlyModal;
@@ -457,4 +629,5 @@
   window.submitMedication = submitMedication;
   window.handleTaskClick = handleTaskClick;
   window.handleConsultationEntry = handleConsultationEntry;
+  window.writeHomePlanRefreshMarker = writeHomePlanRefreshMarker;
 })();

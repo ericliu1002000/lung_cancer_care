@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -54,7 +55,8 @@ class SubmitMedicationSelectedDateTests(TestCase):
         self.assertIsNotNone(metric)
         self.assertEqual(timezone.localtime(metric.measured_at).date(), yesterday)
 
-    def test_submit_medication_default_date_is_today(self):
+    @patch("web_patient.views.api.invalidate_patient_home_plan_cache")
+    def test_submit_medication_default_date_is_today(self, mock_invalidate):
         today = timezone.localdate()
         DailyTask.objects.create(
             patient=self.patient,
@@ -76,4 +78,6 @@ class SubmitMedicationSelectedDateTests(TestCase):
             task_type=core_choices.PlanItemCategory.MEDICATION,
         )
         self.assertEqual(task.status, core_choices.TaskStatus.COMPLETED)
-
+        mock_invalidate.assert_called_once()
+        self.assertEqual(mock_invalidate.call_args.args[0], self.patient.id)
+        self.assertIn(today, mock_invalidate.call_args.args[1])
