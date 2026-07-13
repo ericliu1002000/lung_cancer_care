@@ -1,13 +1,27 @@
 import struct
 from pathlib import Path
+from xml.etree import ElementTree
 
 from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.test import SimpleTestCase
 
 
 class TemplateAssetLoadingTests(SimpleTestCase):
     def _read(self, relative_path: str) -> str:
         return (Path(settings.BASE_DIR) / relative_path).read_text(encoding="utf-8")
+
+    def test_device_empty_state_asset_is_discoverable(self):
+        relative_path = "images/empty_devices.svg"
+        template = self._read("templates/web_patient/device_list.html")
+
+        self.assertIn("{% static 'images/empty_devices.svg' %}", template)
+
+        asset_path = finders.find(relative_path)
+        self.assertIsNotNone(asset_path, msg=f"static asset not found: {relative_path}")
+
+        root = ElementTree.parse(asset_path).getroot()
+        self.assertEqual(root.tag.rsplit("}", 1)[-1], "svg")
 
     def test_full_page_templates_reference_browser_favicon(self):
         favicon_link = (
