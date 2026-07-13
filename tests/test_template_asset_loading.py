@@ -1,3 +1,4 @@
+import struct
 from pathlib import Path
 
 from django.conf import settings
@@ -7,6 +8,24 @@ from django.test import SimpleTestCase
 class TemplateAssetLoadingTests(SimpleTestCase):
     def _read(self, relative_path: str) -> str:
         return (Path(settings.BASE_DIR) / relative_path).read_text(encoding="utf-8")
+
+    def test_full_page_templates_reference_browser_favicon(self):
+        favicon_link = (
+            '<link rel="icon" type="image/png" sizes="32x32" '
+            'href="{% static \'icon32.png\' %}" />'
+        )
+
+        for relative_path in (
+            "templates/layouts/base_portal.html",
+            "templates/layouts/base_sales.html",
+            "templates/index.html",
+        ):
+            self.assertIn(favicon_link, self._read(relative_path), msg=relative_path)
+
+        favicon = Path(settings.BASE_DIR) / "static/icon32.png"
+        image_data = favicon.read_bytes()
+        self.assertTrue(image_data.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertEqual(struct.unpack(">II", image_data[16:24]), (32, 32))
 
     def test_base_templates_do_not_hardcode_cdn_core_assets(self):
         portal = self._read("templates/layouts/base_portal.html")
