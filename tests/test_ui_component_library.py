@@ -11,6 +11,80 @@ class DemoForm(forms.Form):
 
 
 class UiComponentLibraryTests(SimpleTestCase):
+    def test_privacy_image_component_renders_static_source_with_defaults(self):
+        html = render_to_string(
+            "components/ui/privacy_image.html",
+            {"src": "/media/private-report.jpg"},
+        )
+
+        self.assertIn('<button type="button"', html)
+        self.assertIn('aria-label="打开原图预览"', html)
+        self.assertIn('class="relative w-44 aspect-square max-w-full', html)
+        self.assertIn("overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm", html)
+        self.assertIn("focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2", html)
+        self.assertIn('src="/media/private-report.jpg"', html)
+        self.assertNotIn(":src=", html)
+        self.assertIn('alt=""', html)
+        self.assertIn("h-full w-full scale-[1.03] object-cover blur-[2px]", html)
+        self.assertIn("pointer-events-none absolute inset-0 bg-white/10", html)
+        self.assertIn(
+            "pointer-events-none absolute right-0 top-0 inline-flex items-center gap-1 "
+            "rounded-t-lg rounded-bl-lg bg-white px-2 py-1 text-[11px] font-medium "
+            "text-blue-600 shadow-sm",
+            html,
+        )
+        self.assertIn('viewBox="0 0 1024 1024"', html)
+        self.assertIn("隐私保护", html)
+
+    def test_privacy_image_component_renders_alpine_source_and_overrides(self):
+        html = render_to_string(
+            "components/ui/privacy_image.html",
+            {
+                "src": "/media/ignored.jpg",
+                "x_src": "msg.image_url",
+                "label": "已保护",
+                "alt": "检查报告",
+                "aria_label": "查看检查报告原图",
+                "size_class": "w-52 sm:w-60",
+                "extra_class": "privacy-card",
+                "attrs": '@click="previewImage(msg.image_url)"',
+                "image_attrs": '@load="handleMessageImageLoad(msg)"',
+            },
+        )
+
+        self.assertIn(':src="msg.image_url"', html)
+        self.assertNotIn(' src="', html)
+        self.assertIn('aria-label="查看检查报告原图"', html)
+        self.assertIn('class="relative w-52 sm:w-60 aspect-square', html)
+        self.assertIn("privacy-card", html)
+        self.assertIn('@click="previewImage(msg.image_url)"', html)
+        self.assertIn('@load="handleMessageImageLoad(msg)"', html)
+        self.assertIn('alt="检查报告"', html)
+        self.assertIn("已保护", html)
+
+    def test_patient_chat_uses_privacy_image_component_for_self_images(self):
+        chat_template = (
+            Path(settings.BASE_DIR) / "templates/web_patient/consultation_chat.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            '{% include "components/ui/privacy_image.html" with x_src="msg.image_url"',
+            chat_template,
+        )
+        self.assertIn('attrs=\'@click="previewImage(msg.image_url)"\'', chat_template)
+        self.assertIn(
+            'image_attrs=\'@load="handleMessageImageLoad(msg)"\'',
+            chat_template,
+        )
+        self.assertIn(
+            '<template x-if="msg.content_type === \'image\' && !isSelf(msg)">',
+            chat_template,
+        )
+        self.assertIn(
+            '<img :src="msg.image_url" class="max-w-full rounded-lg cursor-pointer"',
+            chat_template,
+        )
+
     def test_core_ui_components_render_with_expected_contracts(self):
         button_html = render_to_string(
             "components/ui/button.html",
@@ -121,3 +195,21 @@ class UiComponentLibraryTests(SimpleTestCase):
         self.assertIn("新增页面优先复用项目 UI 组件", content)
         self.assertIn("不引入 AntD、Element Plus", content)
         self.assertIn("不要为了套用组件而改动存量页面", content)
+
+    def test_agents_documents_privacy_image_component_contract(self):
+        guide = Path(settings.BASE_DIR) / "AGENTS.md"
+        content = guide.read_text(encoding="utf-8")
+
+        self.assertIn("`privacy_image.html`", content)
+        self.assertIn(
+            '{% include "components/ui/privacy_image.html" with src="/media/example.jpg" %}',
+            content,
+        )
+        self.assertIn('x_src="msg.image_url"', content)
+        self.assertIn('attrs=\'@click="previewImage(msg.image_url)"\'', content)
+        self.assertIn(
+            'image_attrs=\'@load="handleMessageImageLoad(msg)"\'',
+            content,
+        )
+        self.assertIn("attrs 和 image_attrs 仅允许传入开发者编写的可信字面量", content)
+        self.assertIn("不得插入用户可控数据", content)
