@@ -2337,6 +2337,11 @@ video {
   border-top-right-radius: 0.75rem;
 }
 
+.rounded-t-lg {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+}
+
 .rounded-bl-\[10px\] {
   border-bottom-left-radius: 10px;
 }
@@ -2363,6 +2368,10 @@ video {
 
 .rounded-tr-sm {
   border-top-right-radius: 0.125rem;
+}
+
+.rounded-bl-lg {
+  border-bottom-left-radius: 0.5rem;
 }
 
 .border {
