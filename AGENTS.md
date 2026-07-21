@@ -84,6 +84,8 @@
 - 样式优先写在模板或 Form Widget 中，统一使用 Tailwind CSS。
 - 非必要不新增独立 CSS 文件；只有 Tailwind 表达困难或第三方覆盖成本高时才新增。
 - JS 按端归档到对应 `static/web_*` 目录，禁止混写医生端、患者端、销售端逻辑。
+- 页面导航优先使用具有真实 `href` 的 `<a>`，不得将基础跳转完全依赖 JavaScript 全局函数。
+- 新增或重构的业务交互不使用内联 `onclick/onchange` 调用全局函数；动态列表优先使用稳定 `data-*` 标识与事件委托。
 - 新增页面优先复用项目 UI 组件，组件统一放在 `templates/components/ui/`，通过 Django `{% include %}` 调用；当前基础组件包括 `button.html`、`badge.html`、`alert.html`、`empty_state.html`、`loading.html`、`page_header.html`、`panel.html`、`form_field.html`、`table_empty.html`、`modal.html`、`privacy_image.html`。
 - UI 组件库只封装无业务含义的基础视觉与交互外壳；患者卡片、任务状态、指标摘要、疗程信息等带业务语义的片段，按端放在 `templates/web_doctor/`、`templates/web_patient/`、`templates/web_sales/` 下的局部模板中。
 - 不引入 AntD、Element Plus、Bootstrap 等重型或框架绑定 UI 组件库；如需日期、图表、图片压缩等复杂能力，继续按场景引入轻量专项库并优先本地托管到 `static/vendor/`。

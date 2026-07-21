@@ -1,6 +1,7 @@
 from base64 import b64decode
 from datetime import date, datetime
 from decimal import Decimal
+import json
 from urllib.parse import urlencode
 
 from django.test import tag
@@ -15,6 +16,7 @@ from core.models import (
     QuestionnaireCode,
     QuestionnaireOption,
     QuestionnaireQuestion,
+    TreatmentCycle,
     choices as core_choices,
 )
 from core.models.choices import CheckupCategory, PlanItemCategory, ReportType, TaskStatus
@@ -121,18 +123,115 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
 
     def test_patient_home_checkup_task_opens_record_page(self):
         self._create_checkup_task()
+        page_errors = []
+        self.page.on("pageerror", lambda error: page_errors.append(str(error)))
+        self.page.route(
+            "**/static/web_patient/patient_home.js*",
+            lambda route: route.abort(),
+        )
 
         self._open("web_patient:patient_home")
-        self.assertEqual(self.page.evaluate("typeof window.handleTaskClick"), "function")
 
-        action = self.page.locator("#plan-action-checkup button")
+        action = self.page.locator("#plan-action-checkup a")
         expect(action).to_be_visible()
+        href = action.get_attribute("href") or ""
+        self.assertIn(reverse("web_patient:record_checkup"), href)
+        self.assertIn(f"patient_id={self.patient.id}", href)
+        self.assertIn("source=home", href)
         action.click()
 
         self.page.wait_for_load_state("domcontentloaded")
         self.assertIn(reverse("web_patient:record_checkup"), self.page.url)
         self.assertIn("source=home", self.page.url)
         expect(self.page.locator("body")).to_contain_text("复查上报")
+
+        self.page.go_back(wait_until="domcontentloaded")
+        expect(self.page.locator("#plan-action-checkup a")).to_be_visible()
+        self.assertFalse(
+            any("handleTaskClick is not defined" in message for message in page_errors),
+            page_errors,
+        )
+
+    def test_patient_home_medication_task_opens_modal(self):
+        page_errors = []
+        self.page.on("pageerror", lambda error: page_errors.append(str(error)))
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="用药测试疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=today,
+            task_type=PlanItemCategory.MEDICATION,
+            title="用药提醒",
+            status=TaskStatus.PENDING,
+        )
+
+        self._open("web_patient:patient_home")
+
+        action = self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        )
+        expect(action).to_be_visible()
+        action.click()
+
+        expect(self.page.locator("#medication-modal")).to_be_visible()
+        self.page.evaluate(
+            "window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))"
+        )
+        self.assertFalse(
+            any("handleTaskClick is not defined" in message for message in page_errors),
+            page_errors,
+        )
+
+    def test_patient_home_bfcache_refresh_rebuilds_real_task_link(self):
+        self._create_checkup_task()
+        refresh_state = {"status": "completed"}
+
+        def fulfill_plan_refresh(route):
+            status = refresh_state["status"]
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "success": True,
+                        "plans": {
+                            "checkup": {
+                                "type": "checkup",
+                                "status": status,
+                                "subtitle": "已完成复查任务"
+                                if status == "completed"
+                                else "请及时完成您的复查任务",
+                                "action_text": "去完成",
+                                "url": "/p/record/checkup/?ids=3%2C5&label=%E5%A4%8D%E6%9F%A5+A",
+                            }
+                        },
+                    }
+                ),
+            )
+
+        self.page.route("**/api/last_metric/**", fulfill_plan_refresh)
+        self._open("web_patient:patient_home")
+
+        expect(self.page.locator("#plan-action-checkup a")).to_have_count(0)
+        refresh_state["status"] = "pending"
+        self.page.evaluate(
+            "window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))"
+        )
+
+        action = self.page.locator("#plan-action-checkup a")
+        expect(action).to_be_visible()
+        href = action.get_attribute("href") or ""
+        self.assertIn("ids=3%2C5", href)
+        self.assertIn("label=%E5%A4%8D%E6%9F%A5+A", href)
+        self.assertIn(f"patient_id={self.patient.id}", href)
+        self.assertIn("source=home", href)
 
     def test_record_and_health_record_pages_load(self):
         checkup = self._create_checkup_task()

@@ -2659,16 +2659,16 @@ video {
   border-color: rgb(255 255 255 / 0.2);
 }
 
+.border-white\/30 {
+  border-color: rgb(255 255 255 / 0.3);
+}
+
 .border-white\/40 {
   border-color: rgb(255 255 255 / 0.4);
 }
 
 .border-white\/5 {
   border-color: rgb(255 255 255 / 0.05);
-}
-
-.border-white\/30 {
-  border-color: rgb(255 255 255 / 0.3);
 }
 
 .border-t-blue-500 {
@@ -2977,6 +2977,10 @@ video {
   background-color: rgb(220 38 38 / var(--tw-bg-opacity, 1));
 }
 
+.bg-red-600\/90 {
+  background-color: rgb(220 38 38 / 0.9);
+}
+
 .bg-rose-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(255 228 230 / var(--tw-bg-opacity, 1));
@@ -3078,6 +3082,10 @@ video {
   background-color: rgb(51 65 85 / 0.7);
 }
 
+.bg-slate-700\/80 {
+  background-color: rgb(51 65 85 / 0.8);
+}
+
 .bg-slate-800 {
   --tw-bg-opacity: 1;
   background-color: rgb(30 41 59 / var(--tw-bg-opacity, 1));
@@ -3153,14 +3161,6 @@ video {
 
 .bg-white\/95 {
   background-color: rgb(255 255 255 / 0.95);
-}
-
-.bg-red-600\/90 {
-  background-color: rgb(220 38 38 / 0.9);
-}
-
-.bg-slate-700\/80 {
-  background-color: rgb(51 65 85 / 0.8);
 }
 
 .bg-opacity-50 {
@@ -4473,6 +4473,11 @@ video {
   --tw-ring-color: rgb(199 210 254 / var(--tw-ring-opacity, 1));
 }
 
+.ring-red-400 {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(248 113 113 / var(--tw-ring-opacity, 1));
+}
+
 .ring-rose-200 {
   --tw-ring-opacity: 1;
   --tw-ring-color: rgb(254 205 211 / var(--tw-ring-opacity, 1));
@@ -4499,11 +4504,6 @@ video {
 
 .ring-white\/20 {
   --tw-ring-color: rgb(255 255 255 / 0.2);
-}
-
-.ring-red-400 {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(248 113 113 / var(--tw-ring-opacity, 1));
 }
 
 .ring-opacity-5 {
@@ -5278,6 +5278,11 @@ video {
   background-color: rgb(255 247 237 / var(--tw-bg-opacity, 1));
 }
 
+.active\:bg-red-700:active {
+  --tw-bg-opacity: 1;
+  background-color: rgb(185 28 28 / var(--tw-bg-opacity, 1));
+}
+
 .active\:bg-rose-700:active {
   --tw-bg-opacity: 1;
   background-color: rgb(190 18 60 / var(--tw-bg-opacity, 1));
@@ -5304,11 +5309,6 @@ video {
 
 .active\:bg-white\/30:active {
   background-color: rgb(255 255 255 / 0.3);
-}
-
-.active\:bg-red-700:active {
-  --tw-bg-opacity: 1;
-  background-color: rgb(185 28 28 / var(--tw-bg-opacity, 1));
 }
 
 .active\:opacity-60:active {
