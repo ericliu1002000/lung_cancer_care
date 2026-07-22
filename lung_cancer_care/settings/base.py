@@ -237,7 +237,7 @@ SMS_CONFIG = {
     "ORG_ID": os.environ.get("SMS_ORG_ID"),
     "USERNAME": os.environ.get("SMS_USERNAME"),
     "PASSWORD": os.environ.get("SMS_PASSWORD"),
-    "SIGNATURE": "【岱劲信息】",
+    "SIGNATURE": "【智医康科技】",
 }
 
 SMARTWATCH_CONFIG = {
