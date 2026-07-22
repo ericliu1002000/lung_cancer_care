@@ -902,6 +902,10 @@ video {
   grid-column: span 3 / span 3;
 }
 
+.col-span-full {
+  grid-column: 1 / -1;
+}
+
 .m-1 {
   margin: 0.25rem;
 }
@@ -2686,6 +2690,10 @@ video {
   border-top-color: rgb(203 213 225 / var(--tw-border-opacity, 1));
 }
 
+.border-t-transparent {
+  border-top-color: transparent;
+}
+
 .bg-\[\#F5F5F5\] {
   --tw-bg-opacity: 1;
   background-color: rgb(245 245 245 / var(--tw-bg-opacity, 1));
@@ -4207,11 +4215,6 @@ video {
 
 .text-white\/90 {
   color: rgb(255 255 255 / 0.9);
-}
-
-.text-yellow-600 {
-  --tw-text-opacity: 1;
-  color: rgb(202 138 4 / var(--tw-text-opacity, 1));
 }
 
 .underline {
